@@ -15,6 +15,10 @@ const VALID_MATCH_TYPES = new Set<string>(MATCH_TYPES)
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
 export async function registerMatchAction(input: RegisterMatchInput): Promise<ActionResult> {
+  if (!(await isAdminFromCookies())) {
+    return { ok: false, error: "권한이 없습니다." }
+  }
+
   if (input.player1Id === input.player2Id) {
     return { ok: false, error: "같은 선수를 선택할 수 없습니다." }
   }

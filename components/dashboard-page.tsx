@@ -62,6 +62,10 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
   })
 
   function handleRegister(input: RegisterMatchInput) {
+    if (!isAdmin) {
+      window.alert("운영진만 전적을 등록할 수 있습니다.")
+      return
+    }
     startTransition(async () => {
       const res = await registerMatchAction(input)
       if (!res.ok) {
@@ -181,15 +185,26 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
             </div>
 
             <div className="flex-shrink-0">
-              <Button
-                onClick={() => setIsDialogOpen(true)}
-                disabled={members.length < 2}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
-                title={members.length < 2 ? "클랜원이 2명 이상 필요합니다" : undefined}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                전적 등록
-              </Button>
+              {isAdmin ? (
+                <Button
+                  onClick={() => setIsDialogOpen(true)}
+                  disabled={members.length < 2}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
+                  title={members.length < 2 ? "클랜원이 2명 이상 필요합니다" : undefined}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  전적 등록
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
+                  onClick={() => window.alert("운영진만 전적을 등록할 수 있습니다. 상단에서 관리자 로그인 후 이용해 주세요.")}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  전적 등록
+                </Button>
+              )}
             </div>
           </div>
 
