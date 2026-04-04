@@ -126,6 +126,7 @@ export function MatchHistory({
               <span className="block font-normal text-[10px] text-muted-foreground/90">(선수1)</span>
             </TableHead>
             <TableHead className="text-muted-foreground font-semibold">맵</TableHead>
+            <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">경기 유형</TableHead>
             <TableHead className="text-muted-foreground font-semibold w-[88px] text-center">
               삭제
             </TableHead>
@@ -205,6 +206,9 @@ export function MatchHistory({
                   {formatEloDelta(delta)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">{match.map}</TableCell>
+                <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
+                  {match.matchType ?? "—"}
+                </TableCell>
                 <TableCell className="text-center p-2">
                   <Button
                     type="button"

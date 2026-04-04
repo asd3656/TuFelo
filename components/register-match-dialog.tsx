@@ -7,9 +7,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getSeoulDateString } from "@/lib/date-seoul"
+import { MATCH_TYPES } from "@/lib/types/tufelo"
 import type { RegisterMatchInput } from "@/lib/types/tufelo"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +29,7 @@ interface RegisterMatchDialogProps {
   isSubmitting?: boolean
   prefillDate: string
   prefillMap: string
+  prefillMatchType?: string
 }
 
 const mapNamePattern = /^[가-힣]+$/
@@ -129,6 +138,7 @@ export function RegisterMatchDialog({
   isSubmitting,
   prefillDate,
   prefillMap,
+  prefillMatchType,
 }: RegisterMatchDialogProps) {
   const [p1Id, setP1Id] = useState("")
   const [p1Text, setP1Text] = useState("")
@@ -136,6 +146,7 @@ export function RegisterMatchDialog({
   const [p2Text, setP2Text] = useState("")
   const [map, setMap] = useState("")
   const [date, setDate] = useState(getSeoulDateString())
+  const [matchType, setMatchType] = useState("")
   const [mapError, setMapError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -143,11 +154,12 @@ export function RegisterMatchDialog({
     setMapError(null)
     setDate(prefillDate ? clampDateToSeoulMax(prefillDate) : getSeoulDateString())
     setMap(prefillMap)
+    setMatchType(prefillMatchType ?? "")
     setP1Id("")
     setP1Text("")
     setP2Id("")
     setP2Text("")
-  }, [open, prefillDate, prefillMap])
+  }, [open, prefillDate, prefillMap, prefillMatchType])
 
   useEffect(() => {
     if (p2Id && p1Id && p2Id === p1Id) {
@@ -159,13 +171,24 @@ export function RegisterMatchDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setMapError(null)
-    if (!p1Id || !p2Id || !map) {
-      if (!p1Id) window.alert("선수 1을 목록에서 선택해 주세요. (이름 입력 후 제안 클릭)")
-      else if (!p2Id) window.alert("선수 2를 목록에서 선택해 주세요.")
+    if (!p1Id) {
+      window.alert("선수 1을 목록에서 선택해 주세요. (이름 입력 후 제안 클릭)")
+      return
+    }
+    if (!p2Id) {
+      window.alert("선수 2를 목록에서 선택해 주세요.")
+      return
+    }
+    if (!map) {
+      window.alert("맵 이름을 입력해 주세요.")
       return
     }
     if (!mapNamePattern.test(map)) {
       setMapError("맵 이름은 띄어쓰기 없이 한글만 입력해 주세요.")
+      return
+    }
+    if (!matchType) {
+      window.alert("경기 유형을 선택해 주세요.")
       return
     }
     onRegister({
@@ -173,6 +196,7 @@ export function RegisterMatchDialog({
       player2Id: p2Id,
       mapName: map,
       playedDate: clampDateToSeoulMax(date),
+      matchType,
     })
   }
 
@@ -230,6 +254,22 @@ export function RegisterMatchDialog({
               className="bg-input border-border"
             />
             {mapError && <p className="text-sm text-destructive">{mapError}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-muted-foreground">경기 유형</label>
+            <Select value={matchType} onValueChange={setMatchType}>
+              <SelectTrigger className="bg-input border-border">
+                <SelectValue placeholder="경기 유형 선택…" />
+              </SelectTrigger>
+              <SelectContent>
+                {MATCH_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

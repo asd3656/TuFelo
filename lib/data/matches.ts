@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import type { Match, Race, Tier } from "@/lib/types/tufelo"
+import type { Match, Race, Tier, MemberForRanking, MatchForRanking } from "@/lib/types/tufelo"
 
 type MatchRow = {
   id: string
@@ -8,6 +8,7 @@ type MatchRow = {
   winner_id: string
   map_name: string
   played_date: string
+  match_type: string | null
   player1_elo_delta: number | null
   player2_elo_delta: number | null
 }
@@ -24,7 +25,7 @@ export async function fetchMatchesForDashboard(): Promise<Match[]> {
     supabase
       .from("matches")
       .select(
-        "id, player1_id, player2_id, winner_id, map_name, played_date, player1_elo_delta, player2_elo_delta",
+        "id, player1_id, player2_id, winner_id, map_name, played_date, match_type, player1_elo_delta, player2_elo_delta",
       )
       .order("played_date", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -36,11 +37,7 @@ export async function fetchMatchesForDashboard(): Promise<Match[]> {
   const byId = new Map(
     (memRes.data ?? []).map((m) => [
       m.id,
-      {
-        name: m.name as string,
-        race: m.race as Race,
-        tier: m.tier as Tier,
-      },
+      { name: m.name as string, race: m.race as Race, tier: m.tier as Tier },
     ]),
   )
 
@@ -60,11 +57,62 @@ export async function fetchMatchesForDashboard(): Promise<Match[]> {
       winner: w?.name ?? "?",
       map: r.map_name,
       date: r.played_date,
+      matchType: r.match_type ?? undefined,
       player1EloDelta: r.player1_elo_delta ?? undefined,
     } satisfies Match
   })
 }
 
+/** 랭킹 페이지용: 멤버 원본 + 경기 원본을 반환해 클라이언트에서 필터링·집계. */
+export async function fetchRankingData(): Promise<{
+  members: MemberForRanking[]
+  matches: MatchForRanking[]
+}> {
+  const supabase = await createClient()
+  const [memRes, matchRes] = await Promise.all([
+    supabase
+      .from("members")
+      .select("id, name, race, tier, elo, wins, losses, streak")
+      .order("elo", { ascending: false }),
+    supabase
+      .from("matches")
+      .select(
+        "id, player1_id, player2_id, winner_id, match_type, player1_elo_delta, player2_elo_delta, played_date, created_at",
+      )
+      .order("played_date", { ascending: false })
+      .order("created_at", { ascending: false }),
+  ])
+
+  if (memRes.error) throw new Error(memRes.error.message)
+  if (matchRes.error) throw new Error(matchRes.error.message)
+
+  const members: MemberForRanking[] = (memRes.data ?? []).map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    race: r.race as Race,
+    tier: r.tier as Tier,
+    elo: r.elo as number,
+    wins: r.wins as number,
+    losses: r.losses as number,
+    streak: r.streak as number,
+  }))
+
+  const matches: MatchForRanking[] = (matchRes.data ?? []).map((r) => ({
+    id: r.id as string,
+    player1Id: r.player1_id as string,
+    player2Id: r.player2_id as string,
+    winnerId: r.winner_id as string,
+    matchType: (r.match_type as string | null) ?? "",
+    player1EloDelta: r.player1_elo_delta as number | null,
+    player2EloDelta: r.player2_elo_delta as number | null,
+    playedDate: r.played_date as string,
+    createdAt: r.created_at as string,
+  }))
+
+  return { members, matches }
+}
+
+/** 레거시 호환: 기존 코드가 참조하는 경우를 위해 남겨둠 */
 export async function fetchRankingPlayers(): Promise<
   Array<{
     id: string
@@ -97,16 +145,13 @@ export async function fetchRankingPlayers(): Promise<
   const matchRows = (matchRes.data ?? []) as MatchDeltaRow[]
   const changeMap = new Map<string, number>()
   for (const m of matchRows) {
-    if (!changeMap.has(m.player1_id) && m.player1_elo_delta != null) {
+    if (!changeMap.has(m.player1_id) && m.player1_elo_delta != null)
       changeMap.set(m.player1_id, m.player1_elo_delta)
-    }
-    if (!changeMap.has(m.player2_id) && m.player2_elo_delta != null) {
+    if (!changeMap.has(m.player2_id) && m.player2_elo_delta != null)
       changeMap.set(m.player2_id, m.player2_elo_delta)
-    }
   }
 
-  const rows = memRes.data ?? []
-  return rows.map((r, i) => ({
+  return (memRes.data ?? []).map((r, i) => ({
     id: r.id as string,
     rank: i + 1,
     name: r.name as string,

@@ -10,8 +10,16 @@ import { AdminLoginDialog } from "@/components/admin-login-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Plus, Trophy, BarChart3, Users } from "lucide-react"
 import { getSeoulDateString } from "@/lib/date-seoul"
+import { MATCH_TYPES } from "@/lib/types/tufelo"
 import type { ClanMember, Match, RegisterMatchInput } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction } from "@/app/actions/matches"
 
@@ -31,6 +39,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
   const [player2, setPlayer2] = useState("")
   const [filterDate, setFilterDate] = useState("")
   const [filterMap, setFilterMap] = useState("")
+  const [filterMatchType, setFilterMatchType] = useState("__all__")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [adminLoginOpen, setAdminLoginOpen] = useState(false)
 
@@ -48,7 +57,8 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
     const matchesDate = !filterDate || match.date === filterDate
     const q = filterMap.trim().toLowerCase()
     const matchesMap = !q || match.map.toLowerCase().includes(q)
-    return matchesPlayer1 && matchesPlayer2 && matchesDate && matchesMap
+    const matchesType = filterMatchType === "__all__" || match.matchType === filterMatchType
+    return matchesPlayer1 && matchesPlayer2 && matchesDate && matchesMap && matchesType
   })
 
   function handleRegister(input: RegisterMatchInput) {
@@ -93,12 +103,6 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
               <p className="text-muted-foreground">전적관리 대시보드</p>
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
-              <Link href="/ranking">
-                <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  ELO 랭킹
-                </Button>
-              </Link>
               <Button
                 type="button"
                 className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md border-0"
@@ -106,6 +110,24 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
               >
                 관리자 로그인
               </Button>
+              {isAdmin ? (
+                <Link href="/ranking">
+                  <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    ELO 랭킹(관리자)
+                  </Button>
+                </Link>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-border text-foreground hover:bg-secondary"
+                  onClick={() => window.alert("운영진만 들어갈 수 있습니다.")}
+                >
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  ELO 랭킹(관리자)
+                </Button>
+              )}
               {isAdmin ? (
                 <Link href="/admin">
                   <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
@@ -124,6 +146,12 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
                   클랜원 명단
                 </Button>
               )}
+              <Link href="/ranking/public">
+                <Button className="bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-md border-0">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  ELO 랭킹
+                </Button>
+              </Link>
             </div>
           </div>
         </header>
@@ -132,7 +160,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
           <div className="flex flex-col lg:flex-row items-center gap-4">
             <div className="flex-1 w-full">
               <PlayerSearch
-                label="선수"
+                label="선수(기준)"
                 placeholder="선수 이름 검색..."
                 value={player1}
                 onChange={setPlayer1}
@@ -165,7 +193,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-border">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-border">
             <div className="space-y-2">
               <Label htmlFor="filter-date" className="text-sm font-medium text-muted-foreground">
                 날짜 필터
@@ -187,9 +215,10 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
                 className="bg-input border-border text-foreground max-w-xs"
               />
               <p className="text-xs text-muted-foreground">
-                비워 두면 모든 날짜 · 선택 시 해당 날짜 전적만 표시 (서울 기준, 미래 불가)
+                비워 두면 모든 날짜 · 선택 시 해당 날짜 전적만 표시
               </p>
             </div>
+
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Label htmlFor="filter-map" className="text-sm font-medium text-muted-foreground">
@@ -205,7 +234,25 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
                 onChange={(e) => setFilterMap(e.target.value)}
                 className="bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
-              <p className="text-xs text-muted-foreground">입력한 글이 포함된 맵 이름의 전적만 표시합니다</p>
+              <p className="text-xs text-muted-foreground">입력한 글이 포함된 맵 이름의 전적만 표시</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">경기 유형 필터</Label>
+              <Select value={filterMatchType} onValueChange={setFilterMatchType}>
+                <SelectTrigger className="bg-input border-border text-foreground">
+                  <SelectValue placeholder="전체 경기 유형" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">전체</SelectItem>
+                  {MATCH_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">기본값 전체</p>
             </div>
           </div>
         </section>
@@ -269,6 +316,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
           isSubmitting={isPending}
           prefillDate={filterDate}
           prefillMap={filterMap.trim()}
+          prefillMatchType={filterMatchType === "__all__" ? "" : filterMatchType}
         />
       </div>
     </main>
