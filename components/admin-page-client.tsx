@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import {
   Table,
@@ -78,6 +78,8 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [searchQuery, setSearchQuery] = useState("")
+  const [filterTier, setFilterTier] = useState("__all__")
+  const [filterRace, setFilterRace] = useState("__all__")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -88,8 +90,15 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
     tier: 4,
   })
 
-  const filteredMembers = initialMembers.filter((member) =>
-    member.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredMembers = useMemo(
+    () =>
+      initialMembers.filter((member) => {
+        const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase())
+        const matchesTier = filterTier === "__all__" || String(member.tier) === filterTier
+        const matchesRace = filterRace === "__all__" || member.race === filterRace
+        return matchesSearch && matchesTier && matchesRace
+      }),
+    [initialMembers, searchQuery, filterTier, filterRace],
   )
 
   const runAction = (fn: () => Promise<ActionResult>, onDone?: () => void) => {
@@ -152,11 +161,12 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
   }
 
   const tierCounts: Record<CliqueTier, number> = {
-    1: initialMembers.filter((m) => m.tier === 1).length,
-    2: initialMembers.filter((m) => m.tier === 2).length,
-    3: initialMembers.filter((m) => m.tier === 3).length,
-    4: initialMembers.filter((m) => m.tier === 4).length,
+    1: filteredMembers.filter((m) => m.tier === 1).length,
+    2: filteredMembers.filter((m) => m.tier === 2).length,
+    3: filteredMembers.filter((m) => m.tier === 3).length,
+    4: filteredMembers.filter((m) => m.tier === 4).length,
   }
+  const totalFilteredCount = filteredMembers.length
 
   return (
     <main className="min-h-screen bg-background">
@@ -176,7 +186,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
           <p className="text-muted-foreground ml-14">클랜원을 추가, 수정, 삭제하고 명단을 관리합니다</p>
         </header>
 
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <section className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
           {TIERS.map((tier) => (
             <div key={tier} className="bg-card rounded-lg border border-border p-4">
               <div className="flex items-center gap-2 mb-1">
@@ -188,17 +198,68 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
               <p className="text-xs text-muted-foreground">명</p>
             </div>
           ))}
+          <div className="bg-card rounded-lg border border-border p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge variant="outline" className="bg-secondary text-secondary-foreground border-border">
+                전체
+              </Badge>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{totalFilteredCount}</p>
+            <p className="text-xs text-muted-foreground">명</p>
+          </div>
         </section>
 
         <section className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="선수 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-card border-border text-foreground placeholder:text-muted-foreground"
-            />
+          <div className="flex-1 space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="선수 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-card border-border text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Select value={filterTier} onValueChange={setFilterTier}>
+                <SelectTrigger className="w-36 bg-card border-border text-foreground">
+                  <SelectValue placeholder="전체 티어" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">전체 티어</SelectItem>
+                  <SelectItem value="1">1티어</SelectItem>
+                  <SelectItem value="2">2티어</SelectItem>
+                  <SelectItem value="3">3티어</SelectItem>
+                  <SelectItem value="4">4티어</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={filterRace} onValueChange={setFilterRace}>
+                <SelectTrigger className="w-36 bg-card border-border text-foreground">
+                  <SelectValue placeholder="전체 종족" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">전체 종족</SelectItem>
+                  <SelectItem value="T">Terran</SelectItem>
+                  <SelectItem value="P">Protoss</SelectItem>
+                  <SelectItem value="Z">Zerg</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(filterTier !== "__all__" || filterRace !== "__all__") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setFilterTier("__all__")
+                    setFilterRace("__all__")
+                  }}
+                >
+                  필터 초기화
+                </Button>
+              )}
+            </div>
           </div>
           <Button
             onClick={() => {
@@ -217,7 +278,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">전체 명단</h2>
-              <p className="text-sm text-muted-foreground">총 {initialMembers.length}명의 클랜원</p>
+              <p className="text-sm text-muted-foreground">총 {filteredMembers.length}명의 클랜원</p>
             </div>
           </div>
           <div className="overflow-x-auto">
