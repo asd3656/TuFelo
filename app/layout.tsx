@@ -7,7 +7,7 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'SC1 Clan Match Tracker',
+  title: '터프클랜 ELO Board',
   description: '스타크래프트 1 클랜 전적 관리 대시보드',
   generator: 'v0.app',
   icons: {
