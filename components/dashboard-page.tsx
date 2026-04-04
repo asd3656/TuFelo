@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
 import { MatchHistory } from "@/components/match-history"
@@ -93,6 +93,11 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
   }
 
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
+
+  const knownMaps = useMemo(
+    () => Array.from(new Set(initialMatches.map((m) => m.map))).sort(),
+    [initialMatches],
+  )
 
   return (
     <main className="min-h-screen bg-background">
@@ -332,6 +337,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
           prefillDate={filterDate}
           prefillMap={filterMap.trim()}
           prefillMatchType={filterMatchType === "__all__" ? "" : filterMatchType}
+          knownMaps={knownMaps}
         />
       </div>
     </main>

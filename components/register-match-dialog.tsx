@@ -30,6 +30,7 @@ interface RegisterMatchDialogProps {
   prefillDate: string
   prefillMap: string
   prefillMatchType?: string
+  knownMaps: string[]
 }
 
 const mapNamePattern = /^[가-힣]+$/
@@ -64,13 +65,26 @@ function MemberAutocomplete({
   onChange: (id: string, name: string) => void
 }) {
   const [openList, setOpenList] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const wrapRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
 
   const choices = useMemo(() => {
     const pool = excludeId ? members.filter((m) => m.id !== excludeId) : members
     return filterMembersByPrefix(valueText, pool)
   }, [members, valueText, excludeId])
+
+  useEffect(() => {
+    setActiveIndex(-1)
+  }, [choices])
+
+  useEffect(() => {
+    if (activeIndex >= 0 && listRef.current) {
+      const items = listRef.current.querySelectorAll<HTMLElement>('[role="option"]')
+      items[activeIndex]?.scrollIntoView({ block: "nearest" })
+    }
+  }, [activeIndex])
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -81,6 +95,39 @@ function MemberAutocomplete({
     document.addEventListener("mousedown", onDoc)
     return () => document.removeEventListener("mousedown", onDoc)
   }, [])
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!openList || choices.length === 0) {
+      if (e.key === "ArrowDown") {
+        setOpenList(true)
+        e.preventDefault()
+      }
+      return
+    }
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault()
+        setActiveIndex((prev) => Math.min(prev + 1, choices.length - 1))
+        break
+      case "ArrowUp":
+        e.preventDefault()
+        setActiveIndex((prev) => Math.max(prev - 1, 0))
+        break
+      case "Enter":
+        e.preventDefault()
+        if (activeIndex >= 0 && activeIndex < choices.length) {
+          const m = choices[activeIndex]
+          onChange(m.id, m.name)
+          setOpenList(false)
+          inputRef.current?.blur()
+        }
+        break
+      case "Escape":
+        setOpenList(false)
+        setActiveIndex(-1)
+        break
+    }
+  }
 
   return (
     <div className="space-y-2">
@@ -96,21 +143,26 @@ function MemberAutocomplete({
             setOpenList(true)
           }}
           onFocus={() => setOpenList(true)}
+          onKeyDown={handleKeyDown}
           autoComplete="off"
           className="bg-input border-border"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={openList && choices.length > 0}
         />
         {openList && choices.length > 0 && (
           <ul
+            ref={listRef}
             className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
             role="listbox"
           >
-            {choices.map((m) => (
-              <li key={m.id}>
+            {choices.map((m, idx) => (
+              <li key={m.id} role="option" aria-selected={idx === activeIndex}>
                 <button
                   type="button"
                   className={cn(
                     "w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                    selectedId === m.id && "bg-accent/50",
+                    (selectedId === m.id || idx === activeIndex) && "bg-accent/50",
                   )}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
@@ -130,6 +182,134 @@ function MemberAutocomplete({
   )
 }
 
+function MapAutocomplete({
+  value,
+  knownMaps,
+  onChange,
+  error,
+}: {
+  value: string
+  knownMaps: string[]
+  onChange: (v: string) => void
+  error: string | null
+}) {
+  const [openList, setOpenList] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+
+  const choices = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (!q) return []
+    return knownMaps.filter((m) => m.toLowerCase().includes(q))
+  }, [knownMaps, value])
+
+  useEffect(() => {
+    setActiveIndex(-1)
+  }, [choices])
+
+  useEffect(() => {
+    if (activeIndex >= 0 && listRef.current) {
+      const items = listRef.current.querySelectorAll<HTMLElement>('[role="option"]')
+      items[activeIndex]?.scrollIntoView({ block: "nearest" })
+    }
+  }, [activeIndex])
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpenList(false)
+      }
+    }
+    document.addEventListener("mousedown", onDoc)
+    return () => document.removeEventListener("mousedown", onDoc)
+  }, [])
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!openList || choices.length === 0) {
+      if (e.key === "ArrowDown") {
+        setOpenList(true)
+        e.preventDefault()
+      }
+      return
+    }
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault()
+        setActiveIndex((prev) => Math.min(prev + 1, choices.length - 1))
+        break
+      case "ArrowUp":
+        e.preventDefault()
+        setActiveIndex((prev) => Math.max(prev - 1, 0))
+        break
+      case "Enter":
+        e.preventDefault()
+        if (activeIndex >= 0 && activeIndex < choices.length) {
+          onChange(choices[activeIndex])
+          setOpenList(false)
+          inputRef.current?.blur()
+        }
+        break
+      case "Escape":
+        setOpenList(false)
+        setActiveIndex(-1)
+        break
+    }
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <Input
+        ref={inputRef}
+        placeholder="예: 서킷브레이커"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpenList(true)
+        }}
+        onFocus={() => {
+          if (value.trim()) setOpenList(true)
+        }}
+        onKeyDown={handleKeyDown}
+        autoComplete="off"
+        className="bg-input border-border"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={openList && choices.length > 0}
+      />
+      {openList && choices.length > 0 && (
+        <ul
+          ref={listRef}
+          className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
+          role="listbox"
+        >
+          {choices.map((mapName, idx) => (
+            <li key={mapName} role="option" aria-selected={idx === activeIndex}>
+              <button
+                type="button"
+                className={cn(
+                  "w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                  idx === activeIndex && "bg-accent/50",
+                )}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(mapName)
+                  setOpenList(false)
+                  inputRef.current?.blur()
+                }}
+              >
+                {mapName}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="text-sm text-destructive mt-1">{error}</p>}
+    </div>
+  )
+}
+
 export function RegisterMatchDialog({
   open,
   onOpenChange,
@@ -139,6 +319,7 @@ export function RegisterMatchDialog({
   prefillDate,
   prefillMap,
   prefillMatchType,
+  knownMaps,
 }: RegisterMatchDialogProps) {
   const [p1Id, setP1Id] = useState("")
   const [p1Text, setP1Text] = useState("")
@@ -242,18 +423,17 @@ export function RegisterMatchDialog({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <label className="text-sm font-medium text-muted-foreground">맵</label>
-              <span className="text-xs text-muted-foreground">띄어쓰기 없이 한글로만</span>
+              <span className="text-xs text-muted-foreground">띄어쓰기 없이 풀네임 한글로만</span>
             </div>
-            <Input
-              placeholder="예: 서킷브레이커"
+            <MapAutocomplete
               value={map}
-              onChange={(e) => {
+              knownMaps={knownMaps}
+              onChange={(v) => {
                 setMapError(null)
-                setMap(e.target.value)
+                setMap(v)
               }}
-              className="bg-input border-border"
+              error={mapError}
             />
-            {mapError && <p className="text-sm text-destructive">{mapError}</p>}
           </div>
 
           <div className="space-y-2">
