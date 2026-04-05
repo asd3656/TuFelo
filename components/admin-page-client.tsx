@@ -591,6 +591,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
                 <p>클랜 탈퇴 시 비활성화 상태로 두는 것을 추천합니다.</p>
                 <p>전적 기록이 아예 없는 신규 회원은 완전 삭제하셔도 됩니다.</p>
                 <p>추가 기능 건의나 기타 문의사항은 <span className="text-foreground font-semibold">Tyr 카톡</span> 바랍니다.</p>
+                <p><span className="text-foreground font-semibold">관리자분은 꼭 본인 계정</span>으로 하시기 바랍니다. 문제 생길 때 해결이 쉬워집니다! </p>
               </div>
             </div>
           </DialogContent>
