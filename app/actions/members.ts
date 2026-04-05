@@ -114,3 +114,37 @@ export async function reactivateMemberAction(id: string): Promise<ActionResult> 
   revalidatePath("/ranking")
   return { ok: true }
 }
+
+/**
+ * 완전 삭제(제명): 해당 선수의 전적 기록을 모두 삭제한 후 멤버를 DB에서 완전히 제거합니다.
+ * 상대방의 ELO/전적은 복구되지 않습니다.
+ * 탈퇴 처리(is_active = false)된 선수에게만 사용하세요.
+ */
+export async function permanentDeleteMemberAction(id: string): Promise<ActionResult> {
+  if (!(await isAdminFromCookies())) {
+    return { ok: false, error: "권한이 없습니다." }
+  }
+
+  const supabase = await createClient()
+
+  // 해당 선수가 참여한 모든 전적 먼저 삭제
+  const { error: matchDeleteErr } = await supabase
+    .from("matches")
+    .delete()
+    .or(`player1_id.eq.${id},player2_id.eq.${id}`)
+
+  if (matchDeleteErr) return { ok: false, error: matchDeleteErr.message }
+
+  // 멤버 완전 삭제
+  const { error: memberDeleteErr } = await supabase
+    .from("members")
+    .delete()
+    .eq("id", id)
+
+  if (memberDeleteErr) return { ok: false, error: memberDeleteErr.message }
+
+  revalidatePath("/")
+  revalidatePath("/admin")
+  revalidatePath("/ranking")
+  return { ok: true }
+}

@@ -43,6 +43,7 @@ import type { ClanMember, Race, Tier } from "@/lib/types/tufelo"
 import {
   addMemberAction,
   deleteMemberAction,
+  permanentDeleteMemberAction,
   reactivateMemberAction,
   updateMemberAction,
   type ActionResult,
@@ -84,6 +85,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isPermanentDeleteDialogOpen, setIsPermanentDeleteDialogOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<ClanMember | null>(null)
   const [formData, setFormData] = useState<{ name: string; race: Race; tier: CliqueTier }>({
     name: "",
@@ -152,6 +154,19 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
 
   const handleReactivate = (member: ClanMember) => {
     runAction(() => reactivateMemberAction(member.id))
+  }
+
+  const handlePermanentDelete = () => {
+    if (!selectedMember) return
+    runAction(() => permanentDeleteMemberAction(selectedMember.id), () => {
+      setIsPermanentDeleteDialogOpen(false)
+      setSelectedMember(null)
+    })
+  }
+
+  const openPermanentDeleteDialog = (member: ClanMember) => {
+    setSelectedMember(member)
+    setIsPermanentDeleteDialogOpen(true)
   }
 
   const openEditDialog = (member: ClanMember) => {
@@ -357,16 +372,28 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
                             </Button>
                           </>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-accent hover:bg-accent/10"
-                            onClick={() => handleReactivate(member)}
-                            disabled={pending}
-                            title="복귀 처리"
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-accent hover:bg-accent/10"
+                              onClick={() => handleReactivate(member)}
+                              disabled={pending}
+                              title="복귀 처리"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => openPermanentDeleteDialog(member)}
+                              disabled={pending}
+                              title="완전 삭제 (제명)"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -508,6 +535,31 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={isPermanentDeleteDialogOpen} onOpenChange={setIsPermanentDeleteDialogOpen}>
+          <AlertDialogContent className="bg-card border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-foreground">완전 삭제 (제명)</AlertDialogTitle>
+              <AlertDialogDescription className="text-muted-foreground">
+                <span className="text-foreground font-semibold">{selectedMember?.name}</span> 선수를 DB에서 완전히 삭제합니다.
+                <br /><br />
+                <span className="text-destructive font-semibold">⚠ 이 선수의 모든 전적 기록도 함께 삭제됩니다.</span>
+                <br />
+                상대방의 ELO와 전적은 복구되지 않습니다. 이 작업은 되돌릴 수 없습니다.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-border text-foreground">취소</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handlePermanentDelete}
+                disabled={pending}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                완전 삭제
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent className="bg-card border-border">
