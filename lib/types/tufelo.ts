@@ -40,6 +40,7 @@ export interface ClanMember {
   wins: number
   losses: number
   streak: number
+  isActive: boolean
 }
 
 export interface RegisterMatchInput {

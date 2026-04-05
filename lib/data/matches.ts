@@ -73,6 +73,7 @@ export async function fetchRankingData(): Promise<{
     supabase
       .from("members")
       .select("id, name, race, tier, elo, wins, losses, streak")
+      .eq("is_active", true)
       .order("elo", { ascending: false }),
     supabase
       .from("matches")

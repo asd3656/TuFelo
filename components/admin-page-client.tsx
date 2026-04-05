@@ -38,11 +38,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Search, Users, ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react"
+import { Search, Users, ArrowLeft, Plus, Pencil, Trash2, RotateCcw } from "lucide-react"
 import type { ClanMember, Race, Tier } from "@/lib/types/tufelo"
 import {
   addMemberAction,
   deleteMemberAction,
+  reactivateMemberAction,
   updateMemberAction,
   type ActionResult,
 } from "@/app/actions/members"
@@ -147,6 +148,10 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
       setIsDeleteDialogOpen(false)
       setSelectedMember(null)
     })
+  }
+
+  const handleReactivate = (member: ClanMember) => {
+    runAction(() => reactivateMemberAction(member.id))
   }
 
   const openEditDialog = (member: ClanMember) => {
@@ -278,7 +283,10 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
           <div className="px-6 py-4 border-b border-border flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-foreground">전체 명단</h2>
-              <p className="text-sm text-muted-foreground">총 {filteredMembers.length}명의 클랜원</p>
+              <p className="text-sm text-muted-foreground">
+                총 {filteredMembers.filter((m) => m.isActive).length}명 활성 ·{" "}
+                {filteredMembers.filter((m) => !m.isActive).length}명 탈퇴
+              </p>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -294,10 +302,24 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
               </TableHeader>
               <TableBody>
                 {filteredMembers.map((member, index) => (
-                  <TableRow key={member.id} className="border-border hover:bg-secondary/50 transition-colors">
+                  <TableRow
+                    key={member.id}
+                    className={`border-border transition-colors ${
+                      member.isActive
+                        ? "hover:bg-secondary/50"
+                        : "opacity-50 bg-secondary/10 hover:bg-secondary/20"
+                    }`}
+                  >
                     <TableCell className="text-center text-muted-foreground font-mono">{index + 1}</TableCell>
                     <TableCell>
-                      <span className="font-semibold text-foreground">{member.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground">{member.name}</span>
+                        {!member.isActive && (
+                          <Badge variant="outline" className="text-xs border-muted-foreground/40 text-muted-foreground">
+                            탈퇴
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <Badge variant="outline" className={raceColors[member.race]}>
@@ -311,24 +333,41 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                          onClick={() => openEditDialog(member)}
-                          disabled={pending}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => openDeleteDialog(member)}
-                          disabled={pending}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {member.isActive ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              onClick={() => openEditDialog(member)}
+                              disabled={pending}
+                              title="수정"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => openDeleteDialog(member)}
+                              disabled={pending}
+                              title="탈퇴 처리"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-accent hover:bg-accent/10"
+                            onClick={() => handleReactivate(member)}
+                            disabled={pending}
+                            title="복귀 처리"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -473,10 +512,13 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent className="bg-card border-border">
             <AlertDialogHeader>
-              <AlertDialogTitle className="text-foreground">클랜원 삭제</AlertDialogTitle>
+              <AlertDialogTitle className="text-foreground">클랜 탈퇴 처리</AlertDialogTitle>
               <AlertDialogDescription className="text-muted-foreground">
-                정말로 <span className="text-foreground font-semibold">{selectedMember?.name}</span> 선수를 명단에서
-                삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+                <span className="text-foreground font-semibold">{selectedMember?.name}</span> 선수를 탈퇴 처리하시겠습니까?
+                <br />
+                전적 기록은 그대로 보존되며, 랭킹과 전적 등록 선수 목록에서 제외됩니다.
+                <br />
+                복귀 시 명단 관리에서 복귀 처리할 수 있습니다.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -486,7 +528,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
                 disabled={pending}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                삭제
+                탈퇴 처리
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

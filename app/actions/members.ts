@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { getStartingEloForTier } from "@/lib/elo"
+import { isAdminFromCookies } from "@/lib/auth/admin"
 import type { Race, Tier } from "@/lib/types/tufelo"
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -26,6 +27,7 @@ export async function addMemberAction(input: {
     wins: 0,
     losses: 0,
     streak: 0,
+    is_active: true,
   })
 
   if (error) {
@@ -73,16 +75,39 @@ export async function updateMemberAction(input: {
   return { ok: true }
 }
 
+/** 클랜 탈퇴 처리: is_active = false로 소프트 삭제. 전적 기록은 보존됩니다. */
 export async function deleteMemberAction(id: string): Promise<ActionResult> {
-  const supabase = await createClient()
-  const { error } = await supabase.from("members").delete().eq("id", id)
-
-  if (error) {
-    if (error.code === "23503") {
-      return { ok: false, error: "전적이 있는 선수는 삭제할 수 없습니다. (DB 제약)" }
-    }
-    return { ok: false, error: error.message }
+  if (!(await isAdminFromCookies())) {
+    return { ok: false, error: "권한이 없습니다." }
   }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("members")
+    .update({ is_active: false })
+    .eq("id", id)
+
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath("/")
+  revalidatePath("/admin")
+  revalidatePath("/ranking")
+  return { ok: true }
+}
+
+/** 클랜 복귀 처리: is_active = true로 복원. */
+export async function reactivateMemberAction(id: string): Promise<ActionResult> {
+  if (!(await isAdminFromCookies())) {
+    return { ok: false, error: "권한이 없습니다." }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("members")
+    .update({ is_active: true })
+    .eq("id", id)
+
+  if (error) return { ok: false, error: error.message }
 
   revalidatePath("/")
   revalidatePath("/admin")
