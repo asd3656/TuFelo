@@ -25,7 +25,7 @@ interface RegisterMatchDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   members: { id: string; name: string }[]
-  onRegister: (input: RegisterMatchInput) => void
+  onRegister: (input: RegisterMatchInput, keepOpen?: boolean) => void
   isSubmitting?: boolean
   prefillDate: string
   prefillMap: string
@@ -349,36 +349,48 @@ export function RegisterMatchDialog({
     }
   }, [p1Id, p2Id])
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const validateAndGetInput = (): RegisterMatchInput | null => {
     setMapError(null)
     if (!p1Id) {
       window.alert("선수 1을 목록에서 선택해 주세요. (이름 입력 후 제안 클릭)")
-      return
+      return null
     }
     if (!p2Id) {
       window.alert("선수 2를 목록에서 선택해 주세요.")
-      return
+      return null
     }
     if (!map) {
       window.alert("맵 이름을 입력해 주세요.")
-      return
+      return null
     }
     if (!mapNamePattern.test(map)) {
       setMapError("맵 이름은 띄어쓰기 없이 한글만 입력해 주세요.")
-      return
+      return null
     }
     if (!matchType) {
       window.alert("경기 유형을 선택해 주세요.")
-      return
+      return null
     }
-    onRegister({
+    return {
       player1Id: p1Id,
       player2Id: p2Id,
       mapName: map,
       playedDate: clampDateToSeoulMax(date),
       matchType,
-    })
+    }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const input = validateAndGetInput()
+    if (!input) return
+    onRegister(input)
+  }
+
+  const handleContinueRegister = () => {
+    const input = validateAndGetInput()
+    if (!input) return
+    onRegister(input, true)
   }
 
   const seoulToday = getSeoulDateString()
@@ -419,6 +431,23 @@ export function RegisterMatchDialog({
               setP2Text(name)
             }}
           />
+
+          <div className="flex justify-start">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setP1Id(p2Id)
+                setP1Text(p2Text)
+                setP2Id(p1Id)
+                setP2Text(p1Text)
+              }}
+              className="border-border text-muted-foreground hover:text-foreground gap-1.5"
+            >
+              ⇅ 선수 스왑
+            </Button>
+          </div>
 
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -476,6 +505,15 @@ export function RegisterMatchDialog({
               disabled={isSubmitting}
             >
               취소
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleContinueRegister}
+              className="flex-1"
+              disabled={isSubmitting || members.length < 2}
+            >
+              {isSubmitting ? "등록 중…" : "이어서 등록"}
             </Button>
             <Button
               type="submit"

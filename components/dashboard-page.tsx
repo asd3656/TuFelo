@@ -64,7 +64,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
   // 선수1 검색 없을 때는 최근 20경기만 표시, 선수1 검색 시 전체 표시
   const displayMatches = player1 ? filteredMatches : filteredMatches.slice(0, 20)
 
-  function handleRegister(input: RegisterMatchInput) {
+  function handleRegister(input: RegisterMatchInput, keepOpen?: boolean) {
     if (!isAdmin) {
       window.alert("운영진만 전적을 등록할 수 있습니다.")
       return
@@ -75,7 +75,9 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
         window.alert(res.error)
         return
       }
-      setIsDialogOpen(false)
+      if (!keepOpen) {
+        setIsDialogOpen(false)
+      }
       router.refresh()
     })
   }
