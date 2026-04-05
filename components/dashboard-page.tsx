@@ -122,41 +122,21 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
               >
                 관리자 로그인
               </Button>
-              {isAdmin ? (
+              {isAdmin && (
                 <Link href="/ranking">
                   <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
                     <BarChart3 className="h-4 w-4 mr-2" />
                     ELO 랭킹(관리자)
                   </Button>
                 </Link>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-border text-foreground hover:bg-secondary"
-                  onClick={() => window.alert("운영진만 들어갈 수 있습니다.")}
-                >
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  ELO 랭킹(관리자)
-                </Button>
               )}
-              {isAdmin ? (
+              {isAdmin && (
                 <Link href="/admin">
                   <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
                     <Users className="h-4 w-4 mr-2" />
                     클랜원 명단
                   </Button>
                 </Link>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-border text-foreground hover:bg-secondary"
-                  onClick={() => window.alert("운영진만 가능합니다.")}
-                >
-                  <Users className="h-4 w-4 mr-2" />
-                  클랜원 명단
-                </Button>
               )}
               <Link href="/ranking/public">
                 <Button className="bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-md border-0">
