@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server"
 import { computeEloMatch } from "@/lib/elo"
 import { getClientIp } from "@/lib/request-ip"
 import { computeStreakForMember } from "@/lib/match-streak"
-import { isAdminFromCookies } from "@/lib/auth/admin"
+import { getSessionFromCookies } from "@/lib/auth/admin"
+import { insertAdminLog } from "@/lib/admin-log"
 import type { RegisterMatchInput } from "@/lib/types/tufelo"
 
 const mapNamePattern = /^[가-힣]+$/
@@ -13,7 +14,8 @@ const mapNamePattern = /^[가-힣]+$/
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
 export async function registerMatchAction(input: RegisterMatchInput): Promise<ActionResult> {
-  if (!(await isAdminFromCookies())) {
+  const session = await getSessionFromCookies()
+  if (!session) {
     return { ok: false, error: "권한이 없습니다." }
   }
 
@@ -105,6 +107,13 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
     return { ok: false, error: u1?.message ?? u2?.message ?? "ELO 업데이트 실패" }
   }
 
+  await insertAdminLog(
+    session.username,
+    "전적 등록",
+    `${input.mapName}`,
+    `player1=${input.player1Id} player2=${input.player2Id} type=${input.matchType} date=${input.playedDate}`,
+  )
+
   revalidatePath("/")
   revalidatePath("/admin")
   revalidatePath("/ranking")
@@ -112,7 +121,8 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
 }
 
 export async function deleteMatchAction(matchId: string): Promise<ActionResult> {
-  if (!(await isAdminFromCookies())) {
+  const session = await getSessionFromCookies()
+  if (!session) {
     return { ok: false, error: "권한이 없습니다." }
   }
 
@@ -195,6 +205,8 @@ export async function deleteMatchAction(matchId: string): Promise<ActionResult> 
   const s2 = await computeStreakForMember(supabase, p2)
   await supabase.from("members").update({ streak: s1 }).eq("id", p1)
   await supabase.from("members").update({ streak: s2 }).eq("id", p2)
+
+  await insertAdminLog(session.username, "전적 삭제", matchId)
 
   revalidatePath("/")
   revalidatePath("/admin")

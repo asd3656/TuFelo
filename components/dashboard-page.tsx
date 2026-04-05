@@ -28,9 +28,10 @@ interface DashboardPageProps {
   initialMatches: Match[]
   members: ClanMember[]
   isAdmin: boolean
+  isCreator?: boolean
 }
 
-export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPageProps) {
+export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: DashboardPageProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
@@ -122,6 +123,13 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
               <p className="text-muted-foreground">전적관리 대시보드</p>
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
+              {isCreator && (
+                <Link href="/creator">
+                  <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md border-0">
+                    제작자 페이지
+                  </Button>
+                </Link>
+              )}
               <Button
                 type="button"
                 className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md border-0"

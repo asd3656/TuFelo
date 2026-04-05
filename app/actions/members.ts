@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { getStartingEloForTier } from "@/lib/elo"
-import { isAdminFromCookies } from "@/lib/auth/admin"
+import { getSessionFromCookies } from "@/lib/auth/admin"
+import { insertAdminLog } from "@/lib/admin-log"
 import type { Race, Tier } from "@/lib/types/tufelo"
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
@@ -13,6 +14,9 @@ export async function addMemberAction(input: {
   race: Race
   tier: Tier
 }): Promise<ActionResult> {
+  const session = await getSessionFromCookies()
+  if (!session) return { ok: false, error: "권한이 없습니다." }
+
   const name = input.name.trim()
   if (!name) return { ok: false, error: "이름을 입력하세요." }
 
@@ -37,6 +41,7 @@ export async function addMemberAction(input: {
     return { ok: false, error: error.message }
   }
 
+  await insertAdminLog(session.username, "클랜원 추가", name, `race=${input.race} tier=${input.tier}`)
   revalidatePath("/")
   revalidatePath("/admin")
   revalidatePath("/ranking")
@@ -49,6 +54,9 @@ export async function updateMemberAction(input: {
   race: Race
   tier: Tier
 }): Promise<ActionResult> {
+  const session = await getSessionFromCookies()
+  if (!session) return { ok: false, error: "권한이 없습니다." }
+
   const name = input.name.trim()
   if (!name) return { ok: false, error: "이름을 입력하세요." }
 
@@ -69,6 +77,7 @@ export async function updateMemberAction(input: {
     return { ok: false, error: error.message }
   }
 
+  await insertAdminLog(session.username, "클랜원 수정", name, `race=${input.race} tier=${input.tier}`)
   revalidatePath("/")
   revalidatePath("/admin")
   revalidatePath("/ranking")
@@ -77,11 +86,13 @@ export async function updateMemberAction(input: {
 
 /** 클랜 탈퇴 처리: is_active = false로 소프트 삭제. 전적 기록은 보존됩니다. */
 export async function deleteMemberAction(id: string): Promise<ActionResult> {
-  if (!(await isAdminFromCookies())) {
-    return { ok: false, error: "권한이 없습니다." }
-  }
+  const session = await getSessionFromCookies()
+  if (!session) return { ok: false, error: "권한이 없습니다." }
 
   const supabase = await createClient()
+
+  const { data: member } = await supabase.from("members").select("name").eq("id", id).single()
+
   const { error } = await supabase
     .from("members")
     .update({ is_active: false })
@@ -89,6 +100,7 @@ export async function deleteMemberAction(id: string): Promise<ActionResult> {
 
   if (error) return { ok: false, error: error.message }
 
+  await insertAdminLog(session.username, "클랜원 탈퇴처리", member?.name ?? id)
   revalidatePath("/")
   revalidatePath("/admin")
   revalidatePath("/ranking")
@@ -97,11 +109,13 @@ export async function deleteMemberAction(id: string): Promise<ActionResult> {
 
 /** 클랜 복귀 처리: is_active = true로 복원. */
 export async function reactivateMemberAction(id: string): Promise<ActionResult> {
-  if (!(await isAdminFromCookies())) {
-    return { ok: false, error: "권한이 없습니다." }
-  }
+  const session = await getSessionFromCookies()
+  if (!session) return { ok: false, error: "권한이 없습니다." }
 
   const supabase = await createClient()
+
+  const { data: member } = await supabase.from("members").select("name").eq("id", id).single()
+
   const { error } = await supabase
     .from("members")
     .update({ is_active: true })
@@ -109,6 +123,7 @@ export async function reactivateMemberAction(id: string): Promise<ActionResult> 
 
   if (error) return { ok: false, error: error.message }
 
+  await insertAdminLog(session.username, "클랜원 복귀처리", member?.name ?? id)
   revalidatePath("/")
   revalidatePath("/admin")
   revalidatePath("/ranking")
@@ -121,11 +136,13 @@ export async function reactivateMemberAction(id: string): Promise<ActionResult> 
  * 탈퇴 처리(is_active = false)된 선수에게만 사용하세요.
  */
 export async function permanentDeleteMemberAction(id: string): Promise<ActionResult> {
-  if (!(await isAdminFromCookies())) {
-    return { ok: false, error: "권한이 없습니다." }
-  }
+  const session = await getSessionFromCookies()
+  if (!session) return { ok: false, error: "권한이 없습니다." }
 
   const supabase = await createClient()
+
+  const { data: member } = await supabase.from("members").select("name").eq("id", id).single()
+  const memberName = member?.name ?? id
 
   // 해당 선수가 참여한 모든 전적 먼저 삭제
   const { error: matchDeleteErr } = await supabase
@@ -143,6 +160,7 @@ export async function permanentDeleteMemberAction(id: string): Promise<ActionRes
 
   if (memberDeleteErr) return { ok: false, error: memberDeleteErr.message }
 
+  await insertAdminLog(session.username, "클랜원 완전삭제", memberName)
   revalidatePath("/")
   revalidatePath("/admin")
   revalidatePath("/ranking")
