@@ -112,12 +112,14 @@ function MemberAutocomplete({
           const m = choices[activeIndex]
           onChange(m.id, m.name)
           setOpenList(false)
-          inputRef.current?.blur()
         }
         break
       case "Escape":
         setOpenList(false)
         setActiveIndex(-1)
+        break
+      case "Tab":
+        setOpenList(false)
         break
     }
   }
@@ -135,7 +137,7 @@ function MemberAutocomplete({
             onChange("", v)
             setOpenList(true)
           }}
-          onFocus={() => setOpenList(true)}
+          onFocus={() => { if (!selectedId) setOpenList(true) }}
           onKeyDown={handleKeyDown}
           autoComplete="off"
           className="bg-input border-border"
@@ -161,7 +163,7 @@ function MemberAutocomplete({
                   onClick={() => {
                     onChange(m.id, m.name)
                     setOpenList(false)
-                    inputRef.current?.blur()
+                    inputRef.current?.focus()
                   }}
                 >
                   {m.name}
@@ -239,12 +241,14 @@ function MatchTypeAutocomplete({
         if (activeIndex >= 0 && activeIndex < choices.length) {
           onChange(choices[activeIndex])
           setOpenList(false)
-          inputRef.current?.blur()
         }
         break
       case "Escape":
         setOpenList(false)
         setActiveIndex(-1)
+        break
+      case "Tab":
+        setOpenList(false)
         break
     }
   }
@@ -259,7 +263,7 @@ function MatchTypeAutocomplete({
           onChange(e.target.value)
           setOpenList(true)
         }}
-        onFocus={() => setOpenList(true)}
+        onFocus={() => { if (!value.trim()) return; setOpenList(true) }}
         onKeyDown={handleKeyDown}
         autoComplete="off"
         className="bg-input border-border"
@@ -285,7 +289,7 @@ function MatchTypeAutocomplete({
                 onClick={() => {
                   onChange(typeName)
                   setOpenList(false)
-                  inputRef.current?.blur()
+                  inputRef.current?.focus()
                 }}
               >
                 {typeName}
@@ -364,12 +368,14 @@ function MapAutocomplete({
         if (activeIndex >= 0 && activeIndex < choices.length) {
           onChange(choices[activeIndex])
           setOpenList(false)
-          inputRef.current?.blur()
         }
         break
       case "Escape":
         setOpenList(false)
         setActiveIndex(-1)
+        break
+      case "Tab":
+        setOpenList(false)
         break
     }
   }
@@ -412,7 +418,7 @@ function MapAutocomplete({
                 onClick={() => {
                   onChange(mapName)
                   setOpenList(false)
-                  inputRef.current?.blur()
+                  inputRef.current?.focus()
                 }}
               >
                 {mapName}
