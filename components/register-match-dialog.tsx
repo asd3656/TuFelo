@@ -7,17 +7,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getSeoulDateString } from "@/lib/date-seoul"
-import { MATCH_TYPES } from "@/lib/types/tufelo"
 import type { RegisterMatchInput } from "@/lib/types/tufelo"
 import { cn } from "@/lib/utils"
 
@@ -31,6 +23,7 @@ interface RegisterMatchDialogProps {
   prefillMap: string
   prefillMatchType?: string
   knownMaps: string[]
+  knownMatchTypes: string[]
 }
 
 const mapNamePattern = /^[가-힣]+$/
@@ -182,6 +175,129 @@ function MemberAutocomplete({
   )
 }
 
+function MatchTypeAutocomplete({
+  value,
+  knownTypes,
+  onChange,
+}: {
+  value: string
+  knownTypes: readonly string[]
+  onChange: (v: string) => void
+}) {
+  const [openList, setOpenList] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+
+  const choices = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (!q) return [...knownTypes]
+    return knownTypes.filter((t) => t.toLowerCase().includes(q))
+  }, [knownTypes, value])
+
+  useEffect(() => {
+    setActiveIndex(-1)
+  }, [choices])
+
+  useEffect(() => {
+    if (activeIndex >= 0 && listRef.current) {
+      const items = listRef.current.querySelectorAll<HTMLElement>('[role="option"]')
+      items[activeIndex]?.scrollIntoView({ block: "nearest" })
+    }
+  }, [activeIndex])
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpenList(false)
+      }
+    }
+    document.addEventListener("mousedown", onDoc)
+    return () => document.removeEventListener("mousedown", onDoc)
+  }, [])
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!openList || choices.length === 0) {
+      if (e.key === "ArrowDown") {
+        setOpenList(true)
+        e.preventDefault()
+      }
+      return
+    }
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault()
+        setActiveIndex((prev) => Math.min(prev + 1, choices.length - 1))
+        break
+      case "ArrowUp":
+        e.preventDefault()
+        setActiveIndex((prev) => Math.max(prev - 1, 0))
+        break
+      case "Enter":
+        e.preventDefault()
+        if (activeIndex >= 0 && activeIndex < choices.length) {
+          onChange(choices[activeIndex])
+          setOpenList(false)
+          inputRef.current?.blur()
+        }
+        break
+      case "Escape":
+        setOpenList(false)
+        setActiveIndex(-1)
+        break
+    }
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <Input
+        ref={inputRef}
+        placeholder="예: 친선, 친선경기를 친선 으로 통일해서 입력"
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpenList(true)
+        }}
+        onFocus={() => setOpenList(true)}
+        onKeyDown={handleKeyDown}
+        autoComplete="off"
+        className="bg-input border-border"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={openList && choices.length > 0}
+      />
+      {openList && choices.length > 0 && (
+        <ul
+          ref={listRef}
+          className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
+          role="listbox"
+        >
+          {choices.map((typeName, idx) => (
+            <li key={typeName} role="option" aria-selected={idx === activeIndex}>
+              <button
+                type="button"
+                className={cn(
+                  "w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                  idx === activeIndex && "bg-accent/50",
+                )}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(typeName)
+                  setOpenList(false)
+                  inputRef.current?.blur()
+                }}
+              >
+                {typeName}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function MapAutocomplete({
   value,
   knownMaps,
@@ -320,6 +436,7 @@ export function RegisterMatchDialog({
   prefillMap,
   prefillMatchType,
   knownMaps,
+  knownMatchTypes,
 }: RegisterMatchDialogProps) {
   const [p1Id, setP1Id] = useState("")
   const [p1Text, setP1Text] = useState("")
@@ -367,8 +484,8 @@ export function RegisterMatchDialog({
       setMapError("맵 이름은 띄어쓰기 없이 한글만 입력해 주세요.")
       return null
     }
-    if (!matchType) {
-      window.alert("경기 유형을 선택해 주세요.")
+    if (!matchType.trim()) {
+      window.alert("경기 유형을 입력해 주세요.")
       return null
     }
     return {
@@ -466,19 +583,15 @@ export function RegisterMatchDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-muted-foreground">경기 유형</label>
-            <Select value={matchType} onValueChange={setMatchType}>
-              <SelectTrigger className="bg-input border-border">
-                <SelectValue placeholder="경기 유형 선택…" />
-              </SelectTrigger>
-              <SelectContent>
-                {MATCH_TYPES.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-sm font-medium text-muted-foreground">경기 유형</label>
+              <span className="text-xs text-muted-foreground">같은 경기유형 양식을 통일해주세요.</span>
+            </div>
+            <MatchTypeAutocomplete
+              value={matchType}
+              knownTypes={knownMatchTypes}
+              onChange={setMatchType}
+            />
           </div>
 
           <div className="space-y-2">

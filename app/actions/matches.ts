@@ -6,11 +6,9 @@ import { computeEloMatch } from "@/lib/elo"
 import { getClientIp } from "@/lib/request-ip"
 import { computeStreakForMember } from "@/lib/match-streak"
 import { isAdminFromCookies } from "@/lib/auth/admin"
-import { MATCH_TYPES } from "@/lib/types/tufelo"
 import type { RegisterMatchInput } from "@/lib/types/tufelo"
 
 const mapNamePattern = /^[가-힣]+$/
-const VALID_MATCH_TYPES = new Set<string>(MATCH_TYPES)
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
@@ -25,8 +23,8 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
   if (!mapNamePattern.test(input.mapName)) {
     return { ok: false, error: "맵 이름은 띄어쓰기 없이 한글만 입력해 주세요." }
   }
-  if (!input.matchType || !VALID_MATCH_TYPES.has(input.matchType)) {
-    return { ok: false, error: "경기 유형을 선택해 주세요." }
+  if (!input.matchType || !input.matchType.trim()) {
+    return { ok: false, error: "경기 유형을 입력해 주세요." }
   }
 
   const supabase = await createClient()

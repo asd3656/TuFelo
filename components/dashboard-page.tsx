@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/select"
 import { Plus, Trophy, BarChart3, Users } from "lucide-react"
 import { getSeoulDateString } from "@/lib/date-seoul"
-import { MATCH_TYPES } from "@/lib/types/tufelo"
 import type { ClanMember, Match, RegisterMatchInput } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction } from "@/app/actions/matches"
 
@@ -101,6 +100,12 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
 
   const knownMaps = useMemo(
     () => Array.from(new Set(initialMatches.map((m) => m.map))).sort(),
+    [initialMatches],
+  )
+
+  const knownMatchTypes = useMemo(
+    () =>
+      Array.from(new Set(initialMatches.map((m) => m.matchType).filter((t): t is string => !!t))).sort(),
     [initialMatches],
   )
 
@@ -250,7 +255,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">전체</SelectItem>
-                  {MATCH_TYPES.map((t) => (
+                  {knownMatchTypes.map((t) => (
                     <SelectItem key={t} value={t}>
                       {t}
                     </SelectItem>
@@ -325,6 +330,7 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
           prefillMap={filterMap.trim()}
           prefillMatchType={filterMatchType === "__all__" ? "" : filterMatchType}
           knownMaps={knownMaps}
+          knownMatchTypes={knownMatchTypes}
         />
       </div>
     </main>
