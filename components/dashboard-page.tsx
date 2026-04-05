@@ -37,7 +37,8 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
   const [isDeletePending, startDeleteTransition] = useTransition()
   const [player1, setPlayer1] = useState("")
   const [player2, setPlayer2] = useState("")
-  const [filterDate, setFilterDate] = useState("")
+  const [filterDateFrom, setFilterDateFrom] = useState("")
+  const [filterDateTo, setFilterDateTo] = useState("")
   const [filterMap, setFilterMap] = useState("")
   const [filterMatchType, setFilterMatchType] = useState("__all__")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -54,7 +55,9 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
       !player2 ||
       match.player2.toLowerCase().includes(player2.toLowerCase()) ||
       match.player1.toLowerCase().includes(player2.toLowerCase())
-    const matchesDate = !filterDate || match.date === filterDate
+    const matchesDate =
+      (!filterDateFrom || match.date >= filterDateFrom) &&
+      (!filterDateTo || match.date <= filterDateTo)
     const q = filterMap.trim().toLowerCase()
     const matchesMap = !q || match.map.toLowerCase().includes(q)
     const matchesType = filterMatchType === "__all__" || match.matchType === filterMatchType
@@ -213,27 +216,33 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-border">
             <div className="space-y-2">
-              <Label htmlFor="filter-date" className="text-sm font-medium text-muted-foreground">
-                날짜 필터
-              </Label>
-              <Input
-                id="filter-date"
-                type="date"
-                value={filterDate}
-                max={seoulToday}
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (!v) {
-                    setFilterDate("")
-                    return
-                  }
-                  if (v > seoulToday) setFilterDate(seoulToday)
-                  else setFilterDate(v)
-                }}
-                className="bg-input border-border text-foreground max-w-xs"
-              />
+              <Label className="text-sm font-medium text-muted-foreground">날짜 필터</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={filterDateFrom}
+                  max={filterDateTo || seoulToday}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setFilterDateFrom(!v ? "" : v > seoulToday ? seoulToday : v)
+                  }}
+                  className="bg-input border-border text-foreground"
+                />
+                <span className="text-muted-foreground text-sm shrink-0">~</span>
+                <Input
+                  type="date"
+                  value={filterDateTo}
+                  min={filterDateFrom || undefined}
+                  max={seoulToday}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setFilterDateTo(!v ? "" : v > seoulToday ? seoulToday : v)
+                  }}
+                  className="bg-input border-border text-foreground"
+                />
+              </div>
               <p className="text-xs text-muted-foreground">
-                비워 두면 모든 날짜 · 선택 시 해당 날짜 전적만 표시
+                비워 두면 모든 날짜 · 시작일~종료일 범위 표시
               </p>
             </div>
 
@@ -334,7 +343,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
           members={memberOptions}
           onRegister={handleRegister}
           isSubmitting={isPending}
-          prefillDate={filterDate}
+          prefillDate={filterDateFrom}
           prefillMap={filterMap.trim()}
           prefillMatchType={filterMatchType === "__all__" ? "" : filterMatchType}
           knownMaps={knownMaps}

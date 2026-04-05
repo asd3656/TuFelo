@@ -116,28 +116,31 @@ export function CreatorPageClient({ currentUsername, admins, logs }: CreatorPage
   const [filterAdmin, setFilterAdmin] = useState("")
   const [filterTarget, setFilterTarget] = useState("")
   const [filterAction, setFilterAction] = useState("__all__")
-  const [filterDate, setFilterDate] = useState("")
+  const [filterDateFrom, setFilterDateFrom] = useState("")
+  const [filterDateTo, setFilterDateTo] = useState("")
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
       if (filterAdmin && !log.admin_username.toLowerCase().includes(filterAdmin.toLowerCase())) return false
       if (filterTarget && !(log.target ?? "").toLowerCase().includes(filterTarget.toLowerCase())) return false
       if (filterAction !== "__all__" && log.action !== filterAction) return false
-      if (filterDate) {
+      if (filterDateFrom || filterDateTo) {
         const logDate = toSeoulDateString(log.created_at)
-        if (!logDate.startsWith(filterDate)) return false
+        if (filterDateFrom && logDate < filterDateFrom) return false
+        if (filterDateTo && logDate > filterDateTo) return false
       }
       return true
     })
-  }, [logs, filterAdmin, filterTarget, filterAction, filterDate])
+  }, [logs, filterAdmin, filterTarget, filterAction, filterDateFrom, filterDateTo])
 
-  const hasFilter = filterAdmin || filterTarget || filterAction !== "__all__" || filterDate
+  const hasFilter = filterAdmin || filterTarget || filterAction !== "__all__" || filterDateFrom || filterDateTo
 
   function resetFilters() {
     setFilterAdmin("")
     setFilterTarget("")
     setFilterAction("__all__")
-    setFilterDate("")
+    setFilterDateFrom("")
+    setFilterDateTo("")
   }
 
   function handleAddAdmin(e: React.FormEvent) {
@@ -349,11 +352,22 @@ export function CreatorPageClient({ currentUsername, admins, logs }: CreatorPage
                 </Select>
               </div>
               <div className="space-y-1 min-w-36">
-                <Label className="text-xs text-muted-foreground">날짜</Label>
+                <Label className="text-xs text-muted-foreground">시작일</Label>
                 <Input
                   type="date"
-                  value={filterDate}
-                  onChange={(e) => setFilterDate(e.target.value)}
+                  value={filterDateFrom}
+                  max={filterDateTo || undefined}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  className="bg-input border-border h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1 min-w-36">
+                <Label className="text-xs text-muted-foreground">종료일</Label>
+                <Input
+                  type="date"
+                  value={filterDateTo}
+                  min={filterDateFrom || undefined}
+                  onChange={(e) => setFilterDateTo(e.target.value)}
                   className="bg-input border-border h-8 text-sm"
                 />
               </div>
