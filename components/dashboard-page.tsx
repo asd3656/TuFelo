@@ -61,6 +61,9 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
     return matchesPlayer1 && matchesPlayer2 && matchesDate && matchesMap && matchesType
   })
 
+  // 선수1 검색 없을 때는 최근 20경기만 표시, 선수1 검색 시 전체 표시
+  const displayMatches = player1 ? filteredMatches : filteredMatches.slice(0, 20)
+
   function handleRegister(input: RegisterMatchInput) {
     if (!isAdmin) {
       window.alert("운영진만 전적을 등록할 수 있습니다.")
@@ -310,11 +313,13 @@ export function DashboardPage({ initialMatches, members, isAdmin }: DashboardPag
           <div className="px-6 py-4 border-b border-border">
             <h2 className="text-lg font-semibold text-foreground">전적 기록</h2>
             <p className="text-sm text-muted-foreground">
-              {player1 ? `"${player1}" 선수의 경기 기록` : "전체 경기 기록"}
+              {player1
+                ? `"${player1}" 선수의 경기 기록 (${filteredMatches.length}경기)`
+                : `전체 경기 기록 (최근 20경기 표시 / 전체 ${filteredMatches.length}경기)`}
             </p>
           </div>
           <MatchHistory
-            matches={filteredMatches}
+            matches={displayMatches}
             searchPlayer={player1}
             isAdmin={isAdmin}
             onDeleteMatch={handleDeleteMatch}

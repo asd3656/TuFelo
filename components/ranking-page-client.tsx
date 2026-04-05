@@ -42,6 +42,13 @@ interface ComputedPlayer {
   streak: number
   /** 가장 최근 경기(필터 범위 내)의 ELO 변동 */
   change: number
+  /** 최근 7일간 순위 변동 (양수 = 상승) */
+  rankChange: number
+}
+
+/* 오늘 자정 기준 날짜 문자열 (YYYY-MM-DD) */
+function getTodayDate(): string {
+  return new Date().toISOString().slice(0, 10)
 }
 
 /* ─────────────────────────────────────────
@@ -101,7 +108,19 @@ function computeRankedPlayers(
       if (!lastChangeMap.has(m.player2Id) && m.player2EloDelta !== null)
         lastChangeMap.set(m.player2Id, m.player2EloDelta)
     }
-    return eligibleMembers
+
+    // 최근 7일간 ELO 변동 합산 → 7일 전 ELO 역산 → 7일 전 순위 계산
+    const today = getTodayDate()
+    const recentDeltaMap = new Map<string, number>()
+    for (const m of allMatches) {
+      if (m.playedDate < today) continue
+      if (m.player1EloDelta !== null)
+        recentDeltaMap.set(m.player1Id, (recentDeltaMap.get(m.player1Id) ?? 0) + m.player1EloDelta)
+      if (m.player2EloDelta !== null)
+        recentDeltaMap.set(m.player2Id, (recentDeltaMap.get(m.player2Id) ?? 0) + m.player2EloDelta)
+    }
+
+    const sorted = eligibleMembers
       .map((m) => ({
         id: m.id,
         name: m.name,
@@ -112,10 +131,22 @@ function computeRankedPlayers(
         losses: m.losses,
         streak: m.streak,
         change: lastChangeMap.get(m.id) ?? 0,
+        rankChange: 0,
         rank: 0,
       }))
       .sort((a, b) => b.elo - a.elo)
-      .map((p, i) => ({ ...p, rank: i + 1 }))
+
+    // 7일 전 ELO 기준 순위 계산
+    const oldRankSorted = [...sorted]
+      .map((p) => ({ id: p.id, elo: p.elo - (recentDeltaMap.get(p.id) ?? 0) }))
+      .sort((a, b) => b.elo - a.elo)
+    const oldRankMap = new Map(oldRankSorted.map((p, i) => [p.id, i + 1]))
+
+    return sorted.map((p, i) => ({
+      ...p,
+      rank: i + 1,
+      rankChange: (oldRankMap.get(p.id) ?? i + 1) - (i + 1),
+    }))
   }
 
   /* ── 시즌 모드: 해당 유형 경기만으로 집계 ── */
@@ -131,7 +162,18 @@ function computeRankedPlayers(
     add(m.player2Id)
   }
 
-  return eligibleMembers
+  // 최근 7일간 시즌 ELO 변동 합산
+  const today = getTodayDate()
+  const recentDeltaMapSeason = new Map<string, number>()
+  for (const m of relevantMatches) {
+    if (m.playedDate < today) continue
+    if (m.player1EloDelta !== null)
+      recentDeltaMapSeason.set(m.player1Id, (recentDeltaMapSeason.get(m.player1Id) ?? 0) + m.player1EloDelta)
+    if (m.player2EloDelta !== null)
+      recentDeltaMapSeason.set(m.player2Id, (recentDeltaMapSeason.get(m.player2Id) ?? 0) + m.player2EloDelta)
+  }
+
+  const computedList = eligibleMembers
     .map((m) => {
       const myMatches = playerMatchesMap.get(m.id) ?? []
       if (myMatches.length === 0) return null // 해당 시즌 경기 없으면 제외
@@ -166,12 +208,24 @@ function computeRankedPlayers(
         losses,
         streak: computeStreak(m.id, myMatches),
         change: lastDelta,
+        rankChange: 0,
         rank: 0,
       }
     })
     .filter((p): p is NonNullable<typeof p> => p !== null)
     .sort((a, b) => b.elo - a.elo)
-    .map((p, i) => ({ ...p, rank: i + 1 }))
+
+  // 7일 전 시즌 ELO 기준 순위 계산
+  const oldRankSortedSeason = [...computedList]
+    .map((p) => ({ id: p.id, elo: p.elo - (recentDeltaMapSeason.get(p.id) ?? 0) }))
+    .sort((a, b) => b.elo - a.elo)
+  const oldRankMapSeason = new Map(oldRankSortedSeason.map((p, i) => [p.id, i + 1]))
+
+  return computedList.map((p, i) => ({
+    ...p,
+    rank: i + 1,
+    rankChange: (oldRankMapSeason.get(p.id) ?? i + 1) - (i + 1),
+  }))
 }
 
 /* ─────────────────────────────────────────
@@ -261,7 +315,7 @@ export function RankingPageClient({ members, allMatches }: RankingPageClientProp
   // 요약 카드 — 필터 결과 기준
   const top = rankedPlayers[0] ?? null
   const topGainer = rankedPlayers.length
-    ? rankedPlayers.reduce((mx, p) => (p.change > mx.change ? p : mx), rankedPlayers[0])
+    ? rankedPlayers.reduce((mx, p) => (p.rankChange > mx.rankChange ? p : mx), rankedPlayers[0])
     : null
 
   const isSeasonMode = filterMatchType !== "__all__"
@@ -304,13 +358,11 @@ export function RankingPageClient({ members, allMatches }: RankingPageClientProp
           <div className="bg-card rounded-lg border border-border p-5">
             <div className="flex items-center gap-3 mb-2">
               <TrendingUp className="h-6 w-6 text-accent" />
-              <span className="text-sm text-muted-foreground">
-                최다 상승 {isSeasonMode ? `(${filterMatchType})` : "(최근 경기)"}
-              </span>
+              <span className="text-sm text-muted-foreground">최다 상승 (자정 기준)</span>
             </div>
             <p className="text-2xl font-bold text-foreground">{topGainer?.name ?? "—"}</p>
             <p className="text-sm text-accent">
-              {topGainer && topGainer.change > 0 ? `+${topGainer.change} pts` : "—"}
+              {topGainer && topGainer.rankChange > 0 ? `순위 ${topGainer.rankChange}위 상승` : "—"}
             </p>
           </div>
           <div className="bg-card rounded-lg border border-border p-5">
