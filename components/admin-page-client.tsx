@@ -86,6 +86,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isPermanentDeleteDialogOpen, setIsPermanentDeleteDialogOpen] = useState(false)
+  const [isNoticeOpen, setIsNoticeOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<ClanMember | null>(null)
   const [formData, setFormData] = useState<{ name: string; race: Race; tier: CliqueTier }>({
     name: "",
@@ -192,16 +193,24 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
     <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         <header className="mb-10">
-          <div className="flex items-center gap-4 mb-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div className="flex items-center gap-3">
-              <Users className="h-8 w-8 text-primary" />
-              <h1 className="text-3xl font-bold text-foreground">클랜원 명단 관리</h1>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-4">
+              <Link href="/">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </Link>
+              <div className="flex items-center gap-3">
+                <Users className="h-8 w-8 text-primary" />
+                <h1 className="text-3xl font-bold text-foreground">클랜원 명단 관리</h1>
+              </div>
             </div>
+            <Button
+              onClick={() => setIsNoticeOpen(true)}
+              className="bg-red-600 hover:bg-red-700 text-white font-semibold shrink-0"
+            >
+              관리자 필독
+            </Button>
           </div>
           <p className="text-muted-foreground ml-14">클랜원을 추가, 수정, 삭제하고 명단을 관리합니다</p>
         </header>
@@ -560,6 +569,32 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <Dialog open={isNoticeOpen} onOpenChange={setIsNoticeOpen}>
+          <DialogContent className="bg-card border-border text-foreground max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-red-500">관리자 필독</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2 text-sm leading-relaxed">
+              <div className="space-y-2">
+                <p className="font-bold text-foreground">클랜원 탈퇴 매커니즘</p>
+                <ul className="space-y-1.5 text-muted-foreground">
+                  <li>• 삭제(쓰레기통) 시 <span className="text-foreground font-medium">비활성화 상태</span>로 전환됩니다.</li>
+                  <li className="pl-3">→ 탈퇴 뱃지가 붙고 회색으로 흐릿하게 변하며 복귀 버튼과 삭제 버튼이 생깁니다.</li>
+                  <li>• 비활성화 상태에서는 새로운 전적 등록이 불가능하지만, 기존 전적 기록은 남아있습니다.</li>
+                  <li>• 복귀 버튼 클릭 시 다시 <span className="text-foreground font-medium">활성화 상태</span>로 전환됩니다.</li>
+                  <li>• 비활성화 상태에서 삭제 시 <span className="text-destructive font-semibold">완전 삭제 상태가 되고 관련된 모든 전적 기록</span>이 삭제됩니다.</li>
+                </ul>
+              </div>
+              <div className="border-t border-border pt-4 space-y-1 text-muted-foreground">
+                <p className="font-bold text-foreground">제작자 멘트</p>
+                <p>클랜 탈퇴 시 비활성화 상태로 두는 것을 추천합니다.</p>
+                <p>전적 기록이 아예 없는 신규 회원은 완전 삭제하셔도 됩니다.</p>
+                <p>추가 기능 건의나 기타 문의사항은 <span className="text-foreground font-semibold">Tyr 카톡</span> 바랍니다.</p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent className="bg-card border-border">
