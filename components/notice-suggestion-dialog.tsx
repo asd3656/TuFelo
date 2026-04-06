@@ -300,14 +300,14 @@ export function NoticeSuggestionDialog({
             <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-indigo-400 shrink-0" />
-                <p className="text-sm font-bold text-indigo-300">공지사항</p>
+                <p className="text-sm font-bold text-indigo-300">공지사항(26.04.06)</p>
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
                 <li className="flex gap-2">
                   <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
                   <span>
                     건의 사항에는{" "}
-                    <span className="text-foreground font-semibold">잡담 금지</span>입니다.{" "}
+                    <span className="text-foreground font-semibold">사담 금지</span>입니다.{" "}
                     장난성 글 작성 시{" "}
                     <span className="text-destructive font-semibold">IP 밴</span>입니다.
                   </span>
