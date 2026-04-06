@@ -584,6 +584,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
                   <li>• 비활성화 상태에서는 새로운 전적 등록이 불가능하지만, 기존 전적 기록은 남아있습니다.</li>
                   <li>• 복귀 버튼 클릭 시 다시 <span className="text-foreground font-medium">활성화 상태</span>로 전환됩니다.</li>
                   <li>• 비활성화 상태에서 삭제 시 <span className="text-destructive font-semibold">완전 삭제 상태가 되고 관련된 모든 전적 기록</span>이 삭제됩니다.</li>
+                  <li>• 메인 페이지의 건의사항글은 해결 완료 시 글 삭제 바랍니다.</li>
                 </ul>
               </div>
               <div className="border-t border-border pt-4 space-y-1 text-muted-foreground">

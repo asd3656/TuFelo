@@ -315,7 +315,7 @@ export function NoticeSuggestionDialog({
                 <li className="flex gap-2">
                   <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
                   <span>
-                    모든 건의사항들을 반영할 순 없겠지만 데이터 수정 같은 경우{" "}
+                    필요이상으로 사이트가 무거워지길 원치 않기에 모든 건의사항들을 반영할 수 없습니다. 데이터 수정 같은 경우{" "}
                     <span className="text-foreground font-semibold">최대한 빠르게 반영</span>하겠습니다.
                   </span>
                 </li>
