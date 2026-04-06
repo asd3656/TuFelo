@@ -31,9 +31,10 @@ interface DashboardPageProps {
   members: ClanMember[]
   isAdmin: boolean
   isCreator?: boolean
+  adminUsernames?: string[]
 }
 
-export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: DashboardPageProps) {
+export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adminUsernames = [] }: DashboardPageProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
@@ -142,9 +143,13 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Trophy className="h-8 w-8 text-primary" />
-                <h1 className="text-3xl font-bold text-foreground">TuF Clan ELO board</h1>
+                <h1 className="text-4xl font-bold text-foreground">TuF Clan ELO board</h1>
               </div>
-              <p className="text-muted-foreground">전적관리 대시보드</p>
+              {adminUsernames.length > 0 && (
+                <p className="text-base text-indigo-400 bg-indigo-500/10 border border-indigo-500/25 rounded-md px-2.5 py-1 w-fit font-medium">
+                  관리자 : {adminUsernames.join(", ")}
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
               {isCreator && (
