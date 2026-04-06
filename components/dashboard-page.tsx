@@ -8,6 +8,7 @@ import { MatchHistory } from "@/components/match-history"
 import { RegisterMatchDialog } from "@/components/register-match-dialog"
 import { EditMatchDialog } from "@/components/edit-match-dialog"
 import { AdminLoginDialog } from "@/components/admin-login-dialog"
+import { NoticeSuggestionDialog } from "@/components/notice-suggestion-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Trophy, BarChart3, Users } from "lucide-react"
+import { Plus, Trophy, BarChart3, Users, Megaphone } from "lucide-react"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
@@ -38,6 +39,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
   const [isDeletePending, startDeleteTransition] = useTransition()
   const [isEditPending, startEditTransition] = useTransition()
   const [editingMatch, setEditingMatch] = useState<Match | null>(null)
+  const [isNoticeOpen, setIsNoticeOpen] = useState(false)
   const [player1, setPlayer1] = useState("")
   const [player2, setPlayer2] = useState("")
   const [filterDateFrom, setFilterDateFrom] = useState("")
@@ -333,13 +335,23 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
         )}
 
         <section className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold text-foreground">전적 기록</h2>
-            <p className="text-sm text-muted-foreground">
-              {player1
-                ? `"${player1}" 선수의 경기 기록 (${filteredMatches.length}경기)`
-                : `전체 경기 기록 (최근 50경기 표시 / 전체 ${filteredMatches.length}경기)`}
-            </p>
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">전적 기록</h2>
+              <p className="text-sm text-muted-foreground">
+                {player1
+                  ? `"${player1}" 선수의 경기 기록 (${filteredMatches.length}경기)`
+                  : `전체 경기 기록 (최근 50경기 표시 / 전체 ${filteredMatches.length}경기)`}
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={() => setIsNoticeOpen(true)}
+              className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold border-0"
+            >
+              <Megaphone className="h-4 w-4 mr-2" />
+              공지 및 건의
+            </Button>
           </div>
           <MatchHistory
             matches={displayMatches}
@@ -366,6 +378,13 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
           isSubmitting={isEditPending}
           knownMaps={knownMaps}
           knownMatchTypes={knownMatchTypes}
+        />
+
+        <NoticeSuggestionDialog
+          open={isNoticeOpen}
+          onOpenChange={setIsNoticeOpen}
+          isAdmin={isAdmin}
+          isCreator={isCreator ?? false}
         />
 
         <RegisterMatchDialog

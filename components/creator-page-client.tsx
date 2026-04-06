@@ -69,6 +69,7 @@ const ACTION_OPTIONS = [
   "클랜원 완전삭제",
   "관리자 추가",
   "관리자 삭제",
+  "건의사항 삭제",
 ] as const
 
 function formatDate(iso: string) {
