@@ -31,7 +31,7 @@ export default async function CreatorPage() {
       .from("admin_logs")
       .select("id, admin_username, action, target, detail, created_at")
       .order("created_at", { ascending: false })
-      .limit(200),
+      .limit(50),
   ])
 
   return (

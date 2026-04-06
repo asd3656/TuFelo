@@ -7,7 +7,7 @@ import { getClientIp } from "@/lib/request-ip"
 import { computeStreakForMember } from "@/lib/match-streak"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
-import type { RegisterMatchInput } from "@/lib/types/tufelo"
+import type { RegisterMatchInput, UpdateMatchInput } from "@/lib/types/tufelo"
 
 const mapNamePattern = /^[가-힣]+$/
 
@@ -33,13 +33,13 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
 
   const { data: m1, error: e1 } = await supabase
     .from("members")
-    .select("id, elo, wins, losses, streak")
+    .select("id, name, elo, wins, losses, streak")
     .eq("id", input.player1Id)
     .single()
 
   const { data: m2, error: e2 } = await supabase
     .from("members")
-    .select("id, elo, wins, losses, streak")
+    .select("id, name, elo, wins, losses, streak")
     .eq("id", input.player2Id)
     .single()
 
@@ -110,8 +110,8 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
   await insertAdminLog(
     session.username,
     "전적 등록",
-    `${input.mapName}`,
-    `player1=${input.player1Id} player2=${input.player2Id} type=${input.matchType} date=${input.playedDate}`,
+    `${m1.name as string}`,
+    `player2=${m2.name as string} map=${input.mapName} type=${input.matchType} date=${input.playedDate}`,
   )
 
   revalidatePath("/")
@@ -206,7 +206,162 @@ export async function deleteMatchAction(matchId: string): Promise<ActionResult> 
   await supabase.from("members").update({ streak: s1 }).eq("id", p1)
   await supabase.from("members").update({ streak: s2 }).eq("id", p2)
 
-  await insertAdminLog(session.username, "전적 삭제", matchId)
+  await insertAdminLog(
+    session.username,
+    "전적 삭제",
+    `${m1.name as string}`,
+    `vs ${m2.name as string} matchId=${matchId}`,
+  )
+
+  revalidatePath("/")
+  revalidatePath("/admin")
+  revalidatePath("/ranking")
+  return { ok: true }
+}
+
+export async function updateMatchAction(input: UpdateMatchInput): Promise<ActionResult> {
+  const session = await getSessionFromCookies()
+  if (!session) {
+    return { ok: false, error: "권한이 없습니다." }
+  }
+
+  if (!mapNamePattern.test(input.mapName)) {
+    return { ok: false, error: "맵 이름은 띄어쓰기 없이 한글만 입력해 주세요." }
+  }
+  if (!input.matchType || !input.matchType.trim()) {
+    return { ok: false, error: "경기 유형을 입력해 주세요." }
+  }
+
+  const supabase = await createClient()
+
+  // 기존 경기 조회
+  const { data: row, error: fErr } = await supabase
+    .from("matches")
+    .select("*")
+    .eq("id", input.matchId)
+    .single()
+  if (fErr || !row) {
+    return { ok: false, error: "수정할 전적을 찾을 수 없습니다." }
+  }
+
+  const oldP1Id = row.player1_id as string
+  const oldP2Id = row.player2_id as string
+  const oldWinnerId = row.winner_id as string
+  const oldD1 = row.player1_elo_delta as number | null
+  const oldD2 = row.player2_elo_delta as number | null
+
+  // 기존 선수들 현재 상태 조회
+  const { data: m1, error: e1 } = await supabase
+    .from("members")
+    .select("id, name, elo, wins, losses, streak")
+    .eq("id", oldP1Id)
+    .single()
+  const { data: m2, error: e2 } = await supabase
+    .from("members")
+    .select("id, name, elo, wins, losses, streak")
+    .eq("id", oldP2Id)
+    .single()
+  if (e1 || !m1 || e2 || !m2) {
+    return { ok: false, error: "선수 정보를 불러올 수 없습니다." }
+  }
+
+  // 기존 ELO · 전적 원상복구 계산 (DB 반영 전)
+  const baseElo1 = (m1.elo as number) - (oldD1 ?? 0)
+  const baseElo2 = (m2.elo as number) - (oldD2 ?? 0)
+
+  let baseW1 = m1.wins as number
+  let baseL1 = m1.losses as number
+  let baseW2 = m2.wins as number
+  let baseL2 = m2.losses as number
+
+  if (oldWinnerId === oldP1Id) {
+    baseW1 = Math.max(0, baseW1 - 1)
+    baseL2 = Math.max(0, baseL2 - 1)
+  } else {
+    baseW2 = Math.max(0, baseW2 - 1)
+    baseL1 = Math.max(0, baseL1 - 1)
+  }
+
+  // 새 승자/패자 결정
+  const newWinnerId = input.isPlayer1Winner ? oldP1Id : oldP2Id
+  const winnerBaseElo = input.isPlayer1Winner ? baseElo1 : baseElo2
+  const loserBaseElo = input.isPlayer1Winner ? baseElo2 : baseElo1
+
+  const { newWinnerElo, newLoserElo, winnerDelta, loserDelta } = computeEloMatch(
+    winnerBaseElo,
+    loserBaseElo,
+  )
+
+  // player1·player2 기준 delta 값
+  const newD1 = input.isPlayer1Winner ? winnerDelta : loserDelta
+  const newD2 = input.isPlayer1Winner ? loserDelta : winnerDelta
+  const newElo1 = input.isPlayer1Winner ? newWinnerElo : newLoserElo
+  const newElo2 = input.isPlayer1Winner ? newLoserElo : newWinnerElo
+  const newW1 = input.isPlayer1Winner ? baseW1 + 1 : baseW1
+  const newL1 = input.isPlayer1Winner ? baseL1 : baseL1 + 1
+  const newW2 = input.isPlayer1Winner ? baseW2 : baseW2 + 1
+  const newL2 = input.isPlayer1Winner ? baseL2 + 1 : baseL2
+
+  // match row 업데이트
+  const { error: updMatchErr } = await supabase
+    .from("matches")
+    .update({
+      winner_id: newWinnerId,
+      map_name: input.mapName,
+      match_type: input.matchType,
+      played_date: input.playedDate,
+      player1_elo_before: baseElo1,
+      player2_elo_before: baseElo2,
+      player1_elo_delta: newD1,
+      player2_elo_delta: newD2,
+    })
+    .eq("id", input.matchId)
+
+  if (updMatchErr) {
+    return { ok: false, error: updMatchErr.message }
+  }
+
+  // 선수 ELO · 전적 업데이트
+  const { error: upd1 } = await supabase
+    .from("members")
+    .update({ elo: newElo1, wins: newW1, losses: newL1 })
+    .eq("id", oldP1Id)
+  const { error: upd2 } = await supabase
+    .from("members")
+    .update({ elo: newElo2, wins: newW2, losses: newL2 })
+    .eq("id", oldP2Id)
+
+  if (upd1 || upd2) {
+    // 실패 시 match row 원복 시도
+    await supabase
+      .from("matches")
+      .update({
+        winner_id: oldWinnerId,
+        map_name: row.map_name,
+        match_type: row.match_type,
+        played_date: row.played_date,
+        player1_elo_before: row.player1_elo_before,
+        player2_elo_before: row.player2_elo_before,
+        player1_elo_delta: oldD1,
+        player2_elo_delta: oldD2,
+      })
+      .eq("id", input.matchId)
+    return { ok: false, error: upd1?.message ?? upd2?.message ?? "ELO 업데이트 실패" }
+  }
+
+  // streak 재계산
+  const s1 = await computeStreakForMember(supabase, oldP1Id)
+  const s2 = await computeStreakForMember(supabase, oldP2Id)
+  await supabase.from("members").update({ streak: s1 }).eq("id", oldP1Id)
+  await supabase.from("members").update({ streak: s2 }).eq("id", oldP2Id)
+
+  const winnerName = input.isPlayer1Winner ? (m1.name as string) : (m2.name as string)
+  await insertAdminLog(
+    session.username,
+    "전적 수정",
+    `${m1.name as string}`,
+    `vs ${m2.name as string} winner=${winnerName} map=${input.mapName} type=${input.matchType} date=${input.playedDate}`,
+  )
 
   revalidatePath("/")
   revalidatePath("/admin")

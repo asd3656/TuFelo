@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Trash2 } from "lucide-react"
+import { Pencil, Trash2 } from "lucide-react"
 
 interface MatchHistoryProps {
   matches: Match[]
@@ -19,6 +19,8 @@ interface MatchHistoryProps {
   isAdmin?: boolean
   onDeleteMatch?: (matchId: string) => void
   deletePending?: boolean
+  onEditMatch?: (match: Match) => void
+  editPending?: boolean
 }
 
 const raceColors: Record<string, string> = {
@@ -90,6 +92,8 @@ export function MatchHistory({
   isAdmin = false,
   onDeleteMatch,
   deletePending = false,
+  onEditMatch,
+  editPending = false,
 }: MatchHistoryProps) {
   if (matches.length === 0) {
     return (
@@ -127,6 +131,9 @@ export function MatchHistory({
             </TableHead>
             <TableHead className="text-muted-foreground font-semibold">맵</TableHead>
             <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">경기 유형</TableHead>
+            <TableHead className="text-muted-foreground font-semibold w-[88px] text-center">
+              수정
+            </TableHead>
             <TableHead className="text-muted-foreground font-semibold w-[88px] text-center">
               삭제
             </TableHead>
@@ -212,10 +219,28 @@ export function MatchHistory({
                 <TableCell className="text-center p-2">
                   <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                    disabled={editPending || deletePending}
+                    onClick={() => {
+                      if (!isAdmin) {
+                        window.alert("운영진에게 문의하세요.")
+                        return
+                      }
+                      onEditMatch?.(match)
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+                <TableCell className="text-center p-2">
+                  <Button
+                    type="button"
                     variant="destructive"
                     size="sm"
                     className="h-8 bg-red-600 hover:bg-red-700 text-white border-0"
-                    disabled={deletePending}
+                    disabled={deletePending || editPending}
                     onClick={() => {
                       if (!isAdmin) {
                         window.alert("운영진에게 문의하세요.")

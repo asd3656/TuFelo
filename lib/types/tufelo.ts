@@ -51,6 +51,16 @@ export interface RegisterMatchInput {
   matchType: string
 }
 
+/** 전적 수정 입력 — 선수는 고정, 승자/맵/날짜/유형만 수정 */
+export interface UpdateMatchInput {
+  matchId: string
+  /** true = player1 승리, false = player2 승리 */
+  isPlayer1Winner: boolean
+  mapName: string
+  playedDate: string
+  matchType: string
+}
+
 /** 랭킹 페이지용 원시 멤버 데이터 */
 export interface MemberForRanking {
   id: string

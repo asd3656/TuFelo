@@ -6,6 +6,7 @@ import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
 import { MatchHistory } from "@/components/match-history"
 import { RegisterMatchDialog } from "@/components/register-match-dialog"
+import { EditMatchDialog } from "@/components/edit-match-dialog"
 import { AdminLoginDialog } from "@/components/admin-login-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,8 +20,8 @@ import {
 } from "@/components/ui/select"
 import { Plus, Trophy, BarChart3, Users } from "lucide-react"
 import { getSeoulDateString } from "@/lib/date-seoul"
-import type { ClanMember, Match, RegisterMatchInput } from "@/lib/types/tufelo"
-import { registerMatchAction, deleteMatchAction } from "@/app/actions/matches"
+import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput } from "@/lib/types/tufelo"
+import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
 
 export type { Tier, Race, Match } from "@/lib/types/tufelo"
 
@@ -35,6 +36,8 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
+  const [isEditPending, startEditTransition] = useTransition()
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null)
   const [player1, setPlayer1] = useState("")
   const [player2, setPlayer2] = useState("")
   const [filterDateFrom, setFilterDateFrom] = useState("")
@@ -64,8 +67,8 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
     return matchesPlayer1 && matchesPlayer2 && matchesDate && matchesMap && matchesType
   })
 
-  // 선수1 검색 없을 때는 최근 20경기만 표시, 선수1 검색 시 전체 표시
-  const displayMatches = player1 ? filteredMatches : filteredMatches.slice(0, 20)
+  // 선수1 검색 없을 때는 최근 50경기만 표시, 선수1 검색 시 전체 표시
+  const displayMatches = player1 ? filteredMatches : filteredMatches.slice(0, 50)
 
   function handleRegister(input: RegisterMatchInput, keepOpen?: boolean) {
     if (!isAdmin) {
@@ -81,6 +84,22 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
       if (!keepOpen) {
         setIsDialogOpen(false)
       }
+      router.refresh()
+    })
+  }
+
+  function handleEditMatch(input: UpdateMatchInput) {
+    if (!isAdmin) {
+      window.alert("운영진만 전적을 수정할 수 있습니다.")
+      return
+    }
+    startEditTransition(async () => {
+      const res = await updateMatchAction(input)
+      if (!res.ok) {
+        window.alert(res.error)
+        return
+      }
+      setEditingMatch(null)
       router.refresh()
     })
   }
@@ -319,7 +338,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
             <p className="text-sm text-muted-foreground">
               {player1
                 ? `"${player1}" 선수의 경기 기록 (${filteredMatches.length}경기)`
-                : `전체 경기 기록 (최근 20경기 표시 / 전체 ${filteredMatches.length}경기)`}
+                : `전체 경기 기록 (최근 50경기 표시 / 전체 ${filteredMatches.length}경기)`}
             </p>
           </div>
           <MatchHistory
@@ -328,6 +347,8 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
             isAdmin={isAdmin}
             onDeleteMatch={handleDeleteMatch}
             deletePending={isDeletePending}
+            onEditMatch={(match) => setEditingMatch(match)}
+            editPending={isEditPending}
           />
         </section>
 
@@ -335,6 +356,16 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator }: D
           open={adminLoginOpen}
           onOpenChange={setAdminLoginOpen}
           onSuccess={() => router.refresh()}
+        />
+
+        <EditMatchDialog
+          open={editingMatch !== null}
+          onOpenChange={(open) => { if (!open) setEditingMatch(null) }}
+          match={editingMatch}
+          onUpdate={handleEditMatch}
+          isSubmitting={isEditPending}
+          knownMaps={knownMaps}
+          knownMatchTypes={knownMatchTypes}
         />
 
         <RegisterMatchDialog

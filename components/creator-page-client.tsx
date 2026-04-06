@@ -60,6 +60,7 @@ interface CreatorPageClientProps {
 const ACTION_OPTIONS = [
   "__all__",
   "전적 등록",
+  "전적 수정",
   "전적 삭제",
   "클랜원 추가",
   "클랜원 수정",
@@ -308,7 +309,7 @@ export function CreatorPageClient({ currentUsername, admins, logs }: CreatorPage
               활동 로그
             </h2>
             <p className="text-sm text-muted-foreground">
-              최근 200개 기록 (최신순)
+              최근 50개 기록 (최신순)
               {hasFilter && (
                 <span className="ml-2 text-primary">· 필터 적용 중 — {filteredLogs.length}건</span>
               )}

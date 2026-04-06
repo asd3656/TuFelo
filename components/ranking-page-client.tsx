@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select"
 import { Crown, Medal, Award, TrendingUp, TrendingDown, Minus, Search, Trophy, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { MATCH_TYPES } from "@/lib/types/tufelo"
 import type { MemberForRanking, MatchForRanking, Race, Tier } from "@/lib/types/tufelo"
 
 interface RankingPageClientProps {
@@ -299,6 +298,11 @@ export function RankingPageClient({ members, allMatches }: RankingPageClientProp
   const [filterRace, setFilterRace] = useState("__all__")
   const [filterTier, setFilterTier] = useState("__all__")
 
+  const knownMatchTypes = useMemo(
+    () => Array.from(new Set(allMatches.map((m) => m.matchType).filter((t): t is string => !!t))).sort(),
+    [allMatches],
+  )
+
   const rankedPlayers = useMemo(
     () => computeRankedPlayers(members, allMatches, filterMatchType, filterRace, filterTier),
     [members, allMatches, filterMatchType, filterRace, filterTier],
@@ -396,7 +400,7 @@ export function RankingPageClient({ members, allMatches }: RankingPageClientProp
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">전체</SelectItem>
-                {MATCH_TYPES.map((t) => (
+                {knownMatchTypes.map((t) => (
                   <SelectItem key={t} value={t}>{t}</SelectItem>
                 ))}
               </SelectContent>
