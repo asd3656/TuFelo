@@ -137,6 +137,8 @@ export async function GET(req: NextRequest) {
       if (dateTo) winsQuery = winsQuery.lte("played_date", dateTo)
       if (mapFilter) winsQuery = winsQuery.ilike("map_name", `%${mapFilter}%`)
       if (matchType) winsQuery = winsQuery.eq("match_type", matchType)
+      if (seasonId === "__none__") winsQuery = winsQuery.is("season_id", null)
+      else if (seasonId) winsQuery = winsQuery.eq("season_id", seasonId)
 
       const { count: winsCount } = await winsQuery
       wins = winsCount ?? 0
