@@ -35,7 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2 } from "lucide-react"
+import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle } from "lucide-react"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
@@ -98,6 +98,7 @@ export function DashboardPage({
   const [isEditPending, startEditTransition] = useTransition()
   const [editingMatch, setEditingMatch] = useState<Match | null>(null)
   const [isNoticeOpen, setIsNoticeOpen] = useState(false)
+  const [isManualOpen, setIsManualOpen] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [adminLoginOpen, setAdminLoginOpen] = useState(false)
 
@@ -540,14 +541,24 @@ export function DashboardPage({
                     : `전체 경기 기록 (총 ${totalCount}경기)`}
               </p>
             </div>
-            <Button
-              type="button"
-              onClick={() => setIsNoticeOpen(true)}
-              className="shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold border-0"
-            >
-              <Megaphone className="h-4 w-4 mr-2" />
-              공지 및 건의
-            </Button>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                type="button"
+                onClick={() => setIsManualOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold border-0"
+              >
+                <BookOpen className="h-4 w-4 mr-2" />
+                사용설명서
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setIsNoticeOpen(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold border-0"
+              >
+                <Megaphone className="h-4 w-4 mr-2" />
+                공지 및 건의
+              </Button>
+            </div>
           </div>
 
           <div className={isLoadingMatches ? "opacity-50 pointer-events-none transition-opacity" : "transition-opacity"}>
@@ -693,6 +704,59 @@ export function DashboardPage({
           knownMaps={knownMaps}
           knownMatchTypes={knownMatchTypes}
         />
+
+        <Dialog open={isManualOpen} onOpenChange={setIsManualOpen}>
+          <DialogContent className="bg-card border-border text-foreground max-w-xl w-full max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
+              <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                <BookOpen className="h-5 w-5 text-emerald-400" />
+                사용설명서
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="px-6 py-5">
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <p className="text-sm font-bold text-emerald-300">사용설명서(26.04.08)</p>
+                  </div>
+                  <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
+                    <li className="flex gap-2">
+                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
+                      <span>
+                        날짜는 경기한 날짜가 아닌{" "}
+                        <span className="text-foreground font-semibold">사이트에 등록된 날짜</span>로 등록됩니다.
+                        날짜 수정이 필요한 경우 건의 게시판에 써주세요.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
+                      <span>
+                        ELO 시스템은 표준 ELO 시스템과 크게 차이가 없습니다.{" "}
+                        <span className="text-foreground font-semibold">최대 상승폭은 32점</span>입니다.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
+                      <span>
+                        ELO와 승패는 매 시즌 시작과 동시에{" "}
+                        <span className="text-foreground font-semibold">초기화</span>되지만 기록이 남습니다.
+                        시즌은 프로리그의 시작과 동시에 갱신됩니다.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
+                      <span>
+                        ELO 초기값은{" "}
+                        <span className="text-foreground font-semibold">1티어 2250, 2티어 2030, 3티어 1850, 4티어 1650</span>입니다.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <NoticeSuggestionDialog
           open={isNoticeOpen}
