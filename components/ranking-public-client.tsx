@@ -148,7 +148,7 @@ const tierColors: Record<number, string> = {
 
 function getRankIcon(rank: number) {
   switch (rank) {
-    case 1: return <Crown className="h-5 w-5 text-yellow-400" />
+    case 1: return <Crown className="h-5 w-5 text-orange-500" />
     case 2: return <Medal className="h-5 w-5 text-gray-300" />
     case 3: return <Award className="h-5 w-5 text-amber-600" />
     default: return <span className="text-muted-foreground font-mono w-5 text-center">{rank}</span>
@@ -229,7 +229,7 @@ export function RankingPublicClient({
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-card rounded-lg border border-border p-5">
             <div className="flex items-center gap-3 mb-2">
-              <Crown className="h-6 w-6 text-yellow-400" />
+              <Crown className="h-6 w-6 text-orange-500" />
               <span className="text-sm text-muted-foreground">현재 1위</span>
             </div>
             <p className="text-2xl font-bold text-foreground">{top?.name ?? "—"}</p>
@@ -355,7 +355,7 @@ export function RankingPublicClient({
                       <div className="flex justify-center">{getRankIcon(player.rank)}</div>
                     </TableCell>
                     <TableCell>
-                      <span className={`font-semibold ${player.rank === 1 ? "text-yellow-400" : "text-foreground"}`}>
+                      <span className={`font-semibold ${player.rank === 1 ? "text-orange-600 dark:text-orange-400" : "text-foreground"}`}>
                         {player.name}
                       </span>
                     </TableCell>

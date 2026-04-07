@@ -13,6 +13,7 @@ export interface SuggestionReply {
   admin_username: string
   content: string
   created_at: string
+  isOwner: boolean
 }
 
 export interface Suggestion {
@@ -26,6 +27,7 @@ export interface Suggestion {
 
 export async function getSuggestionsAction(): Promise<Suggestion[]> {
   const supabase = createServiceClient()
+  const session = await getSessionFromCookies()
 
   const [{ data: suggestions }, { data: replies }] = await Promise.all([
     supabase
@@ -54,6 +56,7 @@ export async function getSuggestionsAction(): Promise<Suggestion[]> {
         admin_username: r.admin_username as string,
         content: r.content as string,
         created_at: r.created_at as string,
+        isOwner: session !== null && (r.admin_username as string) === session.username,
       })),
   }))
 }
@@ -106,6 +109,61 @@ export async function addReplyAction(input: {
     content,
   })
 
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+export async function updateReplyAction(input: {
+  replyId: string
+  content: string
+}): Promise<ActionResult> {
+  const session = await getSessionFromCookies()
+  if (!session) return { ok: false, error: "권한이 없습니다." }
+
+  const content = input.content.trim()
+  if (!content) return { ok: false, error: "답변 내용을 입력해 주세요." }
+  if (content.length > 300) return { ok: false, error: "답변은 300자 이내로 작성해 주세요." }
+
+  const supabase = createServiceClient()
+
+  const { data: existing } = await supabase
+    .from("suggestion_replies")
+    .select("admin_username")
+    .eq("id", input.replyId)
+    .single()
+
+  if (!existing) return { ok: false, error: "답변을 찾을 수 없습니다." }
+  if ((existing.admin_username as string) !== session.username) {
+    return { ok: false, error: "본인이 작성한 답변만 수정할 수 있습니다." }
+  }
+
+  const { error } = await supabase
+    .from("suggestion_replies")
+    .update({ content })
+    .eq("id", input.replyId)
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+export async function deleteReplyAction(replyId: string): Promise<ActionResult> {
+  const session = await getSessionFromCookies()
+  if (!session) return { ok: false, error: "권한이 없습니다." }
+
+  const supabase = createServiceClient()
+
+  const { data: existing } = await supabase
+    .from("suggestion_replies")
+    .select("admin_username")
+    .eq("id", replyId)
+    .single()
+
+  if (!existing) return { ok: false, error: "답변을 찾을 수 없습니다." }
+  if ((existing.admin_username as string) !== session.username) {
+    return { ok: false, error: "본인이 작성한 답변만 삭제할 수 있습니다." }
+  }
+
+  const { error } = await supabase.from("suggestion_replies").delete().eq("id", replyId)
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

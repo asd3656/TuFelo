@@ -21,19 +21,25 @@ import {
   Megaphone,
   AlertTriangle,
   Trash2,
+  Pencil,
   MessageSquareReply,
   Send,
   ChevronDown,
   ChevronUp,
   Loader2,
+  Check,
+  X,
 } from "lucide-react"
 
 import {
   getSuggestionsAction,
   addSuggestionAction,
   addReplyAction,
+  updateReplyAction,
+  deleteReplyAction,
   deleteSuggestionAction,
   type Suggestion,
+  type SuggestionReply,
 } from "@/app/actions/suggestions"
 
 const SUGGESTION_CATEGORIES = ["데이터수정", "기능건의", "기타"] as const
@@ -65,6 +71,111 @@ function formatRelativeTime(iso: string): string {
     month: "2-digit",
     day: "2-digit",
   })
+}
+
+function ReplyItem({
+  reply,
+  onChanged,
+}: {
+  reply: SuggestionReply
+  onChanged: () => void
+}) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState(reply.content)
+  const [isEditPending, startEditTransition] = useTransition()
+  const [isDeletePending, startDeleteTransition] = useTransition()
+
+  function handleSave() {
+    const trimmed = editText.trim()
+    if (!trimmed || trimmed === reply.content) { setIsEditing(false); return }
+    startEditTransition(async () => {
+      const res = await updateReplyAction({ replyId: reply.id, content: trimmed })
+      if (!res.ok) { window.alert(res.error); return }
+      setIsEditing(false)
+      onChanged()
+    })
+  }
+
+  function handleDelete() {
+    if (!window.confirm("이 답변을 삭제하시겠습니까?")) return
+    startDeleteTransition(async () => {
+      const res = await deleteReplyAction(reply.id)
+      if (!res.ok) { window.alert(res.error); return }
+      onChanged()
+    })
+  }
+
+  return (
+    <div className="space-y-0.5">
+      <div className="flex items-center gap-2">
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-indigo-500/10 text-indigo-400 border-indigo-500/30">
+          관리자
+        </Badge>
+        <span className="text-xs font-medium text-foreground">{reply.admin_username}</span>
+        <span className="text-[10px] text-muted-foreground">{formatRelativeTime(reply.created_at)}</span>
+        {reply.isOwner && !isEditing && (
+          <div className="flex items-center gap-0.5 ml-auto">
+            <Button
+              type="button" variant="ghost" size="icon"
+              className="h-5 w-5 text-muted-foreground hover:text-foreground hover:bg-secondary"
+              onClick={() => { setIsEditing(true); setEditText(reply.content) }}
+              disabled={isDeletePending}
+              title="수정"
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+            <Button
+              type="button" variant="ghost" size="icon"
+              className="h-5 w-5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={handleDelete}
+              disabled={isDeletePending}
+              title="삭제"
+            >
+              {isDeletePending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+            </Button>
+          </div>
+        )}
+      </div>
+      {isEditing ? (
+        <div className="flex gap-1.5 pl-0.5">
+          <Input
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSave() }
+              if (e.key === "Escape") { setIsEditing(false); setEditText(reply.content) }
+            }}
+            className="h-7 text-xs bg-input border-border flex-1"
+            disabled={isEditPending}
+            autoFocus
+            maxLength={300}
+          />
+          <Button
+            type="button" size="icon"
+            className="h-7 w-7 shrink-0 bg-indigo-600 hover:bg-indigo-700 text-white border-0"
+            onClick={handleSave}
+            disabled={isEditPending || !editText.trim()}
+            title="저장"
+          >
+            {isEditPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+          </Button>
+          <Button
+            type="button" variant="ghost" size="icon"
+            className="h-7 w-7 shrink-0 text-muted-foreground"
+            onClick={() => { setIsEditing(false); setEditText(reply.content) }}
+            disabled={isEditPending}
+            title="취소"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words pl-0.5">
+          {reply.content}
+        </p>
+      )}
+    </div>
+  )
 }
 
 function SuggestionItem({
@@ -148,18 +259,7 @@ function SuggestionItem({
           {showReplies && (
             <div className="space-y-2 pl-3 border-l-2 border-indigo-500/30">
               {suggestion.replies.map((reply) => (
-                <div key={reply.id} className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-indigo-500/10 text-indigo-400 border-indigo-500/30">
-                      관리자
-                    </Badge>
-                    <span className="text-xs font-medium text-foreground">{reply.admin_username}</span>
-                    <span className="text-[10px] text-muted-foreground">{formatRelativeTime(reply.created_at)}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words pl-0.5">
-                    {reply.content}
-                  </p>
-                </div>
+                <ReplyItem key={reply.id} reply={reply} onChanged={onReplyAdded} />
               ))}
             </div>
           )}
