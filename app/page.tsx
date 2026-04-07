@@ -1,5 +1,5 @@
 import { DashboardPage } from "@/components/dashboard-page"
-import { fetchMatchesForDashboard } from "@/lib/data/matches"
+import { fetchInitialDashboardData } from "@/lib/data/matches"
 import { fetchActiveMembers } from "@/lib/data/members"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { createServiceClient } from "@/lib/supabase/service"
@@ -15,8 +15,8 @@ async function fetchAdminUsernames(): Promise<string[]> {
 }
 
 export default async function HomePage() {
-  const [initialMatches, members, session, adminUsernames] = await Promise.all([
-    fetchMatchesForDashboard(),
+  const [dashboardData, members, session, adminUsernames] = await Promise.all([
+    fetchInitialDashboardData(),
     fetchActiveMembers(),
     getSessionFromCookies(),
     fetchAdminUsernames(),
@@ -24,7 +24,11 @@ export default async function HomePage() {
 
   return (
     <DashboardPage
-      initialMatches={initialMatches}
+      initialMatches={dashboardData.matches}
+      initialTotalCount={dashboardData.totalCount}
+      initialTotalPages={dashboardData.totalPages}
+      knownMaps={dashboardData.knownMaps}
+      knownMatchTypes={dashboardData.knownMatchTypes}
       members={members}
       isAdmin={session !== null}
       isCreator={session?.role === "creator"}

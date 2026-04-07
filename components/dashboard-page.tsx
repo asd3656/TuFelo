@@ -1,7 +1,7 @@
 "use client"
 
+import { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
 import { MatchHistory } from "@/components/match-history"
@@ -19,60 +19,219 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Plus, Trophy, BarChart3, Users, Megaphone } from "lucide-react"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
+import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2 } from "lucide-react"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
 
 export type { Tier, Race, Match } from "@/lib/types/tufelo"
 
+const PAGE_SIZE = 50
+
+interface FilterState {
+  player1: string
+  player2: string
+  dateFrom: string
+  dateTo: string
+  map: string
+  matchType: string
+}
+
 interface DashboardPageProps {
   initialMatches: Match[]
+  initialTotalCount: number
+  initialTotalPages: number
+  knownMaps: string[]
+  knownMatchTypes: string[]
   members: ClanMember[]
   isAdmin: boolean
   isCreator?: boolean
   adminUsernames?: string[]
 }
 
-export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adminUsernames = [] }: DashboardPageProps) {
+function getPageNumbers(current: number, total: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 4) return [1, 2, 3, 4, 5, "...", total]
+  if (current >= total - 3) return [1, "...", total - 4, total - 3, total - 2, total - 1, total]
+  return [1, "...", current - 1, current, current + 1, "...", total]
+}
+
+export function DashboardPage({
+  initialMatches,
+  initialTotalCount,
+  initialTotalPages,
+  knownMaps,
+  knownMatchTypes,
+  members,
+  isAdmin,
+  isCreator,
+  adminUsernames = [],
+}: DashboardPageProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
   const [isEditPending, startEditTransition] = useTransition()
   const [editingMatch, setEditingMatch] = useState<Match | null>(null)
   const [isNoticeOpen, setIsNoticeOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false)
+
+  // 필터 상태
   const [player1, setPlayer1] = useState("")
   const [player2, setPlayer2] = useState("")
   const [filterDateFrom, setFilterDateFrom] = useState("")
   const [filterDateTo, setFilterDateTo] = useState("")
   const [filterMap, setFilterMap] = useState("")
   const [filterMatchType, setFilterMatchType] = useState("__all__")
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [adminLoginOpen, setAdminLoginOpen] = useState(false)
+
+  // 페이지네이션 & 경기 데이터 상태
+  const [currentPage, setCurrentPage] = useState(1)
+  const [matches, setMatches] = useState<Match[]>(initialMatches)
+  const [totalCount, setTotalCount] = useState(initialTotalCount)
+  const [totalPages, setTotalPages] = useState(initialTotalPages)
+  const [wins, setWins] = useState(0)
+  const [losses, setLosses] = useState(0)
+  const [isLoadingMatches, setIsLoadingMatches] = useState(false)
 
   const seoulToday = getSeoulDateString()
+  const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
 
-  const filteredMatches = initialMatches.filter((match) => {
-    const matchesPlayer1 =
-      !player1 ||
-      match.player1.toLowerCase().includes(player1.toLowerCase()) ||
-      match.player2.toLowerCase().includes(player1.toLowerCase())
-    const matchesPlayer2 =
-      !player2 ||
-      match.player2.toLowerCase().includes(player2.toLowerCase()) ||
-      match.player1.toLowerCase().includes(player2.toLowerCase())
-    const matchesDate =
-      (!filterDateFrom || match.date >= filterDateFrom) &&
-      (!filterDateTo || match.date <= filterDateTo)
-    const q = filterMap.trim().toLowerCase()
-    const matchesMap = !q || match.map.toLowerCase().includes(q)
-    const matchesType = filterMatchType === "__all__" || match.matchType === filterMatchType
-    return matchesPlayer1 && matchesPlayer2 && matchesDate && matchesMap && matchesType
+  // 필터 최신값을 ref로 관리 (debounce 타이머에서 항상 최신값 참조)
+  const filtersRef = useRef<FilterState>({
+    player1: "",
+    player2: "",
+    dateFrom: "",
+    dateTo: "",
+    map: "",
+    matchType: "__all__",
   })
+  filtersRef.current = {
+    player1,
+    player2,
+    dateFrom: filterDateFrom,
+    dateTo: filterDateTo,
+    map: filterMap,
+    matchType: filterMatchType,
+  }
 
-  // 선수1 검색 없을 때는 최근 50경기만 표시, 선수1 검색 시 전체 표시
-  const displayMatches = player1 ? filteredMatches : filteredMatches.slice(0, 50)
+  // Abort controller (중복 요청 취소)
+  const abortRef = useRef<AbortController | null>(null)
+  // Debounce 타이머
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 초기 마운트 여부 (첫 렌더는 SSR 데이터 사용)
+  const isMountedRef = useRef(false)
 
+  const doFetch = useCallback(async (page: number, filters: FilterState) => {
+    abortRef.current?.abort()
+    abortRef.current = new AbortController()
+    setIsLoadingMatches(true)
+
+    const params = new URLSearchParams({
+      page: String(page),
+      player1: filters.player1,
+      player2: filters.player2,
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+      map: filters.map,
+      matchType: filters.matchType === "__all__" ? "" : filters.matchType,
+    })
+
+    try {
+      const res = await fetch(`/api/matches?${params}`, {
+        signal: abortRef.current.signal,
+      })
+      if (!res.ok) throw new Error("fetch failed")
+      const data = await res.json()
+      setMatches(data.matches ?? [])
+      setTotalCount(data.totalCount ?? 0)
+      setTotalPages(data.totalPages ?? 0)
+      setWins(data.wins ?? 0)
+      setLosses(data.losses ?? 0)
+      setCurrentPage(page)
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") {
+        console.error("경기 데이터 로드 실패:", e)
+      }
+    } finally {
+      setIsLoadingMatches(false)
+    }
+  }, [])
+
+  // 즉시 fetch (날짜/드롭다운 필터)
+  function triggerImmediateFetch(overrides?: Partial<FilterState>) {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    doFetch(1, { ...filtersRef.current, ...overrides })
+  }
+
+  // router.refresh() 후 SSR 데이터가 갱신되면 현재 필터로 재요청
+  useEffect(() => {
+    if (!isMountedRef.current) {
+      isMountedRef.current = true
+      return
+    }
+    doFetch(1, filtersRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMatches])
+
+  // 페이지 이동
+  function handlePageChange(page: number) {
+    if (page < 1 || page > totalPages || page === currentPage) return
+    doFetch(page, filtersRef.current)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  // 필터 핸들러
+  function handlePlayer1Change(val: string) {
+    setPlayer1(val)
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    debounceTimerRef.current = setTimeout(() => {
+      doFetch(1, { ...filtersRef.current, player1: val })
+    }, 350)
+  }
+
+  function handlePlayer2Change(val: string) {
+    setPlayer2(val)
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    debounceTimerRef.current = setTimeout(() => {
+      doFetch(1, { ...filtersRef.current, player2: val })
+    }, 350)
+  }
+
+  function handleMapChange(val: string) {
+    setFilterMap(val)
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    debounceTimerRef.current = setTimeout(() => {
+      doFetch(1, { ...filtersRef.current, map: val })
+    }, 350)
+  }
+
+  function handleDateFromChange(val: string) {
+    const clamped = !val ? "" : val > seoulToday ? seoulToday : val
+    setFilterDateFrom(clamped)
+    triggerImmediateFetch({ dateFrom: clamped })
+  }
+
+  function handleDateToChange(val: string) {
+    const clamped = !val ? "" : val > seoulToday ? seoulToday : val
+    setFilterDateTo(clamped)
+    triggerImmediateFetch({ dateTo: clamped })
+  }
+
+  function handleMatchTypeChange(val: string) {
+    setFilterMatchType(val)
+    triggerImmediateFetch({ matchType: val })
+  }
+
+  // 전적 등록/수정/삭제
   function handleRegister(input: RegisterMatchInput, keepOpen?: boolean) {
     if (!isAdmin) {
       window.alert("운영진만 전적을 등록할 수 있습니다.")
@@ -84,9 +243,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
         window.alert(res.error)
         return
       }
-      if (!keepOpen) {
-        setIsDialogOpen(false)
-      }
+      if (!keepOpen) setIsDialogOpen(false)
       router.refresh()
     })
   }
@@ -122,18 +279,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
     })
   }
 
-  const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
-
-  const knownMaps = useMemo(
-    () => Array.from(new Set(initialMatches.map((m) => m.map))).sort(),
-    [initialMatches],
-  )
-
-  const knownMatchTypes = useMemo(
-    () =>
-      Array.from(new Set(initialMatches.map((m) => m.matchType).filter((t): t is string => !!t))).sort(),
-    [initialMatches],
-  )
+  const pageNumbers = getPageNumbers(currentPage, totalPages)
 
   return (
     <main className="min-h-screen bg-background">
@@ -199,7 +345,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
                 label="선수(기준)"
                 placeholder="선수 이름 검색..."
                 value={player1}
-                onChange={setPlayer1}
+                onChange={handlePlayer1Change}
               />
             </div>
 
@@ -212,7 +358,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
                 label="상대 선수"
                 placeholder="상대 선수 이름 검색..."
                 value={player2}
-                onChange={setPlayer2}
+                onChange={handlePlayer2Change}
               />
             </div>
 
@@ -231,7 +377,11 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
                 <Button
                   type="button"
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
-                  onClick={() => window.alert("운영진만 전적을 등록할 수 있습니다. 상단에서 관리자 로그인 후 이용해 주세요.")}
+                  onClick={() =>
+                    window.alert(
+                      "운영진만 전적을 등록할 수 있습니다. 상단에서 관리자 로그인 후 이용해 주세요.",
+                    )
+                  }
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   전적 등록
@@ -248,10 +398,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
                   type="date"
                   value={filterDateFrom}
                   max={filterDateTo || seoulToday}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setFilterDateFrom(!v ? "" : v > seoulToday ? seoulToday : v)
-                  }}
+                  onChange={(e) => handleDateFromChange(e.target.value)}
                   className="bg-input border-border text-foreground"
                 />
                 <span className="text-muted-foreground text-sm shrink-0">~</span>
@@ -260,10 +407,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
                   value={filterDateTo}
                   min={filterDateFrom || undefined}
                   max={seoulToday}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setFilterDateTo(!v ? "" : v > seoulToday ? seoulToday : v)
-                  }}
+                  onChange={(e) => handleDateToChange(e.target.value)}
                   className="bg-input border-border text-foreground"
                 />
               </div>
@@ -284,7 +428,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
                 type="text"
                 placeholder="비워 두면 모든 맵 · 일부 이름으로 검색"
                 value={filterMap}
-                onChange={(e) => setFilterMap(e.target.value)}
+                onChange={(e) => handleMapChange(e.target.value)}
                 className="bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
               <p className="text-xs text-muted-foreground">입력한 글이 포함된 맵 이름의 전적만 표시</p>
@@ -292,7 +436,7 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
 
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">경기 유형 필터</Label>
-              <Select value={filterMatchType} onValueChange={setFilterMatchType}>
+              <Select value={filterMatchType} onValueChange={handleMatchTypeChange}>
                 <SelectTrigger className="bg-input border-border text-foreground">
                   <SelectValue placeholder="전체 경기 유형" />
                 </SelectTrigger>
@@ -312,41 +456,27 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
 
         {player1 && (
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <StatCard title="총 경기" value={filteredMatches.length} color="text-foreground" />
-            <StatCard
-              title="승리"
-              value={
-                filteredMatches.filter(
-                  (m) =>
-                    m.winner.toLowerCase() === player1.toLowerCase() ||
-                    (m.player1.toLowerCase().includes(player1.toLowerCase()) && m.winner === m.player1) ||
-                    (m.player2.toLowerCase().includes(player1.toLowerCase()) && m.winner === m.player2),
-                ).length
-              }
-              color="text-accent"
-            />
-            <StatCard
-              title="패배"
-              value={
-                filteredMatches.filter(
-                  (m) =>
-                    (m.player1.toLowerCase().includes(player1.toLowerCase()) && m.winner !== m.player1) ||
-                    (m.player2.toLowerCase().includes(player1.toLowerCase()) && m.winner !== m.player2),
-                ).length
-              }
-              color="text-destructive"
-            />
+            <StatCard title="총 경기" value={totalCount} color="text-foreground" />
+            <StatCard title="승리" value={wins} color="text-accent" />
+            <StatCard title="패배" value={losses} color="text-destructive" />
           </section>
         )}
 
         <section className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">전적 기록</h2>
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                전적 기록
+                {isLoadingMatches && (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </h2>
               <p className="text-sm text-muted-foreground">
                 {player1
-                  ? `"${player1}" 선수의 경기 기록 (${filteredMatches.length}경기)`
-                  : `전체 경기 기록 (최근 50경기 표시 / 전체 ${filteredMatches.length}경기)`}
+                  ? `"${player1}" 선수의 경기 기록 (총 ${totalCount}경기)`
+                  : totalPages > 1
+                    ? `전체 경기 기록 (${totalCount}경기 · ${currentPage}/${totalPages} 페이지)`
+                    : `전체 경기 기록 (총 ${totalCount}경기)`}
               </p>
             </div>
             <Button
@@ -358,15 +488,69 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
               공지 및 건의
             </Button>
           </div>
-          <MatchHistory
-            matches={displayMatches}
-            searchPlayer={player1}
-            isAdmin={isAdmin}
-            onDeleteMatch={handleDeleteMatch}
-            deletePending={isDeletePending}
-            onEditMatch={(match) => setEditingMatch(match)}
-            editPending={isEditPending}
-          />
+
+          <div className={isLoadingMatches ? "opacity-50 pointer-events-none transition-opacity" : "transition-opacity"}>
+            <MatchHistory
+              matches={matches}
+              searchPlayer={player1}
+              isAdmin={isAdmin}
+              onDeleteMatch={handleDeleteMatch}
+              deletePending={isDeletePending}
+              onEditMatch={(match) => setEditingMatch(match)}
+              editPending={isEditPending}
+            />
+          </div>
+
+          {totalPages > 1 && (
+            <div className="px-6 py-4 border-t border-border">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handlePageChange(currentPage - 1)
+                      }}
+                      aria-disabled={currentPage === 1}
+                      className={currentPage === 1 ? "pointer-events-none opacity-40" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+
+                  {pageNumbers.map((p, i) =>
+                    p === "..." ? (
+                      <PaginationItem key={`ellipsis-${i}`}>
+                        <PaginationEllipsis />
+                      </PaginationItem>
+                    ) : (
+                      <PaginationItem key={p}>
+                        <PaginationLink
+                          isActive={p === currentPage}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handlePageChange(p as number)
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {p}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ),
+                  )}
+
+                  <PaginationItem>
+                    <PaginationNext
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handlePageChange(currentPage + 1)
+                      }}
+                      aria-disabled={currentPage === totalPages}
+                      className={currentPage === totalPages ? "pointer-events-none opacity-40" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </section>
 
         <AdminLoginDialog
@@ -377,7 +561,9 @@ export function DashboardPage({ initialMatches, members, isAdmin, isCreator, adm
 
         <EditMatchDialog
           open={editingMatch !== null}
-          onOpenChange={(open) => { if (!open) setEditingMatch(null) }}
+          onOpenChange={(open) => {
+            if (!open) setEditingMatch(null)
+          }}
           match={editingMatch}
           onUpdate={handleEditMatch}
           isSubmitting={isEditPending}
