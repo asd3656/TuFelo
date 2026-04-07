@@ -28,9 +28,16 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2 } from "lucide-react"
 import { getSeoulDateString } from "@/lib/date-seoul"
-import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput } from "@/lib/types/tufelo"
+import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
 
 export type { Tier, Race, Match } from "@/lib/types/tufelo"
@@ -44,6 +51,7 @@ interface FilterState {
   dateTo: string
   map: string
   matchType: string
+  seasonId: string
 }
 
 interface DashboardPageProps {
@@ -56,6 +64,8 @@ interface DashboardPageProps {
   isAdmin: boolean
   isCreator?: boolean
   adminUsernames?: string[]
+  seasons?: Season[]
+  currentSeason?: Season | null
 }
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {
@@ -75,6 +85,8 @@ export function DashboardPage({
   isAdmin,
   isCreator,
   adminUsernames = [],
+  seasons = [],
+  currentSeason = null,
 }: DashboardPageProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -92,6 +104,7 @@ export function DashboardPage({
   const [filterDateTo, setFilterDateTo] = useState("")
   const [filterMap, setFilterMap] = useState("")
   const [filterMatchType, setFilterMatchType] = useState("__all__")
+  const [filterSeasonId, setFilterSeasonId] = useState("__all__")
 
   // 페이지네이션 & 경기 데이터 상태
   const [currentPage, setCurrentPage] = useState(1)
@@ -101,6 +114,8 @@ export function DashboardPage({
   const [wins, setWins] = useState(0)
   const [losses, setLosses] = useState(0)
   const [isLoadingMatches, setIsLoadingMatches] = useState(false)
+  const [isPageJumpOpen, setIsPageJumpOpen] = useState(false)
+  const [pageJumpInput, setPageJumpInput] = useState("")
 
   const seoulToday = getSeoulDateString()
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
@@ -113,6 +128,7 @@ export function DashboardPage({
     dateTo: "",
     map: "",
     matchType: "__all__",
+    seasonId: "__all__",
   })
   filtersRef.current = {
     player1,
@@ -121,6 +137,7 @@ export function DashboardPage({
     dateTo: filterDateTo,
     map: filterMap,
     matchType: filterMatchType,
+    seasonId: filterSeasonId,
   }
 
   // Abort controller (중복 요청 취소)
@@ -143,6 +160,7 @@ export function DashboardPage({
       dateTo: filters.dateTo,
       map: filters.map,
       matchType: filters.matchType === "__all__" ? "" : filters.matchType,
+      seasonId: filters.seasonId === "__all__" ? "" : filters.seasonId,
     })
 
     try {
@@ -189,6 +207,16 @@ export function DashboardPage({
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
+  // ... 클릭 시 페이지 직접 입력
+  function handlePageJump() {
+    const page = parseInt(pageJumpInput, 10)
+    if (!isNaN(page) && page >= 1 && page <= totalPages) {
+      handlePageChange(page)
+    }
+    setIsPageJumpOpen(false)
+    setPageJumpInput("")
+  }
+
   // 필터 핸들러
   function handlePlayer1Change(val: string) {
     setPlayer1(val)
@@ -229,6 +257,11 @@ export function DashboardPage({
   function handleMatchTypeChange(val: string) {
     setFilterMatchType(val)
     triggerImmediateFetch({ matchType: val })
+  }
+
+  function handleSeasonIdChange(val: string) {
+    setFilterSeasonId(val)
+    triggerImmediateFetch({ seasonId: val })
   }
 
   // 전적 등록/수정/삭제
@@ -390,7 +423,7 @@ export function DashboardPage({
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 pt-6 border-t border-border">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 pt-6 border-t border-border">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">날짜 필터</Label>
               <div className="flex items-center gap-2">
@@ -451,6 +484,25 @@ export function DashboardPage({
               </Select>
               <p className="text-xs text-muted-foreground">기본값 전체</p>
             </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">시즌 필터</Label>
+              <Select value={filterSeasonId} onValueChange={handleSeasonIdChange}>
+                <SelectTrigger className="bg-input border-border text-foreground">
+                  <SelectValue placeholder="전체 시즌" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">전체</SelectItem>
+                  <SelectItem value="__none__">비시즌</SelectItem>
+                  {seasons.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}{s.endDate === null ? " (현재)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">기본값 전체</p>
+            </div>
           </div>
         </section>
 
@@ -469,6 +521,11 @@ export function DashboardPage({
                 전적 기록
                 {isLoadingMatches && (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+                {currentSeason && (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+                    {currentSeason.name} 진행중 · {currentSeason.startDate.replace(/-/g, ".")} ~
+                  </span>
                 )}
               </h2>
               <p className="text-sm text-muted-foreground">
@@ -519,7 +576,14 @@ export function DashboardPage({
                   {pageNumbers.map((p, i) =>
                     p === "..." ? (
                       <PaginationItem key={`ellipsis-${i}`}>
-                        <PaginationEllipsis />
+                        <PaginationEllipsis
+                          className="cursor-pointer rounded hover:bg-secondary/70 transition-colors"
+                          onClick={() => {
+                            setPageJumpInput("")
+                            setIsPageJumpOpen(true)
+                          }}
+                          title="페이지 직접 입력"
+                        />
                       </PaginationItem>
                     ) : (
                       <PaginationItem key={p}>
@@ -552,6 +616,59 @@ export function DashboardPage({
             </div>
           )}
         </section>
+
+        <Dialog
+          open={isPageJumpOpen}
+          onOpenChange={(open) => {
+            setIsPageJumpOpen(open)
+            if (!open) setPageJumpInput("")
+          }}
+        >
+          <DialogContent className="bg-card border-border text-foreground w-48 p-4 gap-3">
+            <DialogHeader className="pb-0">
+              <DialogTitle className="text-sm">페이지 이동</DialogTitle>
+            </DialogHeader>
+            <Input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={pageJumpInput}
+              onChange={(e) => setPageJumpInput(e.target.value)}
+              placeholder={`1 ~ ${totalPages}`}
+              className="bg-input border-border text-foreground h-8 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handlePageJump()
+              }}
+              autoFocus
+            />
+            <DialogFooter className="flex-row gap-2 sm:justify-start">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsPageJumpOpen(false)
+                  setPageJumpInput("")
+                }}
+                className="flex-1 border-border text-foreground h-8"
+              >
+                취소
+              </Button>
+              <Button
+                size="sm"
+                onClick={handlePageJump}
+                disabled={
+                  !pageJumpInput ||
+                  isNaN(parseInt(pageJumpInput, 10)) ||
+                  parseInt(pageJumpInput, 10) < 1 ||
+                  parseInt(pageJumpInput, 10) > totalPages
+                }
+                className="flex-1 bg-primary text-primary-foreground h-8"
+              >
+                이동
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <AdminLoginDialog
           open={adminLoginOpen}

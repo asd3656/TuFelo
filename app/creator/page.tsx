@@ -4,6 +4,7 @@ import { getSessionFromCookies } from "@/lib/auth/admin"
 import { createServiceClient } from "@/lib/supabase/service"
 import { CreatorPageClient } from "@/components/creator-page-client"
 import { Button } from "@/components/ui/button"
+import type { Season } from "@/lib/types/tufelo"
 
 export default async function CreatorPage() {
   const session = await getSessionFromCookies()
@@ -22,7 +23,7 @@ export default async function CreatorPage() {
 
   const supabase = createServiceClient()
 
-  const [{ data: admins }, { data: logs }] = await Promise.all([
+  const [{ data: admins }, { data: logs }, { data: seasonsRaw }] = await Promise.all([
     supabase
       .from("admins")
       .select("username, role, created_at")
@@ -32,13 +33,26 @@ export default async function CreatorPage() {
       .select("id, admin_username, action, target, detail, created_at")
       .order("created_at", { ascending: false })
       .limit(50),
+    supabase
+      .from("seasons")
+      .select("id, name, start_date, end_date, created_at")
+      .order("start_date", { ascending: false }),
   ])
+
+  const seasons: Season[] = (seasonsRaw ?? []).map((r) => ({
+    id: r.id as string,
+    name: r.name as string,
+    startDate: r.start_date as string,
+    endDate: (r.end_date as string | null) ?? null,
+    createdAt: r.created_at as string,
+  }))
 
   return (
     <CreatorPageClient
       currentUsername={session.username}
       admins={admins ?? []}
       logs={logs ?? []}
+      seasons={seasons}
     />
   )
 }

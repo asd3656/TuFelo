@@ -82,6 +82,7 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterTier, setFilterTier] = useState("__all__")
   const [filterRace, setFilterRace] = useState("__all__")
+  const [filterStatus, setFilterStatus] = useState("__all__")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -100,9 +101,12 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
         const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase())
         const matchesTier = filterTier === "__all__" || String(member.tier) === filterTier
         const matchesRace = filterRace === "__all__" || member.race === filterRace
-        return matchesSearch && matchesTier && matchesRace
+        const matchesStatus =
+          filterStatus === "__all__" ||
+          (filterStatus === "active" ? member.isActive : !member.isActive)
+        return matchesSearch && matchesTier && matchesRace && matchesStatus
       }),
-    [initialMembers, searchQuery, filterTier, filterRace],
+    [initialMembers, searchQuery, filterTier, filterRace, filterStatus],
   )
 
   const runAction = (fn: () => Promise<ActionResult>, onDone?: () => void) => {
@@ -181,13 +185,15 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
     setIsDeleteDialogOpen(true)
   }
 
+  // 상단 통계는 항상 전체 활성 회원 기준 (필터 영향 없음)
+  const activeMembers = useMemo(() => initialMembers.filter((m) => m.isActive), [initialMembers])
   const tierCounts: Record<CliqueTier, number> = {
-    1: filteredMembers.filter((m) => m.tier === 1).length,
-    2: filteredMembers.filter((m) => m.tier === 2).length,
-    3: filteredMembers.filter((m) => m.tier === 3).length,
-    4: filteredMembers.filter((m) => m.tier === 4).length,
+    1: activeMembers.filter((m) => m.tier === 1).length,
+    2: activeMembers.filter((m) => m.tier === 2).length,
+    3: activeMembers.filter((m) => m.tier === 3).length,
+    4: activeMembers.filter((m) => m.tier === 4).length,
   }
-  const totalFilteredCount = filteredMembers.length
+  const activeTotalCount = activeMembers.length
 
   return (
     <main className="min-h-screen bg-background">
@@ -230,10 +236,10 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
           <div className="bg-card rounded-lg border border-border p-4">
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="outline" className="bg-secondary text-secondary-foreground border-border">
-                전체
+                활성 전체
               </Badge>
             </div>
-            <p className="text-2xl font-bold text-foreground">{totalFilteredCount}</p>
+            <p className="text-2xl font-bold text-foreground">{activeTotalCount}</p>
             <p className="text-xs text-muted-foreground">명</p>
           </div>
         </section>
@@ -250,6 +256,17 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
               />
             </div>
             <div className="flex flex-wrap gap-3">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-28 bg-card border-border text-foreground">
+                  <SelectValue placeholder="전체" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">전체</SelectItem>
+                  <SelectItem value="active">활성</SelectItem>
+                  <SelectItem value="inactive">탈퇴</SelectItem>
+                </SelectContent>
+              </Select>
+
               <Select value={filterTier} onValueChange={setFilterTier}>
                 <SelectTrigger className="w-36 bg-card border-border text-foreground">
                   <SelectValue placeholder="전체 티어" />
@@ -275,12 +292,13 @@ export function AdminPageClient({ initialMembers }: AdminPageClientProps) {
                 </SelectContent>
               </Select>
 
-              {(filterTier !== "__all__" || filterRace !== "__all__") && (
+              {(filterStatus !== "__all__" || filterTier !== "__all__" || filterRace !== "__all__") && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={() => {
+                    setFilterStatus("__all__")
                     setFilterTier("__all__")
                     setFilterRace("__all__")
                   }}

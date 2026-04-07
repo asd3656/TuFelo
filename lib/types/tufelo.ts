@@ -84,4 +84,26 @@ export interface MatchForRanking {
   player2EloDelta: number | null
   playedDate: string
   createdAt: string
+  seasonId: string | null
+}
+
+export interface Season {
+  id: string
+  name: string
+  startDate: string
+  endDate: string | null
+  createdAt: string
+}
+
+export interface SeasonRankingEntry {
+  id: string
+  seasonId: string
+  memberId: string
+  memberName: string
+  memberRace: Race
+  memberTier: Tier
+  finalElo: number
+  finalWins: number
+  finalLosses: number
+  rank: number
 }

@@ -32,9 +32,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Shield, Plus, Trash2, ScrollText, X } from "lucide-react"
+import { ArrowLeft, Shield, Plus, Trash2, ScrollText, X, CalendarDays, Pencil, Play } from "lucide-react"
 import { addAdminAccountAction, deleteAdminAccountAction } from "@/app/actions/creator"
 import { logoutAdminAction } from "@/app/actions/admin"
+import { startNewSeasonAction, updateSeasonAction, deleteSeasonAction } from "@/app/actions/seasons"
+import type { Season } from "@/lib/types/tufelo"
 
 interface AdminRow {
   username: string
@@ -55,6 +57,7 @@ interface CreatorPageClientProps {
   currentUsername: string
   admins: AdminRow[]
   logs: LogRow[]
+  seasons: Season[]
 }
 
 const ACTION_OPTIONS = [
@@ -70,6 +73,9 @@ const ACTION_OPTIONS = [
   "관리자 추가",
   "관리자 삭제",
   "건의사항 삭제",
+  "시즌 시작",
+  "시즌 수정",
+  "시즌 삭제",
 ] as const
 
 function formatDate(iso: string) {
@@ -102,7 +108,7 @@ function actionBadgeClass(action: string) {
   return "bg-secondary text-secondary-foreground"
 }
 
-export function CreatorPageClient({ currentUsername, admins, logs }: CreatorPageClientProps) {
+export function CreatorPageClient({ currentUsername, admins, logs, seasons }: CreatorPageClientProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -113,6 +119,79 @@ export function CreatorPageClient({ currentUsername, admins, logs }: CreatorPage
 
   // 계정 삭제 확인
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+
+  // ── 시즌 관리 상태 ──
+  const [seasonErr, setSeasonErr] = useState<string | null>(null)
+  // 새 시즌 시작 폼
+  const [newSeasonName, setNewSeasonName] = useState("")
+  const [newSeasonStart, setNewSeasonStart] = useState("")
+  const [showNewSeasonForm, setShowNewSeasonForm] = useState(false)
+  const [confirmNewSeason, setConfirmNewSeason] = useState(false)
+  // 시즌 수정
+  const [editingSeason, setEditingSeason] = useState<Season | null>(null)
+  const [editName, setEditName] = useState("")
+  const [editStart, setEditStart] = useState("")
+  const [editEnd, setEditEnd] = useState("")
+  // 시즌 삭제 확인
+  const [deleteSeasonTarget, setDeleteSeasonTarget] = useState<Season | null>(null)
+
+  const activeSeason = seasons.find((s) => s.endDate === null) ?? null
+
+  function handleStartNewSeason(e: React.FormEvent) {
+    e.preventDefault()
+    setSeasonErr(null)
+    if (!newSeasonName.trim() || !newSeasonStart) {
+      setSeasonErr("시즌 이름과 시작 날짜를 모두 입력하세요.")
+      return
+    }
+    setConfirmNewSeason(true)
+  }
+
+  function confirmAndStartSeason() {
+    setConfirmNewSeason(false)
+    startTransition(async () => {
+      const res = await startNewSeasonAction({ name: newSeasonName.trim(), startDate: newSeasonStart })
+      if (!res.ok) { setSeasonErr(res.error); return }
+      setNewSeasonName("")
+      setNewSeasonStart("")
+      setShowNewSeasonForm(false)
+      router.refresh()
+    })
+  }
+
+  function handleOpenEdit(season: Season) {
+    setEditingSeason(season)
+    setEditName(season.name)
+    setEditStart(season.startDate)
+    setEditEnd(season.endDate ?? "")
+    setSeasonErr(null)
+  }
+
+  function handleSaveEdit() {
+    if (!editingSeason) return
+    setSeasonErr(null)
+    startTransition(async () => {
+      const res = await updateSeasonAction({
+        id: editingSeason.id,
+        name: editName.trim(),
+        startDate: editStart,
+        endDate: editEnd || null,
+      })
+      if (!res.ok) { setSeasonErr(res.error); return }
+      setEditingSeason(null)
+      router.refresh()
+    })
+  }
+
+  function handleDeleteSeason() {
+    if (!deleteSeasonTarget) return
+    startTransition(async () => {
+      const res = await deleteSeasonAction(deleteSeasonTarget.id)
+      if (!res.ok) { window.alert(res.error); return }
+      setDeleteSeasonTarget(null)
+      router.refresh()
+    })
+  }
 
   // 로그 필터
   const [filterAdmin, setFilterAdmin] = useState("")
@@ -206,6 +285,194 @@ export function CreatorPageClient({ currentUsername, admins, logs }: CreatorPage
             <Badge className="ml-2 bg-red-600/20 text-red-400 border-red-500/30">제작자</Badge>
           </p>
         </header>
+
+        {/* 시즌 관리 */}
+        <section className="bg-card rounded-lg border border-border overflow-hidden mb-8">
+          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-primary" />
+                시즌 관리
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {activeSeason
+                  ? `현재 진행 중: ${activeSeason.name} (${activeSeason.startDate} ~ )`
+                  : "현재 진행 중인 시즌 없음"}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={() => { setShowNewSeasonForm((v) => !v); setSeasonErr(null) }}
+              disabled={pending}
+            >
+              <Play className="h-4 w-4 mr-1" />
+              새 시즌 시작
+            </Button>
+          </div>
+
+          {/* 새 시즌 시작 폼 */}
+          {showNewSeasonForm && (
+            <div className="px-6 py-5 border-b border-border bg-secondary/20">
+              <p className="text-sm font-semibold text-foreground mb-3">새 시즌 정보 입력</p>
+              {activeSeason && (
+                <p className="text-xs text-amber-400 mb-3">
+                  ⚠ &quot;{activeSeason.name}&quot;이(가) 자동 종료되고 모든 활성 선수의 ELO/승패/연속이 초기화됩니다.
+                </p>
+              )}
+              <form onSubmit={handleStartNewSeason} className="flex flex-wrap gap-3 items-end">
+                <div className="space-y-1.5 flex-1 min-w-32">
+                  <Label className="text-xs text-muted-foreground">시즌 이름</Label>
+                  <Input
+                    placeholder="예: 시즌3"
+                    value={newSeasonName}
+                    onChange={(e) => setNewSeasonName(e.target.value)}
+                    className="bg-input border-border"
+                  />
+                </div>
+                <div className="space-y-1.5 min-w-40">
+                  <Label className="text-xs text-muted-foreground">시작 날짜</Label>
+                  <Input
+                    type="date"
+                    value={newSeasonStart}
+                    onChange={(e) => setNewSeasonStart(e.target.value)}
+                    className="bg-input border-border"
+                  />
+                </div>
+                <Button type="submit" disabled={pending} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Plus className="h-4 w-4 mr-1" />
+                  시작
+                </Button>
+                <Button type="button" variant="ghost" disabled={pending} onClick={() => setShowNewSeasonForm(false)}>
+                  취소
+                </Button>
+              </form>
+              {seasonErr && <p className="text-sm text-destructive mt-2">{seasonErr}</p>}
+            </div>
+          )}
+
+          {/* 시즌 목록 */}
+          {seasons.length === 0 ? (
+            <div className="px-6 py-10 text-center text-muted-foreground text-sm">
+              아직 시즌이 없습니다.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="text-muted-foreground font-semibold">시즌명</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center">시작일</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center">종료일</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center">상태</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center w-24">관리</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {seasons.map((season) => (
+                    <TableRow key={season.id} className="border-border hover:bg-secondary/50">
+                      {editingSeason?.id === season.id ? (
+                        <>
+                          <TableCell>
+                            <Input
+                              value={editName}
+                              onChange={(e) => setEditName(e.target.value)}
+                              className="bg-input border-border h-8 text-sm"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="date"
+                              value={editStart}
+                              onChange={(e) => setEditStart(e.target.value)}
+                              className="bg-input border-border h-8 text-sm"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {season.endDate !== null ? (
+                              <Input
+                                type="date"
+                                value={editEnd}
+                                onChange={(e) => setEditEnd(e.target.value)}
+                                className="bg-input border-border h-8 text-sm"
+                              />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">진행 중</span>
+                            )}
+                          </TableCell>
+                          <TableCell />
+                          <TableCell className="text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button
+                                size="sm"
+                                className="h-7 px-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                onClick={handleSaveEdit}
+                                disabled={pending}
+                              >
+                                저장
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setEditingSeason(null)}
+                                disabled={pending}
+                              >
+                                취소
+                              </Button>
+                            </div>
+                            {seasonErr && editingSeason?.id === season.id && (
+                              <p className="text-xs text-destructive mt-1">{seasonErr}</p>
+                            )}
+                          </TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell className="font-semibold text-foreground">{season.name}</TableCell>
+                          <TableCell className="text-center text-sm text-muted-foreground">{season.startDate}</TableCell>
+                          <TableCell className="text-center text-sm text-muted-foreground">
+                            {season.endDate ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {season.endDate === null ? (
+                              <Badge className="bg-primary/20 text-primary border-primary/30">진행 중</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground">종료</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                                onClick={() => handleOpenEdit(season)}
+                                disabled={pending}
+                                title="수정"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteSeasonTarget(season)}
+                                disabled={pending}
+                                title="삭제"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </section>
 
         {/* 관리자 계정 관리 */}
         <section className="bg-card rounded-lg border border-border overflow-hidden mb-8">
@@ -431,6 +698,68 @@ export function CreatorPageClient({ currentUsername, admins, logs }: CreatorPage
           )}
         </section>
       </div>
+
+      {/* 새 시즌 시작 확인 다이얼로그 */}
+      <AlertDialog open={confirmNewSeason} onOpenChange={(v) => { if (!v) setConfirmNewSeason(false) }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">새 시즌 시작 확인</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              <span className="text-foreground font-semibold">{newSeasonName}</span> 시즌을 시작합니다.
+              {activeSeason && (
+                <>
+                  <br />현재 진행 중인 <span className="text-foreground font-semibold">{activeSeason.name}</span>이(가) 자동으로 종료되고
+                  스냅샷이 저장됩니다.
+                </>
+              )}
+              <br />모든 활성 선수의 <span className="text-foreground font-semibold">ELO, 승패, 연속 기록이 초기화</span>됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-foreground">취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmAndStartSeason}
+              disabled={pending}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              시작
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 시즌 삭제 확인 다이얼로그 */}
+      <AlertDialog open={!!deleteSeasonTarget} onOpenChange={(v) => { if (!v) setDeleteSeasonTarget(null) }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">시즌 삭제</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              <span className="text-foreground font-semibold">{deleteSeasonTarget?.name}</span> 시즌을 삭제하시겠습니까?
+              {deleteSeasonTarget?.endDate === null && (
+                <>
+                  <br />현재 활성 시즌입니다. 경기가 없는 경우에만 삭제 가능하며,
+                  이전 시즌이 있으면 자동으로 복원됩니다.
+                </>
+              )}
+              {deleteSeasonTarget?.endDate !== null && (
+                <>
+                  <br />이 시즌의 랭킹 스냅샷도 함께 삭제됩니다.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-foreground">취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSeason}
+              disabled={pending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* 계정 삭제 확인 다이얼로그 */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null) }}>

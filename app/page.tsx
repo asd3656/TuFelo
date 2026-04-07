@@ -1,6 +1,7 @@
 import { DashboardPage } from "@/components/dashboard-page"
 import { fetchInitialDashboardData } from "@/lib/data/matches"
 import { fetchActiveMembers } from "@/lib/data/members"
+import { fetchSeasons } from "@/lib/data/seasons"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { createServiceClient } from "@/lib/supabase/service"
 
@@ -15,12 +16,15 @@ async function fetchAdminUsernames(): Promise<string[]> {
 }
 
 export default async function HomePage() {
-  const [dashboardData, members, session, adminUsernames] = await Promise.all([
+  const [dashboardData, members, session, adminUsernames, seasons] = await Promise.all([
     fetchInitialDashboardData(),
     fetchActiveMembers(),
     getSessionFromCookies(),
     fetchAdminUsernames(),
+    fetchSeasons(),
   ])
+
+  const currentSeason = seasons.find((s) => s.endDate === null) ?? null
 
   return (
     <DashboardPage
@@ -33,6 +37,8 @@ export default async function HomePage() {
       isAdmin={session !== null}
       isCreator={session?.role === "creator"}
       adminUsernames={adminUsernames}
+      seasons={seasons}
+      currentSeason={currentSeason}
     />
   )
 }

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
-import type { Match, Race, Tier, MemberForRanking, MatchForRanking } from "@/lib/types/tufelo"
+import type { Match, Race, Tier, MemberForRanking, MatchForRanking, Season, SeasonRankingEntry } from "@/lib/types/tufelo"
+import { fetchSeasons, fetchAllSeasonRankings } from "@/lib/data/seasons"
 
 type MatchRow = {
   id: string
@@ -95,29 +96,46 @@ export async function fetchMatchesForDashboard(): Promise<Match[]> {
   return matches
 }
 
-/** 랭킹 페이지용: 멤버 원본 + 경기 원본을 반환해 클라이언트에서 필터링·집계. */
+/**
+ * 랭킹 페이지용: 멤버 원본 + 현재 시즌 경기 + 시즌 목록 + 과거 시즌 스냅샷 반환.
+ */
 export async function fetchRankingData(): Promise<{
   members: MemberForRanking[]
   matches: MatchForRanking[]
+  seasons: Season[]
+  currentSeason: Season | null
+  pastSeasonRankings: Record<string, SeasonRankingEntry[]>
 }> {
   const supabase = await createClient()
-  const [memRes, matchRes] = await Promise.all([
+
+  // 현재 활성 시즌 ID
+  const { data: activeSeasonRow } = await supabase
+    .from("seasons")
+    .select("id")
+    .is("end_date", null)
+    .maybeSingle()
+  const activeSeasonId = (activeSeasonRow?.id as string | null) ?? null
+
+  const [memRes, matchRes, seasons, pastSeasonRankings] = await Promise.all([
     supabase
       .from("members")
       .select("id, name, race, tier, elo, wins, losses, streak")
       .eq("is_active", true)
       .order("elo", { ascending: false }),
-    supabase
-      .from("matches")
-      .select(
-        "id, player1_id, player2_id, winner_id, match_type, player1_elo_delta, player2_elo_delta, played_date, created_at",
-      )
-      .order("played_date", { ascending: false })
-      .order("created_at", { ascending: false }),
+    // 현재 시즌 경기만 (랭킹 최근 변동 계산용)
+    activeSeasonId
+      ? supabase
+          .from("matches")
+          .select("id, player1_id, player2_id, winner_id, match_type, player1_elo_delta, player2_elo_delta, played_date, created_at, season_id")
+          .eq("season_id", activeSeasonId)
+          .order("played_date", { ascending: false })
+          .order("created_at", { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    fetchSeasons(),
+    fetchAllSeasonRankings(),
   ])
 
   if (memRes.error) throw new Error(memRes.error.message)
-  if (matchRes.error) throw new Error(matchRes.error.message)
 
   const members: MemberForRanking[] = (memRes.data ?? []).map((r) => ({
     id: r.id as string,
@@ -130,19 +148,27 @@ export async function fetchRankingData(): Promise<{
     streak: r.streak as number,
   }))
 
-  const matches: MatchForRanking[] = (matchRes.data ?? []).map((r) => ({
-    id: r.id as string,
-    player1Id: r.player1_id as string,
-    player2Id: r.player2_id as string,
-    winnerId: r.winner_id as string,
-    matchType: (r.match_type as string | null) ?? "",
-    player1EloDelta: r.player1_elo_delta as number | null,
-    player2EloDelta: r.player2_elo_delta as number | null,
-    playedDate: r.played_date as string,
-    createdAt: r.created_at as string,
-  }))
+  const matchData = (matchRes as { data: unknown[] | null }).data ?? []
+  const matches: MatchForRanking[] = matchData.map((r) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = r as any
+    return {
+      id: row.id as string,
+      player1Id: row.player1_id as string,
+      player2Id: row.player2_id as string,
+      winnerId: row.winner_id as string,
+      matchType: (row.match_type as string | null) ?? "",
+      player1EloDelta: row.player1_elo_delta as number | null,
+      player2EloDelta: row.player2_elo_delta as number | null,
+      playedDate: row.played_date as string,
+      createdAt: row.created_at as string,
+      seasonId: (row.season_id as string | null) ?? null,
+    }
+  })
 
-  return { members, matches }
+  const currentSeason = seasons.find((s) => s.endDate === null) ?? null
+
+  return { members, matches, seasons, currentSeason, pastSeasonRankings }
 }
 
 /** 레거시 호환: 기존 코드가 참조하는 경우를 위해 남겨둠 */

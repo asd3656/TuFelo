@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
     const dateTo = searchParams.get("dateTo") ?? ""
     const mapFilter = searchParams.get("map")?.trim() ?? ""
     const matchType = searchParams.get("matchType") ?? ""
+    const seasonId = searchParams.get("seasonId") ?? ""  // "__none__" | UUID | ""
 
     const supabase = await createClient()
 
@@ -106,6 +107,8 @@ export async function GET(req: NextRequest) {
     if (dateTo) query = query.lte("played_date", dateTo)
     if (mapFilter) query = query.ilike("map_name", `%${mapFilter}%`)
     if (matchType) query = query.eq("match_type", matchType)
+    if (seasonId === "__none__") query = query.is("season_id", null)
+    else if (seasonId) query = query.eq("season_id", seasonId)
 
     const { data, count, error } = await query
 

@@ -107,19 +107,46 @@ export async function deleteMemberAction(id: string): Promise<ActionResult> {
   return { ok: true }
 }
 
-/** 클랜 복귀 처리: is_active = true로 복원. */
+/** 클랜 복귀 처리: is_active = true로 복원. 시즌 경기 여부에 따라 ELO 결정. */
 export async function reactivateMemberAction(id: string): Promise<ActionResult> {
   const session = await getSessionFromCookies()
   if (!session) return { ok: false, error: "권한이 없습니다." }
 
   const supabase = await createClient()
 
-  const { data: member } = await supabase.from("members").select("name").eq("id", id).single()
-
-  const { error } = await supabase
+  const { data: member } = await supabase
     .from("members")
-    .update({ is_active: true })
+    .select("name, tier")
     .eq("id", id)
+    .single()
+
+  // 현재 활성 시즌 확인
+  const { data: activeSeason } = await supabase
+    .from("seasons")
+    .select("id")
+    .is("end_date", null)
+    .maybeSingle()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let updateData: Record<string, any> = { is_active: true }
+
+  if (activeSeason) {
+    // 현재 시즌에서 이미 경기가 있는지 확인
+    const { count } = await supabase
+      .from("matches")
+      .select("id", { count: "exact", head: true })
+      .or(`player1_id.eq.${id},player2_id.eq.${id}`)
+      .eq("season_id", activeSeason.id)
+
+    if (!count || count === 0) {
+      // 시즌 경기 없음 → 티어 초기값으로 리셋
+      const elo = getStartingEloForTier((member?.tier as import("@/lib/types/tufelo").Tier) ?? 4)
+      updateData = { is_active: true, elo, wins: 0, losses: 0, streak: 0 }
+    }
+    // 시즌 경기 있음 → 기존 ELO 유지 (is_active만 변경)
+  }
+
+  const { error } = await supabase.from("members").update(updateData).eq("id", id)
 
   if (error) return { ok: false, error: error.message }
 
