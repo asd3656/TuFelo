@@ -286,9 +286,9 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
           <p className="text-muted-foreground ml-14">
             로그인 중: <span className="text-foreground font-semibold">{currentUsername}</span>
             {isGuest ? (
-              <Badge className="ml-2 bg-blue-600/20 text-blue-400 border-blue-500/30">손님 (읽기 전용)</Badge>
+              <Badge className="ml-2 bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30">손님 (읽기 전용)</Badge>
             ) : (
-              <Badge className="ml-2 bg-red-600/20 text-red-400 border-red-500/30">제작자</Badge>
+              <Badge className="ml-2 bg-red-100 dark:bg-red-600/20 text-red-700 dark:text-red-400 border-red-400/60 dark:border-red-500/30">제작자</Badge>
             )}
           </p>
         </header>
@@ -513,9 +513,9 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                     <TableCell className="font-semibold text-foreground">{admin.username}</TableCell>
                     <TableCell className="text-center">
                       {admin.role === "creator" ? (
-                        <Badge className="bg-red-600/20 text-red-400 border-red-500/30">제작자</Badge>
+                        <Badge className="bg-red-100 dark:bg-red-600/20 text-red-700 dark:text-red-400 border-red-400/60 dark:border-red-500/30">제작자</Badge>
                       ) : admin.role === "guest" ? (
-                        <Badge variant="outline" className="bg-blue-600/20 text-blue-400 border-blue-500/30">손님</Badge>
+                        <Badge variant="outline" className="bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30">손님</Badge>
                       ) : (
                         <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">관리자</Badge>
                       )}

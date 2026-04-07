@@ -35,7 +35,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle } from "lucide-react"
+import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor } from "lucide-react"
+import { useTheme } from "next-themes"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
@@ -93,6 +94,9 @@ export function DashboardPage({
   currentSeason = null,
 }: DashboardPageProps) {
   const router = useRouter()
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
   const [isEditPending, startEditTransition] = useTransition()
@@ -302,16 +306,24 @@ export function DashboardPage({
     })
   }
 
-  function handleDeleteMatch(matchId: string) {
+  function handleBulkDelete(matchIds: string[]) {
     if (!isAdmin) {
       window.alert("운영진에게 문의하세요.")
       return
     }
+    if (
+      !window.confirm(
+        `선택한 ${matchIds.length}개의 전적을 삭제할까요?\n삭제 시 양 선수의 ELO·전적이 함께 되돌아갑니다.`,
+      )
+    )
+      return
     startDeleteTransition(async () => {
-      const res = await deleteMatchAction(matchId)
-      if (!res.ok) {
-        window.alert(res.error)
-        return
+      for (const id of matchIds) {
+        const res = await deleteMatchAction(id)
+        if (!res.ok) {
+          window.alert(res.error)
+          return
+        }
       }
       router.refresh()
     })
@@ -330,12 +342,35 @@ export function DashboardPage({
                 <h1 className="text-4xl font-bold text-foreground">TuF Clan ELO board</h1>
               </div>
               {adminUsernames.length > 0 && (
-                <p className="text-base text-indigo-400 bg-indigo-500/10 border border-indigo-500/25 rounded-md px-2.5 py-1 w-fit font-medium">
+                <p className="text-base text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-300 dark:border-indigo-500/25 rounded-md px-2.5 py-1 w-fit font-medium">
                   관리자 : {adminUsernames.join(", ")}
                 </p>
               )}
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => {
+                  if (theme === "system") setTheme("light")
+                  else if (theme === "light") setTheme("dark")
+                  else setTheme("system")
+                }}
+                className="border-border text-foreground hover:bg-secondary shrink-0"
+                suppressHydrationWarning
+                title={
+                  !mounted ? undefined
+                  : theme === "system" ? "시스템 설정 (클릭: 라이트 모드)"
+                  : theme === "light" ? "라이트 모드 (클릭: 다크 모드)"
+                  : "다크 모드 (클릭: 시스템 설정)"
+                }
+              >
+                {!mounted ? <Monitor className="h-4 w-4" />
+                  : theme === "light" ? <Sun className="h-4 w-4" />
+                  : theme === "dark" ? <Moon className="h-4 w-4" />
+                  : <Monitor className="h-4 w-4" />}
+              </Button>
               {(isCreator || isGuest) && (
                 <Link href="/creator">
                   <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md border-0">
@@ -566,10 +601,10 @@ export function DashboardPage({
               matches={matches}
               searchPlayer={player1}
               isAdmin={isAdmin}
-              onDeleteMatch={handleDeleteMatch}
               deletePending={isDeletePending}
               onEditMatch={(match) => setEditingMatch(match)}
               editPending={isEditPending}
+              onBulkDelete={handleBulkDelete}
             />
           </div>
 

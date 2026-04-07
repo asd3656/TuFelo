@@ -135,17 +135,17 @@ function computeRankedPlayers(
 }
 
 const raceColors: Record<string, string> = {
-  T: "bg-blue-600/20 text-blue-400 border-blue-500/30",
-  P: "bg-amber-600/20 text-amber-400 border-amber-500/30",
-  Z: "bg-red-600/20 text-red-400 border-red-500/30",
+  T: "bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
+  P: "bg-amber-100 dark:bg-amber-600/20 text-amber-700 dark:text-amber-400 border-amber-400/60 dark:border-amber-500/30",
+  Z: "bg-red-100 dark:bg-red-600/20 text-red-700 dark:text-red-400 border-red-400/60 dark:border-red-500/30",
 }
 const raceNames: Record<string, string> = { T: "Terran", P: "Protoss", Z: "Zerg" }
 
 const tierColors: Record<number, string> = {
-  1: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
-  2: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  3: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  4: "bg-green-500/20 text-green-400 border-green-500/30",
+  1: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-400/60 dark:border-yellow-500/30",
+  2: "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-400/60 dark:border-purple-500/30",
+  3: "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
+  4: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-400/60 dark:border-green-500/30",
 }
 
 function getRankIcon(rank: number) {
