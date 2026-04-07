@@ -10,17 +10,20 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { loginAdminAction, changePasswordAction } from "@/app/actions/admin"
+import { LogOut, User } from "lucide-react"
+import { loginAdminAction, logoutAdminAction, changePasswordAction } from "@/app/actions/admin"
 
 interface AdminLoginDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: () => void
+  isLoggedIn?: boolean
+  loggedInUsername?: string
 }
 
 type Mode = "login" | "changePassword"
 
-export function AdminLoginDialog({ open, onOpenChange, onSuccess }: AdminLoginDialogProps) {
+export function AdminLoginDialog({ open, onOpenChange, onSuccess, isLoggedIn, loggedInUsername }: AdminLoginDialogProps) {
   const [mode, setMode] = useState<Mode>("login")
   const [pending, startTransition] = useTransition()
 
@@ -42,6 +45,14 @@ export function AdminLoginDialog({ open, onOpenChange, onSuccess }: AdminLoginDi
     setUsername(""); setPassword(""); setLoginErr(null)
     setCpUsername(""); setCpCurrent(""); setCpNew(""); setCpConfirm("")
     setCpErr(null); setCpSuccess(false)
+  }
+
+  function handleLogout() {
+    startTransition(async () => {
+      await logoutAdminAction()
+      onOpenChange(false)
+      onSuccess()
+    })
   }
 
   function handleLogin(e?: React.FormEvent) {
@@ -77,11 +88,35 @@ export function AdminLoginDialog({ open, onOpenChange, onSuccess }: AdminLoginDi
       <DialogContent className="bg-card border-border text-foreground max-w-sm">
         <DialogHeader>
           <DialogTitle>
-            {mode === "login" ? "관리자 로그인" : "비밀번호 변경"}
+            {isLoggedIn ? "계정 관리" : mode === "login" ? "관리자 로그인" : "비밀번호 변경"}
           </DialogTitle>
         </DialogHeader>
 
-        {mode === "login" ? (
+        {isLoggedIn ? (
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-3 p-3 bg-secondary/50 rounded-lg border border-border">
+              <User className="h-5 w-5 text-amber-500 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">현재 로그인</p>
+                <p className="text-sm font-semibold text-foreground">{loggedInUsername}</p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
+                닫기
+              </Button>
+              <Button
+                type="button"
+                onClick={handleLogout}
+                disabled={pending}
+                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                {pending ? "로그아웃 중…" : "로그아웃"}
+              </Button>
+            </div>
+          </div>
+        ) : mode === "login" ? (
           <form onSubmit={handleLogin} className="space-y-3 pt-2">
             <div className="space-y-1.5">
               <Label className="text-sm text-muted-foreground">아이디</Label>
@@ -186,3 +221,4 @@ export function AdminLoginDialog({ open, onOpenChange, onSuccess }: AdminLoginDi
     </Dialog>
   )
 }
+

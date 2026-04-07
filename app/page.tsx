@@ -9,7 +9,8 @@ async function fetchAdminUsernames(): Promise<string[]> {
   const supabase = createServiceClient()
   const { data } = await supabase
     .from("admins")
-    .select("username")
+    .select("username, role")
+    .neq("role", "guest")
     .order("created_at", { ascending: true })
   if (!data) return []
   return data.map((row) => row.username as string)
@@ -34,8 +35,10 @@ export default async function HomePage() {
       knownMaps={dashboardData.knownMaps}
       knownMatchTypes={dashboardData.knownMatchTypes}
       members={members}
-      isAdmin={session !== null}
+      isAdmin={session !== null && session.role !== "guest"}
       isCreator={session?.role === "creator"}
+      isGuest={session?.role === "guest"}
+      loggedInUsername={session?.username}
       adminUsernames={adminUsernames}
       seasons={seasons}
       currentSeason={currentSeason}

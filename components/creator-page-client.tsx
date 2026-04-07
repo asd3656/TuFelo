@@ -58,6 +58,7 @@ interface CreatorPageClientProps {
   admins: AdminRow[]
   logs: LogRow[]
   seasons: Season[]
+  isGuest?: boolean
 }
 
 const ACTION_OPTIONS = [
@@ -108,7 +109,7 @@ function actionBadgeClass(action: string) {
   return "bg-secondary text-secondary-foreground"
 }
 
-export function CreatorPageClient({ currentUsername, admins, logs, seasons }: CreatorPageClientProps) {
+export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGuest }: CreatorPageClientProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -271,18 +272,24 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                 <h1 className="text-3xl font-bold text-foreground">제작자 페이지</h1>
               </div>
             </div>
-            <Button
-              variant="outline"
-              className="border-border text-muted-foreground hover:text-foreground"
-              onClick={handleLogout}
-              disabled={pending}
-            >
-              로그아웃
-            </Button>
+            {!isGuest && (
+              <Button
+                variant="outline"
+                className="border-border text-muted-foreground hover:text-foreground"
+                onClick={handleLogout}
+                disabled={pending}
+              >
+                로그아웃
+              </Button>
+            )}
           </div>
           <p className="text-muted-foreground ml-14">
             로그인 중: <span className="text-foreground font-semibold">{currentUsername}</span>
-            <Badge className="ml-2 bg-red-600/20 text-red-400 border-red-500/30">제작자</Badge>
+            {isGuest ? (
+              <Badge className="ml-2 bg-blue-600/20 text-blue-400 border-blue-500/30">손님 (읽기 전용)</Badge>
+            ) : (
+              <Badge className="ml-2 bg-red-600/20 text-red-400 border-red-500/30">제작자</Badge>
+            )}
           </p>
         </header>
 
@@ -300,15 +307,17 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                   : "현재 진행 중인 시즌 없음"}
               </p>
             </div>
-            <Button
-              size="sm"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => { setShowNewSeasonForm((v) => !v); setSeasonErr(null) }}
-              disabled={pending}
-            >
-              <Play className="h-4 w-4 mr-1" />
-              새 시즌 시작
-            </Button>
+            {!isGuest && (
+              <Button
+                size="sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={() => { setShowNewSeasonForm((v) => !v); setSeasonErr(null) }}
+                disabled={pending}
+              >
+                <Play className="h-4 w-4 mr-1" />
+                새 시즌 시작
+              </Button>
+            )}
           </div>
 
           {/* 새 시즌 시작 폼 */}
@@ -365,7 +374,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                     <TableHead className="text-muted-foreground font-semibold text-center">시작일</TableHead>
                     <TableHead className="text-muted-foreground font-semibold text-center">종료일</TableHead>
                     <TableHead className="text-muted-foreground font-semibold text-center">상태</TableHead>
-                    <TableHead className="text-muted-foreground font-semibold text-center w-24">관리</TableHead>
+                    {!isGuest && <TableHead className="text-muted-foreground font-semibold text-center w-24">관리</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -401,30 +410,32 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                             )}
                           </TableCell>
                           <TableCell />
-                          <TableCell className="text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button
-                                size="sm"
-                                className="h-7 px-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                onClick={handleSaveEdit}
-                                disabled={pending}
-                              >
-                                저장
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => setEditingSeason(null)}
-                                disabled={pending}
-                              >
-                                취소
-                              </Button>
-                            </div>
-                            {seasonErr && editingSeason?.id === season.id && (
-                              <p className="text-xs text-destructive mt-1">{seasonErr}</p>
-                            )}
-                          </TableCell>
+                          {!isGuest && (
+                            <TableCell className="text-center">
+                              <div className="flex justify-center gap-1">
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                  onClick={handleSaveEdit}
+                                  disabled={pending}
+                                >
+                                  저장
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => setEditingSeason(null)}
+                                  disabled={pending}
+                                >
+                                  취소
+                                </Button>
+                              </div>
+                              {seasonErr && editingSeason?.id === season.id && (
+                                <p className="text-xs text-destructive mt-1">{seasonErr}</p>
+                              )}
+                            </TableCell>
+                          )}
                         </>
                       ) : (
                         <>
@@ -440,30 +451,32 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                               <Badge variant="outline" className="text-muted-foreground">종료</Badge>
                             )}
                           </TableCell>
-                          <TableCell className="text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/80"
-                                onClick={() => handleOpenEdit(season)}
-                                disabled={pending}
-                                title="수정"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => setDeleteSeasonTarget(season)}
-                                disabled={pending}
-                                title="삭제"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                          {!isGuest && (
+                            <TableCell className="text-center">
+                              <div className="flex justify-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                                  onClick={() => handleOpenEdit(season)}
+                                  disabled={pending}
+                                  title="수정"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => setDeleteSeasonTarget(season)}
+                                  disabled={pending}
+                                  title="삭제"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          )}
                         </>
                       )}
                     </TableRow>
@@ -491,7 +504,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                   <TableHead className="text-muted-foreground font-semibold">아이디</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">역할</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">등록일</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-center w-20">삭제</TableHead>
+                  {!isGuest && <TableHead className="text-muted-foreground font-semibold text-center w-20">삭제</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -501,6 +514,8 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                     <TableCell className="text-center">
                       {admin.role === "creator" ? (
                         <Badge className="bg-red-600/20 text-red-400 border-red-500/30">제작자</Badge>
+                      ) : admin.role === "guest" ? (
+                        <Badge variant="outline" className="bg-blue-600/20 text-blue-400 border-blue-500/30">손님</Badge>
                       ) : (
                         <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">관리자</Badge>
                       )}
@@ -508,20 +523,22 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
                     <TableCell className="text-center text-muted-foreground text-sm">
                       {formatDate(admin.created_at)}
                     </TableCell>
-                    <TableCell className="text-center">
-                      {admin.role !== "creator" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => setDeleteTarget(admin.username)}
-                          disabled={pending}
-                          title="삭제"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </TableCell>
+                    {!isGuest && (
+                      <TableCell className="text-center">
+                        {admin.role !== "creator" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteTarget(admin.username)}
+                            disabled={pending}
+                            title="삭제"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -529,7 +546,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
           </div>
 
           {/* 신규 관리자 추가 폼 */}
-          <div className="px-6 py-5 border-t border-border">
+          {!isGuest && <div className="px-6 py-5 border-t border-border">
             <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
               <Plus className="h-4 w-4" />
               신규 관리자 추가
@@ -566,7 +583,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons }: Cr
               </Button>
             </form>
             {formErr && <p className="text-sm text-destructive mt-2">{formErr}</p>}
-          </div>
+          </div>}
         </section>
 
         {/* 활동 로그 */}

@@ -63,6 +63,8 @@ interface DashboardPageProps {
   members: ClanMember[]
   isAdmin: boolean
   isCreator?: boolean
+  isGuest?: boolean
+  loggedInUsername?: string
   adminUsernames?: string[]
   seasons?: Season[]
   currentSeason?: Season | null
@@ -84,6 +86,8 @@ export function DashboardPage({
   members,
   isAdmin,
   isCreator,
+  isGuest,
+  loggedInUsername,
   adminUsernames = [],
   seasons = [],
   currentSeason = null,
@@ -331,7 +335,7 @@ export function DashboardPage({
               )}
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
-              {isCreator && (
+              {(isCreator || isGuest) && (
                 <Link href="/creator">
                   <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md border-0">
                     제작자 페이지
@@ -343,9 +347,9 @@ export function DashboardPage({
                 className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md border-0"
                 onClick={() => setAdminLoginOpen(true)}
               >
-                관리자 로그인
+                {loggedInUsername ? "계정 관리" : "관리자 로그인"}
               </Button>
-              {isAdmin && (
+              {(isAdmin || isGuest) && (
                 <Link href="/ranking">
                   <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
                     <BarChart3 className="h-4 w-4 mr-2" />
@@ -353,7 +357,7 @@ export function DashboardPage({
                   </Button>
                 </Link>
               )}
-              {isAdmin && (
+              {(isAdmin || isGuest) && (
                 <Link href="/admin">
                   <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
                     <Users className="h-4 w-4 mr-2" />
@@ -459,7 +463,7 @@ export function DashboardPage({
               <Input
                 id="filter-map"
                 type="text"
-                placeholder="비워 두면 모든 맵 · 일부 이름으로 검색"
+                placeholder="일부이름으로 검색 가능"
                 value={filterMap}
                 onChange={(e) => handleMapChange(e.target.value)}
                 className="bg-input border-border text-foreground placeholder:text-muted-foreground"
@@ -674,6 +678,8 @@ export function DashboardPage({
           open={adminLoginOpen}
           onOpenChange={setAdminLoginOpen}
           onSuccess={() => router.refresh()}
+          isLoggedIn={!!loggedInUsername}
+          loggedInUsername={loggedInUsername}
         />
 
         <EditMatchDialog

@@ -8,7 +8,9 @@ import type { Season } from "@/lib/types/tufelo"
 
 export default async function CreatorPage() {
   const session = await getSessionFromCookies()
-  if (!session || session.role !== "creator") {
+  const isGuest = session?.role === "guest"
+
+  if (!session || (session.role !== "creator" && session.role !== "guest")) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center p-8">
         <div className="text-center space-y-4 max-w-md">
@@ -53,6 +55,7 @@ export default async function CreatorPage() {
       admins={admins ?? []}
       logs={logs ?? []}
       seasons={seasons}
+      isGuest={isGuest}
     />
   )
 }

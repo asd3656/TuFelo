@@ -1,12 +1,15 @@
 import Link from "next/link"
 import { AdminPageClient } from "@/components/admin-page-client"
 import { fetchMembers } from "@/lib/data/members"
-import { isAdminFromCookies } from "@/lib/auth/admin"
+import { getSessionFromCookies } from "@/lib/auth/admin"
 import { Button } from "@/components/ui/button"
 
 export default async function AdminPage() {
-  const isAdmin = await isAdminFromCookies()
-  if (!isAdmin) {
+  const session = await getSessionFromCookies()
+  const isAdmin = session !== null && session.role !== "guest"
+  const isGuest = session?.role === "guest"
+
+  if (!isAdmin && !isGuest) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center p-8">
         <div className="text-center space-y-4 max-w-md">
@@ -20,5 +23,5 @@ export default async function AdminPage() {
   }
 
   const members = await fetchMembers()
-  return <AdminPageClient initialMembers={members} />
+  return <AdminPageClient initialMembers={members} isGuest={isGuest} />
 }
