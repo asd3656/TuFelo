@@ -69,7 +69,8 @@ function computeRankedPlayers(
       .filter(
         (e) =>
           (filterRace === "__all__" || e.memberRace === filterRace) &&
-          (filterTier === "__all__" || e.memberTier === Number(filterTier)),
+          (filterTier === "__all__" || e.memberTier === Number(filterTier)) &&
+          e.finalWins + e.finalLosses > 0,
       )
       .map((e, i) => ({
         id: e.memberId,
@@ -105,6 +106,7 @@ function computeRankedPlayers(
   }
 
   const sorted = eligibleMembers
+    .filter((m) => m.wins + m.losses > 0)
     .map((m) => ({
       id: m.id,
       name: m.name,
@@ -234,7 +236,7 @@ export function RankingPublicClient({
             </div>
             <p className="text-2xl font-bold text-foreground">{top?.name ?? "—"}</p>
             <p className="text-sm text-muted-foreground">
-              {top != null ? `${top.elo} ELO` : ""}
+              {/* {top != null ? `${top.elo} ELO` : ""} elo 점수 표시 기능*/} 
             </p>
           </div>
           <div className="bg-card rounded-lg border border-border p-5">
