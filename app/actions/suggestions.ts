@@ -4,8 +4,9 @@ import { createServiceClient } from "@/lib/supabase/service"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { getClientIp } from "@/lib/request-ip"
 import { insertAdminLog } from "@/lib/admin-log"
+import type { ActionResult } from "@/lib/types/tufelo"
 
-export type ActionResult = { ok: true } | { ok: false; error: string }
+export type { ActionResult }
 
 export interface SuggestionReply {
   id: string

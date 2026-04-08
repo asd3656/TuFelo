@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
@@ -40,20 +40,11 @@ import { useTheme } from "next-themes"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
+import { useMatchFilter } from "@/hooks/use-match-filter"
 
 export type { Tier, Race, Match } from "@/lib/types/tufelo"
 
 const PAGE_SIZE = 50
-
-interface FilterState {
-  player1: string
-  player2: string
-  dateFrom: string
-  dateTo: string
-  map: string
-  matchType: string
-  seasonId: string
-}
 
 interface DashboardPageProps {
   initialMatches: Match[]
@@ -71,6 +62,7 @@ interface DashboardPageProps {
   currentSeason?: Season | null
 }
 
+/** 페이지네이션 번호 배열을 생성합니다 (최대 7개, 중간 생략은 "...") */
 function getPageNumbers(current: number, total: number): (number | "...")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
   if (current <= 4) return [1, 2, 3, 4, 5, "...", total]
@@ -97,6 +89,7 @@ export function DashboardPage({
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
   const [isEditPending, startEditTransition] = useTransition()
@@ -105,175 +98,35 @@ export function DashboardPage({
   const [isManualOpen, setIsManualOpen] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [adminLoginOpen, setAdminLoginOpen] = useState(false)
-
-  // 필터 상태
-  const [player1, setPlayer1] = useState("")
-  const [player2, setPlayer2] = useState("")
-  const [filterDateFrom, setFilterDateFrom] = useState("")
-  const [filterDateTo, setFilterDateTo] = useState("")
-  const [filterMap, setFilterMap] = useState("")
-  const [filterMatchType, setFilterMatchType] = useState("__all__")
-  const [filterSeasonId, setFilterSeasonId] = useState("__all__")
-
-  // 페이지네이션 & 경기 데이터 상태
-  const [currentPage, setCurrentPage] = useState(1)
-  const [matches, setMatches] = useState<Match[]>(initialMatches)
-  const [totalCount, setTotalCount] = useState(initialTotalCount)
-  const [totalPages, setTotalPages] = useState(initialTotalPages)
-  const [wins, setWins] = useState(0)
-  const [losses, setLosses] = useState(0)
-  const [isLoadingMatches, setIsLoadingMatches] = useState(false)
   const [isPageJumpOpen, setIsPageJumpOpen] = useState(false)
   const [pageJumpInput, setPageJumpInput] = useState("")
 
+  // 필터 상태 + fetch 로직을 커스텀 훅으로 위임
+  const {
+    filters,
+    currentPage,
+    matches,
+    totalCount,
+    totalPages,
+    wins,
+    losses,
+    isLoading: isLoadingMatches,
+    handlePageChange,
+    setPlayer1,
+    setPlayer2,
+    setMap,
+    setDateFrom,
+    setDateTo,
+    setMatchType,
+    setSeasonId,
+  } = useMatchFilter({ initialMatches, initialTotalCount, initialTotalPages })
+
   const seoulToday = getSeoulDateString()
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
+  const pageNumbers = getPageNumbers(currentPage, totalPages)
 
-  // 필터 최신값을 ref로 관리 (debounce 타이머에서 항상 최신값 참조)
-  const filtersRef = useRef<FilterState>({
-    player1: "",
-    player2: "",
-    dateFrom: "",
-    dateTo: "",
-    map: "",
-    matchType: "__all__",
-    seasonId: "__all__",
-  })
-  filtersRef.current = {
-    player1,
-    player2,
-    dateFrom: filterDateFrom,
-    dateTo: filterDateTo,
-    map: filterMap,
-    matchType: filterMatchType,
-    seasonId: filterSeasonId,
-  }
+  // ── 전적 액션 핸들러 ──
 
-  // Abort controller (중복 요청 취소)
-  const abortRef = useRef<AbortController | null>(null)
-  // Debounce 타이머
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // 초기 마운트 여부 (첫 렌더는 SSR 데이터 사용)
-  const isMountedRef = useRef(false)
-
-  const doFetch = useCallback(async (page: number, filters: FilterState) => {
-    abortRef.current?.abort()
-    abortRef.current = new AbortController()
-    setIsLoadingMatches(true)
-
-    const params = new URLSearchParams({
-      page: String(page),
-      player1: filters.player1,
-      player2: filters.player2,
-      dateFrom: filters.dateFrom,
-      dateTo: filters.dateTo,
-      map: filters.map,
-      matchType: filters.matchType === "__all__" ? "" : filters.matchType,
-      seasonId: filters.seasonId === "__all__" ? "" : filters.seasonId,
-    })
-
-    try {
-      const res = await fetch(`/api/matches?${params}`, {
-        signal: abortRef.current.signal,
-      })
-      if (!res.ok) throw new Error("fetch failed")
-      const data = await res.json()
-      setMatches(data.matches ?? [])
-      setTotalCount(data.totalCount ?? 0)
-      setTotalPages(data.totalPages ?? 0)
-      setWins(data.wins ?? 0)
-      setLosses(data.losses ?? 0)
-      setCurrentPage(page)
-    } catch (e) {
-      if ((e as Error).name !== "AbortError") {
-        console.error("경기 데이터 로드 실패:", e)
-      }
-    } finally {
-      setIsLoadingMatches(false)
-    }
-  }, [])
-
-  // 즉시 fetch (날짜/드롭다운 필터)
-  function triggerImmediateFetch(overrides?: Partial<FilterState>) {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-    doFetch(1, { ...filtersRef.current, ...overrides })
-  }
-
-  // router.refresh() 후 SSR 데이터가 갱신되면 현재 필터로 재요청
-  useEffect(() => {
-    if (!isMountedRef.current) {
-      isMountedRef.current = true
-      return
-    }
-    doFetch(1, filtersRef.current)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMatches])
-
-  // 페이지 이동
-  function handlePageChange(page: number) {
-    if (page < 1 || page > totalPages || page === currentPage) return
-    doFetch(page, filtersRef.current)
-    window.scrollTo({ top: 0, behavior: "smooth" })
-  }
-
-  // ... 클릭 시 페이지 직접 입력
-  function handlePageJump() {
-    const page = parseInt(pageJumpInput, 10)
-    if (!isNaN(page) && page >= 1 && page <= totalPages) {
-      handlePageChange(page)
-    }
-    setIsPageJumpOpen(false)
-    setPageJumpInput("")
-  }
-
-  // 필터 핸들러
-  function handlePlayer1Change(val: string) {
-    setPlayer1(val)
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-    debounceTimerRef.current = setTimeout(() => {
-      doFetch(1, { ...filtersRef.current, player1: val })
-    }, 350)
-  }
-
-  function handlePlayer2Change(val: string) {
-    setPlayer2(val)
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-    debounceTimerRef.current = setTimeout(() => {
-      doFetch(1, { ...filtersRef.current, player2: val })
-    }, 350)
-  }
-
-  function handleMapChange(val: string) {
-    setFilterMap(val)
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-    debounceTimerRef.current = setTimeout(() => {
-      doFetch(1, { ...filtersRef.current, map: val })
-    }, 350)
-  }
-
-  function handleDateFromChange(val: string) {
-    const clamped = !val ? "" : val > seoulToday ? seoulToday : val
-    setFilterDateFrom(clamped)
-    triggerImmediateFetch({ dateFrom: clamped })
-  }
-
-  function handleDateToChange(val: string) {
-    const clamped = !val ? "" : val > seoulToday ? seoulToday : val
-    setFilterDateTo(clamped)
-    triggerImmediateFetch({ dateTo: clamped })
-  }
-
-  function handleMatchTypeChange(val: string) {
-    setFilterMatchType(val)
-    triggerImmediateFetch({ matchType: val })
-  }
-
-  function handleSeasonIdChange(val: string) {
-    setFilterSeasonId(val)
-    triggerImmediateFetch({ seasonId: val })
-  }
-
-  // 전적 등록/수정/삭제
   function handleRegister(input: RegisterMatchInput, keepOpen?: boolean) {
     if (!isAdmin) {
       window.alert("운영진만 전적을 등록할 수 있습니다.")
@@ -281,10 +134,7 @@ export function DashboardPage({
     }
     startTransition(async () => {
       const res = await registerMatchAction(input)
-      if (!res.ok) {
-        window.alert(res.error)
-        return
-      }
+      if (!res.ok) { window.alert(res.error); return }
       if (!keepOpen) setIsDialogOpen(false)
       router.refresh()
     })
@@ -297,43 +147,50 @@ export function DashboardPage({
     }
     startEditTransition(async () => {
       const res = await updateMatchAction(input)
-      if (!res.ok) {
-        window.alert(res.error)
-        return
-      }
+      if (!res.ok) { window.alert(res.error); return }
       setEditingMatch(null)
       router.refresh()
     })
   }
 
   function handleBulkDelete(matchIds: string[]) {
-    if (!isAdmin) {
-      window.alert("운영진에게 문의하세요.")
-      return
-    }
-    if (
-      !window.confirm(
-        `선택한 ${matchIds.length}개의 전적을 삭제할까요?\n삭제 시 양 선수의 ELO·전적이 함께 되돌아갑니다.`,
-      )
-    )
-      return
+    if (!isAdmin) { window.alert("운영진에게 문의하세요."); return }
+    if (!window.confirm(
+      `선택한 ${matchIds.length}개의 전적을 삭제할까요?\n삭제 시 양 선수의 ELO·전적이 함께 되돌아갑니다.`,
+    )) return
     startDeleteTransition(async () => {
       for (const id of matchIds) {
         const res = await deleteMatchAction(id)
-        if (!res.ok) {
-          window.alert(res.error)
-          return
-        }
+        if (!res.ok) { window.alert(res.error); return }
       }
       router.refresh()
     })
   }
 
-  const pageNumbers = getPageNumbers(currentPage, totalPages)
+  function handlePageJump() {
+    const page = parseInt(pageJumpInput, 10)
+    if (!isNaN(page) && page >= 1 && page <= totalPages) {
+      handlePageChange(page, totalPages)
+    }
+    setIsPageJumpOpen(false)
+    setPageJumpInput("")
+  }
+
+  // 날짜 필터 (미래 날짜 clamp)
+  function handleDateFromChange(val: string) {
+    const clamped = !val ? "" : val > seoulToday ? seoulToday : val
+    setDateFrom(clamped)
+  }
+  function handleDateToChange(val: string) {
+    const clamped = !val ? "" : val > seoulToday ? seoulToday : val
+    setDateTo(clamped)
+  }
 
   return (
     <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
+
+        {/* ── 헤더 ── */}
         <header className="mb-10">
           <div className="flex items-center justify-between">
             <div>
@@ -348,6 +205,7 @@ export function DashboardPage({
               )}
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
+              {/* 테마 토글 버튼 (system → light → dark → system) */}
               <Button
                 type="button"
                 variant="outline"
@@ -411,30 +269,28 @@ export function DashboardPage({
           </div>
         </header>
 
+        {/* ── 검색 & 필터 섹션 ── */}
         <section className="bg-card rounded-lg border border-border p-6 mb-8">
           <div className="flex flex-col lg:flex-row items-center gap-4">
             <div className="flex-1 w-full">
               <PlayerSearch
                 label="선수(기준)"
                 placeholder="선수 이름 검색..."
-                value={player1}
-                onChange={handlePlayer1Change}
+                value={filters.player1}
+                onChange={setPlayer1}
               />
             </div>
-
             <div className="flex items-center justify-center px-6">
               <span className="text-3xl font-bold text-primary">VS</span>
             </div>
-
             <div className="flex-1 w-full">
               <PlayerSearch
                 label="상대 선수"
                 placeholder="상대 선수 이름 검색..."
-                value={player2}
-                onChange={handlePlayer2Change}
+                value={filters.player2}
+                onChange={setPlayer2}
               />
             </div>
-
             <div className="flex-shrink-0">
               {isAdmin ? (
                 <Button
@@ -460,11 +316,7 @@ export function DashboardPage({
                 <Button
                   type="button"
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
-                  onClick={() =>
-                    window.alert(
-                      "운영진만 전적을 등록할 수 있습니다. 상단에서 관리자 로그인 후 이용해 주세요.",
-                    )
-                  }
+                  onClick={() => window.alert("운영진만 전적을 등록할 수 있습니다. 상단에서 관리자 로그인 후 이용해 주세요.")}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   전적 등록
@@ -479,24 +331,22 @@ export function DashboardPage({
               <div className="flex items-center gap-2">
                 <Input
                   type="date"
-                  value={filterDateFrom}
-                  max={filterDateTo || seoulToday}
+                  value={filters.dateFrom}
+                  max={filters.dateTo || seoulToday}
                   onChange={(e) => handleDateFromChange(e.target.value)}
                   className="bg-input border-border text-foreground"
                 />
                 <span className="text-muted-foreground text-sm shrink-0">~</span>
                 <Input
                   type="date"
-                  value={filterDateTo}
-                  min={filterDateFrom || undefined}
+                  value={filters.dateTo}
+                  min={filters.dateFrom || undefined}
                   max={seoulToday}
                   onChange={(e) => handleDateToChange(e.target.value)}
                   className="bg-input border-border text-foreground"
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                비워 두면 모든 날짜 · 시작일~종료일 범위 표시
-              </p>
+              <p className="text-xs text-muted-foreground">비워 두면 모든 날짜 · 시작일~종료일 범위 표시</p>
             </div>
 
             <div className="space-y-2">
@@ -510,8 +360,8 @@ export function DashboardPage({
                 id="filter-map"
                 type="text"
                 placeholder="일부이름으로 검색 가능"
-                value={filterMap}
-                onChange={(e) => handleMapChange(e.target.value)}
+                value={filters.map}
+                onChange={(e) => setMap(e.target.value)}
                 className="bg-input border-border text-foreground placeholder:text-muted-foreground"
               />
               <p className="text-xs text-muted-foreground">입력한 글이 포함된 맵 이름의 전적만 표시</p>
@@ -519,16 +369,14 @@ export function DashboardPage({
 
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">경기 유형 필터</Label>
-              <Select value={filterMatchType} onValueChange={handleMatchTypeChange}>
+              <Select value={filters.matchType} onValueChange={setMatchType}>
                 <SelectTrigger className="bg-input border-border text-foreground">
                   <SelectValue placeholder="전체 경기 유형" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">전체</SelectItem>
                   {knownMatchTypes.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -537,7 +385,7 @@ export function DashboardPage({
 
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">시즌 필터</Label>
-              <Select value={filterSeasonId} onValueChange={handleSeasonIdChange}>
+              <Select value={filters.seasonId} onValueChange={setSeasonId}>
                 <SelectTrigger className="bg-input border-border text-foreground">
                   <SelectValue placeholder="전체 시즌" />
                 </SelectTrigger>
@@ -556,7 +404,8 @@ export function DashboardPage({
           </div>
         </section>
 
-        {player1 && (
+        {/* ── 선수1 검색 시 승/패 요약 카드 ── */}
+        {filters.player1 && (
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <StatCard title="총 경기" value={totalCount} color="text-foreground" />
             <StatCard title="승리" value={wins} color="text-accent" />
@@ -564,14 +413,13 @@ export function DashboardPage({
           </section>
         )}
 
+        {/* ── 전적 기록 섹션 ── */}
         <section className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                 전적 기록
-                {isLoadingMatches && (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                )}
+                {isLoadingMatches && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                 {currentSeason && (
                   <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
                     {currentSeason.name} 진행중 · {currentSeason.startDate.replace(/-/g, ".")} ~
@@ -579,8 +427,8 @@ export function DashboardPage({
                 )}
               </h2>
               <p className="text-sm text-muted-foreground">
-                {player1
-                  ? `"${player1}" 선수의 경기 기록 (총 ${totalCount}경기)`
+                {filters.player1
+                  ? `"${filters.player1}" 선수의 경기 기록 (총 ${totalCount}경기)`
                   : totalPages > 1
                     ? `전체 경기 기록 (${totalCount}경기 · ${currentPage}/${totalPages} 페이지)`
                     : `전체 경기 기록 (총 ${totalCount}경기)`}
@@ -609,7 +457,7 @@ export function DashboardPage({
           <div className={isLoadingMatches ? "opacity-50 pointer-events-none transition-opacity" : "transition-opacity"}>
             <MatchHistory
               matches={matches}
-              searchPlayer={player1}
+              searchPlayer={filters.player1}
               isAdmin={isAdmin}
               isGuest={isGuest}
               deletePending={isDeletePending}
@@ -625,10 +473,7 @@ export function DashboardPage({
                 <PaginationContent>
                   <PaginationItem>
                     <PaginationPrevious
-                      onClick={(e) => {
-                        e.preventDefault()
-                        handlePageChange(currentPage - 1)
-                      }}
+                      onClick={(e) => { e.preventDefault(); handlePageChange(currentPage - 1, totalPages) }}
                       aria-disabled={currentPage === 1}
                       className={currentPage === 1 ? "pointer-events-none opacity-40" : "cursor-pointer"}
                     />
@@ -639,10 +484,7 @@ export function DashboardPage({
                       <PaginationItem key={`ellipsis-${i}`}>
                         <PaginationEllipsis
                           className="cursor-pointer rounded hover:bg-secondary/70 transition-colors"
-                          onClick={() => {
-                            setPageJumpInput("")
-                            setIsPageJumpOpen(true)
-                          }}
+                          onClick={() => { setPageJumpInput(""); setIsPageJumpOpen(true) }}
                           title="페이지 직접 입력"
                         />
                       </PaginationItem>
@@ -650,10 +492,7 @@ export function DashboardPage({
                       <PaginationItem key={p}>
                         <PaginationLink
                           isActive={p === currentPage}
-                          onClick={(e) => {
-                            e.preventDefault()
-                            handlePageChange(p as number)
-                          }}
+                          onClick={(e) => { e.preventDefault(); handlePageChange(p as number, totalPages) }}
                           className="cursor-pointer"
                         >
                           {p}
@@ -664,10 +503,7 @@ export function DashboardPage({
 
                   <PaginationItem>
                     <PaginationNext
-                      onClick={(e) => {
-                        e.preventDefault()
-                        handlePageChange(currentPage + 1)
-                      }}
+                      onClick={(e) => { e.preventDefault(); handlePageChange(currentPage + 1, totalPages) }}
                       aria-disabled={currentPage === totalPages}
                       className={currentPage === totalPages ? "pointer-events-none opacity-40" : "cursor-pointer"}
                     />
@@ -678,6 +514,7 @@ export function DashboardPage({
           )}
         </section>
 
+        {/* ── 페이지 직접 이동 다이얼로그 ── */}
         <Dialog
           open={isPageJumpOpen}
           onOpenChange={(open) => {
@@ -697,19 +534,14 @@ export function DashboardPage({
               onChange={(e) => setPageJumpInput(e.target.value)}
               placeholder={`1 ~ ${totalPages}`}
               className="bg-input border-border text-foreground h-8 text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handlePageJump()
-              }}
+              onKeyDown={(e) => { if (e.key === "Enter") handlePageJump() }}
               autoFocus
             />
             <DialogFooter className="flex-row gap-2 sm:justify-start">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setIsPageJumpOpen(false)
-                  setPageJumpInput("")
-                }}
+                onClick={() => { setIsPageJumpOpen(false); setPageJumpInput("") }}
                 className="flex-1 border-border text-foreground h-8"
               >
                 취소
@@ -741,9 +573,7 @@ export function DashboardPage({
 
         <EditMatchDialog
           open={editingMatch !== null}
-          onOpenChange={(open) => {
-            if (!open) setEditingMatch(null)
-          }}
+          onOpenChange={(open) => { if (!open) setEditingMatch(null) }}
           match={editingMatch}
           onUpdate={handleEditMatch}
           isSubmitting={isEditPending}
@@ -751,6 +581,7 @@ export function DashboardPage({
           knownMatchTypes={knownMatchTypes}
         />
 
+        {/* ── 사용설명서 다이얼로그 ── */}
         <Dialog open={isManualOpen} onOpenChange={setIsManualOpen}>
           <DialogContent className="bg-card border-border text-foreground max-w-xl w-full max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
             <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
@@ -817,9 +648,9 @@ export function DashboardPage({
           members={memberOptions}
           onRegister={handleRegister}
           isSubmitting={isPending}
-          prefillDate={filterDateFrom}
-          prefillMap={filterMap.trim()}
-          prefillMatchType={filterMatchType === "__all__" ? "" : filterMatchType}
+          prefillDate={filters.dateFrom}
+          prefillMap={filters.map.trim()}
+          prefillMatchType={filters.matchType === "__all__" ? "" : filters.matchType}
           knownMaps={knownMaps}
           knownMatchTypes={knownMatchTypes}
         />
@@ -828,6 +659,7 @@ export function DashboardPage({
   )
 }
 
+/** 선수 검색 시 나타나는 통계 카드 (총 경기 / 승 / 패) */
 function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
   return (
     <div className="bg-card rounded-lg border border-border p-4">

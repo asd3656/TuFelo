@@ -5,9 +5,16 @@ import { createClient } from "@/lib/supabase/server"
 import { getStartingEloForTier } from "@/lib/elo"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
-import type { Race, Tier } from "@/lib/types/tufelo"
+import type { Race, Tier, ActionResult } from "@/lib/types/tufelo"
 
-export type ActionResult = { ok: true } | { ok: false; error: string }
+export type { ActionResult }
+
+/** 클랜원 관련 경로 캐시를 모두 무효화합니다 */
+function revalidateMemberPaths() {
+  revalidatePath("/")
+  revalidatePath("/admin")
+  revalidatePath("/ranking")
+}
 
 export async function addMemberAction(input: {
   name: string
@@ -42,9 +49,7 @@ export async function addMemberAction(input: {
   }
 
   await insertAdminLog(session.username, "클랜원 추가", name, `race=${input.race} tier=${input.tier}`)
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMemberPaths()
   return { ok: true }
 }
 
@@ -78,9 +83,7 @@ export async function updateMemberAction(input: {
   }
 
   await insertAdminLog(session.username, "클랜원 수정", name, `race=${input.race} tier=${input.tier}`)
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMemberPaths()
   return { ok: true }
 }
 
@@ -101,9 +104,7 @@ export async function deleteMemberAction(id: string): Promise<ActionResult> {
   if (error) return { ok: false, error: error.message }
 
   await insertAdminLog(session.username, "클랜원 탈퇴처리", member?.name ?? id)
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMemberPaths()
   return { ok: true }
 }
 
@@ -151,9 +152,7 @@ export async function reactivateMemberAction(id: string): Promise<ActionResult> 
   if (error) return { ok: false, error: error.message }
 
   await insertAdminLog(session.username, "클랜원 복귀처리", member?.name ?? id)
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMemberPaths()
   return { ok: true }
 }
 
@@ -188,8 +187,6 @@ export async function permanentDeleteMemberAction(id: string): Promise<ActionRes
   if (memberDeleteErr) return { ok: false, error: memberDeleteErr.message }
 
   await insertAdminLog(session.username, "클랜원 완전삭제", memberName)
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMemberPaths()
   return { ok: true }
 }

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import type { Match, Race, Tier } from "@/lib/types/tufelo"
+import { mapDbRowToMatch, type DbMatchRow } from "@/lib/data/matches"
 
 export const dynamic = "force-dynamic"
 
@@ -13,18 +14,11 @@ type MemberRow = {
   tier: Tier
 }
 
-type MatchRow = {
-  id: string
-  player1_id: string
-  player2_id: string
-  winner_id: string
-  map_name: string
-  played_date: string
-  match_type: string | null
-  player1_elo_delta: number | null
-  player2_elo_delta: number | null
-}
-
+/**
+ * GET /api/matches
+ * 대시보드 전적 목록을 필터·페이지네이션하여 반환합니다.
+ * 쿼리 파라미터: page, player1, player2, dateFrom, dateTo, map, matchType, seasonId
+ */
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
@@ -39,7 +33,7 @@ export async function GET(req: NextRequest) {
 
     const supabase = await createClient()
 
-    // 멤버 전체 로드 (소수이므로 가볍고, 이름→ID 매핑에 필요)
+    // 멤버 전체 로드 (규모가 작아 가볍고, 이름→ID 매핑에 필요)
     const { data: membersData, error: membersError } = await supabase
       .from("members")
       .select("id, name, race, tier")
@@ -51,7 +45,7 @@ export async function GET(req: NextRequest) {
     const members = (membersData ?? []) as MemberRow[]
     const byId = new Map(members.map((m) => [m.id, m]))
 
-    // 선수1 이름 → ID 목록 변환
+    // 선수 이름 → ID 목록 변환 (양쪽 포지션 모두 검색)
     let player1Ids: string[] = []
     if (player1) {
       player1Ids = members
@@ -62,7 +56,6 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 선수2 이름 → ID 목록 변환
     let player2Ids: string[] = []
     if (player2) {
       player2Ids = members
@@ -145,26 +138,10 @@ export async function GET(req: NextRequest) {
       losses = totalCount - wins
     }
 
-    // DB rows → Match 타입 변환
-    const matches: Match[] = (data ?? []).map((row: MatchRow) => {
-      const p1 = byId.get(row.player1_id)
-      const p2 = byId.get(row.player2_id)
-      const w = byId.get(row.winner_id)
-      return {
-        id: row.id,
-        player1: p1?.name ?? "?",
-        player2: p2?.name ?? "?",
-        player1Race: p1?.race,
-        player2Race: p2?.race,
-        player1Tier: p1?.tier,
-        player2Tier: p2?.tier,
-        winner: w?.name ?? "?",
-        map: row.map_name,
-        date: row.played_date,
-        matchType: row.match_type ?? undefined,
-        player1EloDelta: row.player1_elo_delta ?? undefined,
-      } satisfies Match
-    })
+    // DB rows → Match 타입 변환 (공유 mapper 사용)
+    const matches: Match[] = (data ?? []).map((row: DbMatchRow) =>
+      mapDbRowToMatch(row, byId),
+    )
 
     return NextResponse.json({ matches, totalCount, totalPages, wins, losses })
   } catch (e) {

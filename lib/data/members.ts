@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import type { ClanMember } from "@/lib/types/tufelo"
-import type { Race, Tier } from "@/lib/types/tufelo"
+import type { ClanMember, Race, Tier } from "@/lib/types/tufelo"
 
 type MemberRow = {
   id: string

@@ -4,6 +4,9 @@ export type Tier = EloTier
 
 export type Race = "T" | "P" | "Z"
 
+/** 서버 액션 공통 반환 타입 */
+export type ActionResult = { ok: true } | { ok: false; error: string }
+
 export const MATCH_TYPES = [
   "친선",
   "팀매배",

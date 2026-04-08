@@ -7,11 +7,18 @@ import { getClientIp } from "@/lib/request-ip"
 import { computeStreakForMember } from "@/lib/match-streak"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
-import type { RegisterMatchInput, UpdateMatchInput } from "@/lib/types/tufelo"
+import type { RegisterMatchInput, UpdateMatchInput, ActionResult } from "@/lib/types/tufelo"
+
+export type { ActionResult }
 
 const mapNamePattern = /^[가-힣]+$/
 
-export type ActionResult = { ok: true } | { ok: false; error: string }
+/** 전적 관련 경로 캐시를 모두 무효화합니다 */
+function revalidateMatchPaths() {
+  revalidatePath("/")
+  revalidatePath("/admin")
+  revalidatePath("/ranking")
+}
 
 /** 현재 활성 시즌 조회 (없으면 null) */
 async function getActiveSeason(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -143,9 +150,7 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
     `player2=${m2.name as string} map=${input.mapName} type=${input.matchType} date=${input.playedDate} season=${seasonId ?? "비시즌"}`,
   )
 
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMatchPaths()
   return { ok: true }
 }
 
@@ -172,9 +177,7 @@ export async function deleteMatchAction(matchId: string): Promise<ActionResult> 
     const { data: m1 } = await supabase.from("members").select("name").eq("id", p1).single()
     const { data: m2 } = await supabase.from("members").select("name").eq("id", p2).single()
     await insertAdminLog(session.username, "전적 삭제", m1?.name ?? p1, `vs ${m2?.name ?? p2} matchId=${matchId} (비시즌)`)
-    revalidatePath("/")
-    revalidatePath("/admin")
-    revalidatePath("/ranking")
+    revalidateMatchPaths()
     return { ok: true }
   }
 
@@ -193,9 +196,7 @@ export async function deleteMatchAction(matchId: string): Promise<ActionResult> 
     const { data: m1 } = await supabase.from("members").select("name").eq("id", p1).single()
     const { data: m2 } = await supabase.from("members").select("name").eq("id", p2).single()
     await insertAdminLog(session.username, "전적 삭제", m1?.name ?? p1, `vs ${m2?.name ?? p2} matchId=${matchId} (종료시즌)`)
-    revalidatePath("/")
-    revalidatePath("/admin")
-    revalidatePath("/ranking")
+    revalidateMatchPaths()
     return { ok: true }
   }
 
@@ -263,9 +264,7 @@ export async function deleteMatchAction(matchId: string): Promise<ActionResult> 
     `vs ${m2.name as string} matchId=${matchId}`,
   )
 
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMatchPaths()
   return { ok: true }
 }
 
@@ -312,9 +311,7 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
     const { data: m1 } = await supabase.from("members").select("name").eq("id", oldP1Id).single()
     const { data: m2 } = await supabase.from("members").select("name").eq("id", oldP2Id).single()
     await insertAdminLog(session.username, "전적 수정", m1?.name ?? oldP1Id, `vs ${m2?.name ?? oldP2Id} (비시즌)`)
-    revalidatePath("/")
-    revalidatePath("/admin")
-    revalidatePath("/ranking")
+    revalidateMatchPaths()
     return { ok: true }
   }
 
@@ -339,9 +336,7 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
     const { data: m1 } = await supabase.from("members").select("name").eq("id", oldP1Id).single()
     const { data: m2 } = await supabase.from("members").select("name").eq("id", oldP2Id).single()
     await insertAdminLog(session.username, "전적 수정", m1?.name ?? oldP1Id, `vs ${m2?.name ?? oldP2Id} (종료시즌)`)
-    revalidatePath("/")
-    revalidatePath("/admin")
-    revalidatePath("/ranking")
+    revalidateMatchPaths()
     return { ok: true }
   }
 
@@ -453,8 +448,6 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
     `vs ${m2.name as string} winner=${winnerName} map=${input.mapName} type=${input.matchType} date=${input.playedDate}`,
   )
 
-  revalidatePath("/")
-  revalidatePath("/admin")
-  revalidatePath("/ranking")
+  revalidateMatchPaths()
   return { ok: true }
 }

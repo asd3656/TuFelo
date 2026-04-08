@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/server"
 import type { Match, Race, Tier, MemberForRanking, MatchForRanking, Season, SeasonRankingEntry } from "@/lib/types/tufelo"
 import { fetchSeasons, fetchAllSeasonRankings } from "@/lib/data/seasons"
 
-type MatchRow = {
+/** Supabase matches 테이블의 원시 행 타입 */
+export type DbMatchRow = {
   id: string
   player1_id: string
   player2_id: string
@@ -14,13 +15,64 @@ type MatchRow = {
   player2_elo_delta: number | null
 }
 
-type MatchDeltaRow = Pick<
-  MatchRow,
-  "player1_id" | "player2_id" | "player1_elo_delta" | "player2_elo_delta"
->
+type MemberLookup = { name: string; race: Race; tier: Tier }
+
+/**
+ * DB 행과 멤버 조회 맵을 받아 Match 도메인 객체로 변환합니다.
+ * dashboard와 /api/matches 양쪽에서 공통으로 사용합니다.
+ */
+export function mapDbRowToMatch(
+  row: DbMatchRow,
+  byId: Map<string, MemberLookup>,
+): Match {
+  const p1 = byId.get(row.player1_id)
+  const p2 = byId.get(row.player2_id)
+  const w = byId.get(row.winner_id)
+  return {
+    id: row.id,
+    player1: p1?.name ?? "?",
+    player2: p2?.name ?? "?",
+    player1Race: p1?.race,
+    player2Race: p2?.race,
+    player1Tier: p1?.tier,
+    player2Tier: p2?.tier,
+    winner: w?.name ?? "?",
+    map: row.map_name,
+    date: row.played_date,
+    matchType: row.match_type ?? undefined,
+    player1EloDelta: row.player1_elo_delta ?? undefined,
+  } satisfies Match
+}
 
 const DASHBOARD_PAGE_SIZE = 50
 
+type MatchMetaRow = { map_name: string | null; match_type: string | null }
+
+/**
+ * 맵/경기유형 드롭다운용 고유값.
+ * 우선 Supabase RPC `get_distinct_match_meta` (DB에서 DISTINCT) 사용, 실패 시 구 방식 폴백.
+ */
+async function fetchDistinctMatchMeta(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<MatchMetaRow[]> {
+  const { data, error } = await supabase.rpc("get_distinct_match_meta")
+  if (!error && data != null) {
+    return data as MatchMetaRow[]
+  }
+  const { data: fb, error: fbErr } = await supabase
+    .from("matches")
+    .select("map_name, match_type")
+    .limit(10000)
+  if (fbErr) throw new Error(fbErr.message)
+  return (fb ?? []) as MatchMetaRow[]
+}
+
+/**
+ * 대시보드 초기 데이터 페치.
+ * - 1페이지 경기 목록 (최신순 50건)
+ * - 전체 경기 수 및 총 페이지 수
+ * - 맵/경기유형 드롭다운용 고유값 (RPC `get_distinct_match_meta` 권장)
+ */
 export async function fetchInitialDashboardData(): Promise<{
   matches: Match[]
   totalCount: number
@@ -30,7 +82,7 @@ export async function fetchInitialDashboardData(): Promise<{
 }> {
   const supabase = await createClient()
 
-  const [memRes, firstPageRes, metaRes] = await Promise.all([
+  const [memRes, firstPageRes, metaRows] = await Promise.all([
     supabase.from("members").select("id, name, race, tier"),
     supabase
       .from("matches")
@@ -41,8 +93,7 @@ export async function fetchInitialDashboardData(): Promise<{
       .order("played_date", { ascending: false })
       .order("created_at", { ascending: false })
       .range(0, DASHBOARD_PAGE_SIZE - 1),
-    // 맵/경기유형 드롭다운용 전체 고유값 수집 (컬럼 2개만 fetch)
-    supabase.from("matches").select("map_name, match_type").limit(10000),
+    fetchDistinctMatchMeta(supabase),
   ])
 
   if (memRes.error) throw new Error(memRes.error.message)
@@ -55,45 +106,21 @@ export async function fetchInitialDashboardData(): Promise<{
     ]),
   )
 
-  const matches: Match[] = (firstPageRes.data ?? []).map((row) => {
-    const r = row as MatchRow
-    const p1 = byId.get(r.player1_id)
-    const p2 = byId.get(r.player2_id)
-    const w = byId.get(r.winner_id)
-    return {
-      id: r.id,
-      player1: p1?.name ?? "?",
-      player2: p2?.name ?? "?",
-      player1Race: p1?.race,
-      player2Race: p2?.race,
-      player1Tier: p1?.tier,
-      player2Tier: p2?.tier,
-      winner: w?.name ?? "?",
-      map: r.map_name,
-      date: r.played_date,
-      matchType: r.match_type ?? undefined,
-      player1EloDelta: r.player1_elo_delta ?? undefined,
-    } satisfies Match
-  })
+  const matches: Match[] = (firstPageRes.data ?? []).map((row) =>
+    mapDbRowToMatch(row as DbMatchRow, byId),
+  )
 
   const totalCount = firstPageRes.count ?? 0
   const totalPages = Math.ceil(totalCount / DASHBOARD_PAGE_SIZE)
 
-  const metaRows = metaRes.data ?? []
   const knownMaps = Array.from(
-    new Set(metaRows.map((r) => r.map_name as string | null).filter(Boolean)),
+    new Set(metaRows.map((r) => r.map_name).filter(Boolean)),
   ).sort() as string[]
   const knownMatchTypes = Array.from(
-    new Set(metaRows.map((r) => r.match_type as string | null).filter(Boolean)),
+    new Set(metaRows.map((r) => r.match_type).filter(Boolean)),
   ).sort() as string[]
 
   return { matches, totalCount, totalPages, knownMaps, knownMatchTypes }
-}
-
-/** @deprecated fetchInitialDashboardData() 로 교체됨. 레거시 호환용으로만 유지. */
-export async function fetchMatchesForDashboard(): Promise<Match[]> {
-  const { matches } = await fetchInitialDashboardData()
-  return matches
 }
 
 /**
@@ -108,7 +135,7 @@ export async function fetchRankingData(): Promise<{
 }> {
   const supabase = await createClient()
 
-  // 현재 활성 시즌 ID
+  // 현재 활성 시즌 ID 조회
   const { data: activeSeasonRow } = await supabase
     .from("seasons")
     .select("id")
@@ -122,7 +149,7 @@ export async function fetchRankingData(): Promise<{
       .select("id, name, race, tier, elo, wins, losses, streak")
       .eq("is_active", true)
       .order("elo", { ascending: false }),
-    // 현재 시즌 경기만 (랭킹 최근 변동 계산용)
+    // 현재 시즌 경기만 조회 (랭킹 최근 변동 계산용)
     activeSeasonId
       ? supabase
           .from("matches")
@@ -169,56 +196,4 @@ export async function fetchRankingData(): Promise<{
   const currentSeason = seasons.find((s) => s.endDate === null) ?? null
 
   return { members, matches, seasons, currentSeason, pastSeasonRankings }
-}
-
-/** 레거시 호환: 기존 코드가 참조하는 경우를 위해 남겨둠 */
-export async function fetchRankingPlayers(): Promise<
-  Array<{
-    id: string
-    rank: number
-    name: string
-    race: Race
-    elo: number
-    change: number
-    wins: number
-    losses: number
-    streak: number
-  }>
-> {
-  const supabase = await createClient()
-  const [memRes, matchRes] = await Promise.all([
-    supabase
-      .from("members")
-      .select("id, name, race, tier, elo, wins, losses, streak")
-      .order("elo", { ascending: false }),
-    supabase
-      .from("matches")
-      .select("player1_id, player2_id, player1_elo_delta, player2_elo_delta, played_date, created_at")
-      .order("played_date", { ascending: false })
-      .order("created_at", { ascending: false }),
-  ])
-
-  if (memRes.error) throw new Error(memRes.error.message)
-  if (matchRes.error) throw new Error(matchRes.error.message)
-
-  const matchRows = (matchRes.data ?? []) as MatchDeltaRow[]
-  const changeMap = new Map<string, number>()
-  for (const m of matchRows) {
-    if (!changeMap.has(m.player1_id) && m.player1_elo_delta != null)
-      changeMap.set(m.player1_id, m.player1_elo_delta)
-    if (!changeMap.has(m.player2_id) && m.player2_elo_delta != null)
-      changeMap.set(m.player2_id, m.player2_elo_delta)
-  }
-
-  return (memRes.data ?? []).map((r, i) => ({
-    id: r.id as string,
-    rank: i + 1,
-    name: r.name as string,
-    race: r.race as Race,
-    elo: r.elo as number,
-    change: changeMap.get(r.id as string) ?? 0,
-    wins: r.wins as number,
-    losses: r.losses as number,
-    streak: r.streak as number,
-  }))
 }

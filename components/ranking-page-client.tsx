@@ -19,9 +19,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Crown, Medal, Award, TrendingUp, TrendingDown, Minus, Search, Trophy, ArrowLeft } from "lucide-react"
+import { Crown, TrendingUp, Award, Search, Trophy, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import type { MemberForRanking, MatchForRanking, Race, Tier, Season, SeasonRankingEntry } from "@/lib/types/tufelo"
+import type { MemberForRanking, MatchForRanking, Season, SeasonRankingEntry } from "@/lib/types/tufelo"
+import {
+  computeRankedPlayers,
+  formatSeasonDateRange,
+  raceColors,
+  raceNames,
+  tierColors,
+} from "@/lib/ranking-utils"
+import { RankIcon, ChangeDisplay, StreakDisplay } from "@/components/ranking-shared"
 
 interface RankingPageClientProps {
   members: MemberForRanking[]
@@ -29,175 +37,6 @@ interface RankingPageClientProps {
   seasons: Season[]
   currentSeason: Season | null
   pastSeasonRankings: Record<string, SeasonRankingEntry[]>
-}
-
-interface ComputedPlayer {
-  id: string
-  rank: number
-  name: string
-  race: Race
-  tier: Tier
-  elo: number
-  wins: number
-  losses: number
-  streak: number
-  change: number
-  rankChange: number
-}
-
-function getTodayDate(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
-function computeRankedPlayers(
-  members: MemberForRanking[],
-  allMatches: MatchForRanking[],
-  filterSeasonId: string,
-  filterRace: string,
-  filterTier: string,
-  pastSeasonRankings: Record<string, SeasonRankingEntry[]>,
-): ComputedPlayer[] {
-  const eligibleMembers = members.filter(
-    (m) =>
-      (filterRace === "__all__" || m.race === filterRace) &&
-      (filterTier === "__all__" || m.tier === Number(filterTier)),
-  )
-
-  // ── 과거 시즌: 스냅샷 데이터 사용 ──
-  if (filterSeasonId !== "__current__") {
-    const entries = pastSeasonRankings[filterSeasonId] ?? []
-    return entries
-      .filter(
-        (e) =>
-          (filterRace === "__all__" || e.memberRace === filterRace) &&
-          (filterTier === "__all__" || e.memberTier === Number(filterTier)),
-      )
-      .map((e, i) => ({
-        id: e.memberId,
-        rank: i + 1,
-        name: e.memberName,
-        race: e.memberRace,
-        tier: e.memberTier,
-        elo: e.finalElo,
-        wins: e.finalWins,
-        losses: e.finalLosses,
-        streak: 0,
-        change: 0,
-        rankChange: 0,
-      }))
-  }
-
-  // ── 현재 시즌: members.elo 기준 ──
-  const lastChangeMap = new Map<string, number>()
-  for (const m of allMatches) {
-    if (!lastChangeMap.has(m.player1Id) && m.player1EloDelta !== null)
-      lastChangeMap.set(m.player1Id, m.player1EloDelta)
-    if (!lastChangeMap.has(m.player2Id) && m.player2EloDelta !== null)
-      lastChangeMap.set(m.player2Id, m.player2EloDelta)
-  }
-
-  const today = getTodayDate()
-  const recentDeltaMap = new Map<string, number>()
-  for (const m of allMatches) {
-    if (m.playedDate < today) continue
-    if (m.player1EloDelta !== null)
-      recentDeltaMap.set(m.player1Id, (recentDeltaMap.get(m.player1Id) ?? 0) + m.player1EloDelta)
-    if (m.player2EloDelta !== null)
-      recentDeltaMap.set(m.player2Id, (recentDeltaMap.get(m.player2Id) ?? 0) + m.player2EloDelta)
-  }
-
-  const sorted = eligibleMembers
-    .map((m) => ({
-      id: m.id,
-      name: m.name,
-      race: m.race,
-      tier: m.tier,
-      elo: m.elo,
-      wins: m.wins,
-      losses: m.losses,
-      streak: m.streak,
-      change: lastChangeMap.get(m.id) ?? 0,
-      rankChange: 0,
-      rank: 0,
-    }))
-    .sort((a, b) => b.elo - a.elo)
-
-  const oldRankSorted = [...sorted]
-    .map((p) => ({ id: p.id, elo: p.elo - (recentDeltaMap.get(p.id) ?? 0) }))
-    .sort((a, b) => b.elo - a.elo)
-  const oldRankMap = new Map(oldRankSorted.map((p, i) => [p.id, i + 1]))
-
-  return sorted.map((p, i) => ({
-    ...p,
-    rank: i + 1,
-    rankChange: (oldRankMap.get(p.id) ?? i + 1) - (i + 1),
-  }))
-}
-
-const raceColors: Record<string, string> = {
-  T: "bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
-  P: "bg-amber-100 dark:bg-amber-600/20 text-amber-700 dark:text-amber-400 border-amber-400/60 dark:border-amber-500/30",
-  Z: "bg-red-100 dark:bg-red-600/20 text-red-700 dark:text-red-400 border-red-400/60 dark:border-red-500/30",
-}
-const raceNames: Record<string, string> = { T: "Terran", P: "Protoss", Z: "Zerg" }
-
-const tierColors: Record<number, string> = {
-  1: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-400/60 dark:border-yellow-500/30",
-  2: "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-400/60 dark:border-purple-500/30",
-  3: "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
-  4: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-400/60 dark:border-green-500/30",
-}
-
-function getRankIcon(rank: number) {
-  switch (rank) {
-    case 1: return <Crown className="h-5 w-5 text-orange-500" />
-    case 2: return <Medal className="h-5 w-5 text-gray-300" />
-    case 3: return <Award className="h-5 w-5 text-amber-600" />
-    default: return <span className="text-muted-foreground font-mono w-5 text-center">{rank}</span>
-  }
-}
-
-function ChangeDisplay({ change }: { change: number }) {
-  if (change > 0)
-    return (
-      <span className="flex items-center justify-center gap-1 text-accent font-medium">
-        <TrendingUp className="h-4 w-4" /><span>+{change}</span>
-      </span>
-    )
-  if (change < 0)
-    return (
-      <span className="flex items-center justify-center gap-1 text-destructive font-medium">
-        <TrendingDown className="h-4 w-4" /><span>{change}</span>
-      </span>
-    )
-  return (
-    <span className="flex items-center justify-center gap-1 text-muted-foreground">
-      <Minus className="h-4 w-4" /><span>0</span>
-    </span>
-  )
-}
-
-function StreakDisplay({ streak }: { streak: number }) {
-  if (streak > 0)
-    return (
-      <Badge className="bg-accent/20 text-accent border-accent/30" variant="outline">
-        {streak}연승
-      </Badge>
-    )
-  if (streak < 0)
-    return (
-      <Badge className="bg-destructive/20 text-destructive border-destructive/30" variant="outline">
-        {Math.abs(streak)}연패
-      </Badge>
-    )
-  return null
-}
-
-function formatSeasonDateRange(season: Season) {
-  const start = season.startDate.replace(/-/g, ".").slice(0, 7)
-  if (!season.endDate) return `${start} ~ `
-  const end = season.endDate.replace(/-/g, ".").slice(0, 7)
-  return `${start} ~ ${end}`
 }
 
 export function RankingPageClient({
@@ -298,7 +137,6 @@ export function RankingPageClient({
             />
           </div>
           <div className="flex flex-wrap gap-3">
-            {/* 시즌 필터 */}
             <Select value={filterSeasonId} onValueChange={setFilterSeasonId}>
               <SelectTrigger className="w-52 bg-card border-border text-foreground">
                 <SelectValue />
@@ -315,7 +153,6 @@ export function RankingPageClient({
               </SelectContent>
             </Select>
 
-            {/* 티어 */}
             <Select value={filterTier} onValueChange={setFilterTier}>
               <SelectTrigger className="w-36 bg-card border-border text-foreground">
                 <SelectValue placeholder="전체 티어" />
@@ -329,7 +166,6 @@ export function RankingPageClient({
               </SelectContent>
             </Select>
 
-            {/* 종족 */}
             <Select value={filterRace} onValueChange={setFilterRace}>
               <SelectTrigger className="w-36 bg-card border-border text-foreground">
                 <SelectValue placeholder="전체 종족" />
@@ -395,7 +231,7 @@ export function RankingPageClient({
                       className={`border-border hover:bg-secondary/50 transition-colors ${player.rank <= 3 ? "bg-secondary/30" : ""}`}
                     >
                       <TableCell className="text-center">
-                        <div className="flex justify-center">{getRankIcon(player.rank)}</div>
+                        <div className="flex justify-center"><RankIcon rank={player.rank} /></div>
                       </TableCell>
                       <TableCell>
                         <span className={`font-semibold ${player.rank === 1 ? "text-orange-600 dark:text-orange-400" : "text-foreground"}`}>

@@ -5,8 +5,9 @@ import { cookies } from "next/headers"
 import { createServiceClient } from "@/lib/supabase/service"
 import { ADMIN_SESSION_COOKIE } from "@/lib/auth/admin"
 import bcrypt from "bcryptjs"
+import type { ActionResult } from "@/lib/types/tufelo"
 
-export type ActionResult = { ok: true } | { ok: false; error: string }
+export type { ActionResult }
 
 export async function loginAdminAction(
   username: string,

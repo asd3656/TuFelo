@@ -7,8 +7,17 @@ import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
 import { computeStreakFromMatchList } from "@/lib/match-streak"
 import type { EloTier } from "@/lib/elo"
+import type { ActionResult } from "@/lib/types/tufelo"
 
-export type ActionResult = { ok: true } | { ok: false; error: string }
+export type { ActionResult }
+
+/** 시즌/랭킹 관련 모든 경로 캐시를 무효화합니다 */
+function revalidateSeasonPaths() {
+  revalidatePath("/")
+  revalidatePath("/ranking")
+  revalidatePath("/ranking/public")
+  revalidatePath("/creator")
+}
 
 // ─── 내부 헬퍼 ──────────────────────────────────────────────
 
@@ -126,38 +135,52 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     matchUpdates.push({ id: match.id, p1_elo_before: elo1, p2_elo_before: elo2, p1_elo_delta: winnerDelta, p2_elo_delta: loserDelta })
   }
 
-  // 경기별 ELO 값 업데이트
-  for (const upd of matchUpdates) {
-    await supabase.from("matches").update({
-      player1_elo_before: upd.p1_elo_before,
-      player2_elo_before: upd.p2_elo_before,
-      player1_elo_delta: upd.p1_elo_delta,
-      player2_elo_delta: upd.p2_elo_delta,
-    }).eq("id", upd.id)
+  // 경기별 ELO 값 일괄 업데이트 (N번 개별 요청 → 1번 upsert로 최적화)
+  if (matchUpdates.length > 0) {
+    await supabase.from("matches").upsert(
+      matchUpdates.map((u) => ({
+        id: u.id,
+        player1_elo_before: u.p1_elo_before,
+        player2_elo_before: u.p2_elo_before,
+        player1_elo_delta: u.p1_elo_delta,
+        player2_elo_delta: u.p2_elo_delta,
+      })),
+      { onConflict: "id" },
+    )
   }
 
   // streak 인메모리 계산 (최신순으로 뒤집어서)
   const reversedMatches = [...matchList].reverse()
   const participants = new Set(matchList.flatMap((m) => [m.player1_id, m.player2_id]))
 
-  for (const m of memberList) {
-    if (participants.has(m.id)) {
-      const streak = computeStreakFromMatchList(m.id, reversedMatches)
-      await supabase.from("members").update({
-        elo: eloMap.get(m.id) ?? getStartingEloForTier(tierMap.get(m.id) ?? 4),
-        wins: winsMap.get(m.id) ?? 0,
-        losses: lossesMap.get(m.id) ?? 0,
-        streak,
-      }).eq("id", m.id)
-    } else if (m.is_active) {
-      // 시즌 경기 없는 활성 선수 → 초기값으로 리셋
-      await supabase.from("members").update({
-        elo: getStartingEloForTier(m.tier as EloTier),
-        wins: 0,
-        losses: 0,
-        streak: 0,
-      }).eq("id", m.id)
-    }
+  // 멤버 스탯 일괄 업데이트 (N번 개별 요청 → 1번 upsert로 최적화)
+  const memberUpdateData = memberList
+    .map((m) => {
+      if (participants.has(m.id)) {
+        const streak = computeStreakFromMatchList(m.id, reversedMatches)
+        return {
+          id: m.id,
+          elo: eloMap.get(m.id) ?? getStartingEloForTier(tierMap.get(m.id) ?? 4),
+          wins: winsMap.get(m.id) ?? 0,
+          losses: lossesMap.get(m.id) ?? 0,
+          streak,
+        }
+      } else if (m.is_active) {
+        // 시즌 경기 없는 활성 선수 → 초기값으로 리셋
+        return {
+          id: m.id,
+          elo: getStartingEloForTier(m.tier as EloTier),
+          wins: 0,
+          losses: 0,
+          streak: 0,
+        }
+      }
+      return null
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null)
+
+  if (memberUpdateData.length > 0) {
+    await supabase.from("members").upsert(memberUpdateData, { onConflict: "id" })
   }
 }
 
@@ -205,19 +228,21 @@ export async function startNewSeasonAction(input: {
       .eq("id", activeSeason.id)
   }
 
-  // 활성 선수 ELO/승패/연속 초기화
+  // 활성 선수 ELO/승패/연속 초기화 (배치 upsert)
   const { data: activeMembers } = await supabase
     .from("members")
     .select("id, tier")
     .eq("is_active", true)
 
-  for (const m of (activeMembers ?? []) as Array<{ id: string; tier: number }>) {
-    await supabase.from("members").update({
-      elo: getStartingEloForTier(m.tier as EloTier),
-      wins: 0,
-      losses: 0,
-      streak: 0,
-    }).eq("id", m.id)
+  const resetData = (activeMembers ?? []).map((m) => ({
+    id: m.id,
+    elo: getStartingEloForTier((m.tier as EloTier)),
+    wins: 0,
+    losses: 0,
+    streak: 0,
+  }))
+  if (resetData.length > 0) {
+    await supabase.from("members").upsert(resetData, { onConflict: "id" })
   }
 
   // 새 시즌 생성
@@ -234,10 +259,7 @@ export async function startNewSeasonAction(input: {
     `start_date=${input.startDate}${activeSeason ? ` (이전: ${activeSeason.name as string})` : ""}`,
   )
 
-  revalidatePath("/")
-  revalidatePath("/ranking")
-  revalidatePath("/ranking/public")
-  revalidatePath("/creator")
+  revalidateSeasonPaths()
   return { ok: true }
 }
 
@@ -294,10 +316,7 @@ export async function updateSeasonAction(input: {
 
   await insertAdminLog(session.username, "시즌 수정", name, `start_date=${input.startDate}`)
 
-  revalidatePath("/")
-  revalidatePath("/ranking")
-  revalidatePath("/ranking/public")
-  revalidatePath("/creator")
+  revalidateSeasonPaths()
   return { ok: true }
 }
 
@@ -356,27 +375,26 @@ export async function deleteSeasonAction(id: string): Promise<ActionResult> {
       // ELO 재계산 (직전 시즌 시작일 기준)
       await recalculateCurrentSeasonElo(supabase, prevSeason.id as string, prevSeason.start_date as string)
     } else {
-      // 시즌 없음 → 모든 활성 선수 초기화
+      // 시즌 없음 → 모든 활성 선수 초기화 (배치 upsert)
       const { data: activeMembers } = await supabase
         .from("members")
         .select("id, tier")
         .eq("is_active", true)
-      for (const m of (activeMembers ?? []) as Array<{ id: string; tier: number }>) {
-        await supabase.from("members").update({
-          elo: getStartingEloForTier(m.tier as EloTier),
-          wins: 0,
-          losses: 0,
-          streak: 0,
-        }).eq("id", m.id)
+      const resetData = (activeMembers ?? []).map((m) => ({
+        id: m.id,
+        elo: getStartingEloForTier((m.tier as EloTier)),
+        wins: 0,
+        losses: 0,
+        streak: 0,
+      }))
+      if (resetData.length > 0) {
+        await supabase.from("members").upsert(resetData, { onConflict: "id" })
       }
     }
   }
 
   await insertAdminLog(session.username, "시즌 삭제", season.name as string)
 
-  revalidatePath("/")
-  revalidatePath("/ranking")
-  revalidatePath("/ranking/public")
-  revalidatePath("/creator")
+  revalidateSeasonPaths()
   return { ok: true }
 }
