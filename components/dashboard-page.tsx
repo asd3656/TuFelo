@@ -35,7 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor } from "lucide-react"
+import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor, Lock } from "lucide-react"
 import { useTheme } from "next-themes"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
@@ -446,6 +446,16 @@ export function DashboardPage({
                   <Plus className="h-4 w-4 mr-2" />
                   전적 등록
                 </Button>
+              ) : isGuest ? (
+                <Button
+                  type="button"
+                  disabled
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
+                  title="관리자 권한이 필요합니다"
+                >
+                  <Lock className="h-4 w-4 mr-2" />
+                  전적 등록
+                </Button>
               ) : (
                 <Button
                   type="button"
@@ -601,6 +611,7 @@ export function DashboardPage({
               matches={matches}
               searchPlayer={player1}
               isAdmin={isAdmin}
+              isGuest={isGuest}
               deletePending={isDeletePending}
               onEditMatch={(match) => setEditingMatch(match)}
               editPending={isEditPending}

@@ -32,7 +32,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Shield, Plus, Trash2, ScrollText, X, CalendarDays, Pencil, Play } from "lucide-react"
+import { ArrowLeft, Shield, Plus, Trash2, ScrollText, X, CalendarDays, Pencil, Play, Lock } from "lucide-react"
 import { addAdminAccountAction, deleteAdminAccountAction } from "@/app/actions/creator"
 import { logoutAdminAction } from "@/app/actions/admin"
 import { startNewSeasonAction, updateSeasonAction, deleteSeasonAction } from "@/app/actions/seasons"
@@ -307,17 +307,15 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                   : "현재 진행 중인 시즌 없음"}
               </p>
             </div>
-            {!isGuest && (
-              <Button
-                size="sm"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                onClick={() => { setShowNewSeasonForm((v) => !v); setSeasonErr(null) }}
-                disabled={pending}
-              >
-                <Play className="h-4 w-4 mr-1" />
-                새 시즌 시작
-              </Button>
-            )}
+            <Button
+              size="sm"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={() => { setShowNewSeasonForm((v) => !v); setSeasonErr(null) }}
+              disabled={isGuest || pending}
+            >
+              {isGuest ? <Lock className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+              새 시즌 시작
+            </Button>
           </div>
 
           {/* 새 시즌 시작 폼 */}
@@ -374,7 +372,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                     <TableHead className="text-muted-foreground font-semibold text-center">시작일</TableHead>
                     <TableHead className="text-muted-foreground font-semibold text-center">종료일</TableHead>
                     <TableHead className="text-muted-foreground font-semibold text-center">상태</TableHead>
-                    {!isGuest && <TableHead className="text-muted-foreground font-semibold text-center w-24">관리</TableHead>}
+                    <TableHead className="text-muted-foreground font-semibold text-center w-24">관리</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -410,32 +408,30 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                             )}
                           </TableCell>
                           <TableCell />
-                          {!isGuest && (
-                            <TableCell className="text-center">
-                              <div className="flex justify-center gap-1">
-                                <Button
-                                  size="sm"
-                                  className="h-7 px-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                  onClick={handleSaveEdit}
-                                  disabled={pending}
-                                >
-                                  저장
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 px-2 text-xs"
-                                  onClick={() => setEditingSeason(null)}
-                                  disabled={pending}
-                                >
-                                  취소
-                                </Button>
-                              </div>
-                              {seasonErr && editingSeason?.id === season.id && (
-                                <p className="text-xs text-destructive mt-1">{seasonErr}</p>
-                              )}
-                            </TableCell>
-                          )}
+                          <TableCell className="text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button
+                                size="sm"
+                                className="h-7 px-2 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                onClick={handleSaveEdit}
+                                disabled={isGuest || pending}
+                              >
+                                저장
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => setEditingSeason(null)}
+                                disabled={isGuest || pending}
+                              >
+                                취소
+                              </Button>
+                            </div>
+                            {seasonErr && editingSeason?.id === season.id && (
+                              <p className="text-xs text-destructive mt-1">{seasonErr}</p>
+                            )}
+                          </TableCell>
                         </>
                       ) : (
                         <>
@@ -451,32 +447,31 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                               <Badge variant="outline" className="text-muted-foreground">종료</Badge>
                             )}
                           </TableCell>
-                          {!isGuest && (
-                            <TableCell className="text-center">
-                              <div className="flex justify-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/80"
-                                  onClick={() => handleOpenEdit(season)}
-                                  disabled={pending}
-                                  title="수정"
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => setDeleteSeasonTarget(season)}
-                                  disabled={pending}
-                                  title="삭제"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          )}
+                          <TableCell className="text-center">
+                            <div className="flex justify-center items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/80"
+                                onClick={() => handleOpenEdit(season)}
+                                disabled={isGuest || pending}
+                                title={isGuest ? "관리자 권한이 필요합니다" : "수정"}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => setDeleteSeasonTarget(season)}
+                                disabled={isGuest || pending}
+                                title={isGuest ? "관리자 권한이 필요합니다" : "삭제"}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                              {isGuest && <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />}
+                            </div>
+                          </TableCell>
                         </>
                       )}
                     </TableRow>
@@ -504,7 +499,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                   <TableHead className="text-muted-foreground font-semibold">아이디</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">역할</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">등록일</TableHead>
-                  {!isGuest && <TableHead className="text-muted-foreground font-semibold text-center w-20">삭제</TableHead>}
+                  <TableHead className="text-muted-foreground font-semibold text-center w-20">삭제</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -523,22 +518,23 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                     <TableCell className="text-center text-muted-foreground text-sm">
                       {formatDate(admin.created_at)}
                     </TableCell>
-                    {!isGuest && (
-                      <TableCell className="text-center">
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
                         {admin.role !== "creator" && (
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                             onClick={() => setDeleteTarget(admin.username)}
-                            disabled={pending}
-                            title="삭제"
+                            disabled={isGuest || pending}
+                            title={isGuest ? "관리자 권한이 필요합니다" : "삭제"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
-                      </TableCell>
-                    )}
+                        {isGuest && admin.role !== "creator" && <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -546,7 +542,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
           </div>
 
           {/* 신규 관리자 추가 폼 */}
-          {!isGuest && <div className="px-6 py-5 border-t border-border">
+          <div className="px-6 py-5 border-t border-border">
             <p className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
               <Plus className="h-4 w-4" />
               신규 관리자 추가
@@ -560,6 +556,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                   onChange={(e) => setNewUsername(e.target.value)}
                   className="bg-input border-border"
                   autoComplete="off"
+                  disabled={isGuest}
                 />
               </div>
               <div className="space-y-1.5 flex-1 min-w-32">
@@ -571,19 +568,21 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="bg-input border-border"
                   autoComplete="new-password"
+                  disabled={isGuest}
                 />
               </div>
               <Button
                 type="submit"
-                disabled={pending}
+                disabled={isGuest || pending}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                title={isGuest ? "관리자 권한이 필요합니다" : undefined}
               >
-                <Plus className="h-4 w-4 mr-1" />
+                {isGuest ? <Lock className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
                 추가
               </Button>
             </form>
             {formErr && <p className="text-sm text-destructive mt-2">{formErr}</p>}
-          </div>}
+          </div>
         </section>
 
         {/* 활동 로그 */}

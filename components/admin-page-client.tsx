@@ -38,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Search, Users, ArrowLeft, Plus, Pencil, Trash2, RotateCcw } from "lucide-react"
+import { Search, Users, ArrowLeft, Plus, Pencil, Trash2, RotateCcw, Lock } from "lucide-react"
 import type { ClanMember, Race, Tier } from "@/lib/types/tufelo"
 import {
   addMemberAction,
@@ -309,19 +309,17 @@ export function AdminPageClient({ initialMembers, isGuest }: AdminPageClientProp
               )}
             </div>
           </div>
-          {!isGuest && (
-            <Button
-              onClick={() => {
-                setFormData({ name: "", race: "T", tier: 4 })
-                setIsAddDialogOpen(true)
-              }}
-              disabled={pending}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              클랜원 추가
-            </Button>
-          )}
+          <Button
+            onClick={() => {
+              setFormData({ name: "", race: "T", tier: 4 })
+              setIsAddDialogOpen(true)
+            }}
+            disabled={isGuest || pending}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+          >
+            {isGuest ? <Lock className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
+            클랜원 추가
+          </Button>
         </section>
 
         <section className="bg-card rounded-lg border border-border overflow-hidden">
@@ -342,7 +340,7 @@ export function AdminPageClient({ initialMembers, isGuest }: AdminPageClientProp
                   <TableHead className="text-muted-foreground font-semibold">선수명</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">종족</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">티어</TableHead>
-                  {!isGuest && <TableHead className="text-muted-foreground font-semibold text-center w-32">관리</TableHead>}
+                  <TableHead className="text-muted-foreground font-semibold text-center w-32">관리</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -376,59 +374,58 @@ export function AdminPageClient({ initialMembers, isGuest }: AdminPageClientProp
                         {member.tier}티어
                       </Badge>
                     </TableCell>
-                    {!isGuest && (
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          {member.isActive ? (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                                onClick={() => openEditDialog(member)}
-                                disabled={pending}
-                                title="수정"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => openDeleteDialog(member)}
-                                disabled={pending}
-                                title="탈퇴 처리"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-accent hover:bg-accent/10"
-                                onClick={() => handleReactivate(member)}
-                                disabled={pending}
-                                title="복귀 처리"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => openPermanentDeleteDialog(member)}
-                                disabled={pending}
-                                title="완전 삭제 (제명)"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {member.isActive ? (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                              onClick={() => openEditDialog(member)}
+                              disabled={isGuest || pending}
+                              title={isGuest ? "관리자 권한이 필요합니다" : "수정"}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => openDeleteDialog(member)}
+                              disabled={isGuest || pending}
+                              title={isGuest ? "관리자 권한이 필요합니다" : "탈퇴 처리"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-accent hover:bg-accent/10"
+                              onClick={() => handleReactivate(member)}
+                              disabled={isGuest || pending}
+                              title={isGuest ? "관리자 권한이 필요합니다" : "복귀 처리"}
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => openPermanentDeleteDialog(member)}
+                              disabled={isGuest || pending}
+                              title={isGuest ? "관리자 권한이 필요합니다" : "완전 삭제 (제명)"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {isGuest && <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -13,12 +13,13 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Pencil, Trash2 } from "lucide-react"
+import { Pencil, Trash2, Lock } from "lucide-react"
 
 interface MatchHistoryProps {
   matches: Match[]
   searchPlayer: string
   isAdmin?: boolean
+  isGuest?: boolean
   deletePending?: boolean
   onEditMatch?: (match: Match) => void
   editPending?: boolean
@@ -92,6 +93,7 @@ export function MatchHistory({
   matches,
   searchPlayer,
   isAdmin = false,
+  isGuest = false,
   deletePending = false,
   onEditMatch,
   editPending = false,
@@ -173,12 +175,12 @@ export function MatchHistory({
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
-              {isAdmin && (
+              {(isAdmin || isGuest) && (
                 <TableHead className="w-10 text-center">
                   <Checkbox
                     checked={allSelected ? true : someSelected ? "indeterminate" : false}
                     onCheckedChange={toggleAll}
-                    disabled={deletePending}
+                    disabled={isGuest || deletePending}
                     aria-label="전체 선택"
                     className="border-2 border-slate-400 dark:border-slate-400 data-[state=checked]:border-primary data-[state=indeterminate]:border-primary"
                   />
@@ -196,7 +198,7 @@ export function MatchHistory({
               </TableHead>
               <TableHead className="text-muted-foreground font-semibold">맵</TableHead>
               <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">경기 유형</TableHead>
-              {isAdmin && (
+              {(isAdmin || isGuest) && (
                 <TableHead className="text-muted-foreground font-semibold w-[60px] text-center">
                   수정
                 </TableHead>
@@ -224,12 +226,12 @@ export function MatchHistory({
                   key={match.id}
                   className={`border-border hover:bg-secondary/50 transition-colors ${isSelected ? "bg-destructive/5 dark:bg-destructive/10" : ""}`}
                 >
-                  {isAdmin && (
+                  {(isAdmin || isGuest) && (
                     <TableCell className="text-center p-2">
                       <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => toggleOne(match.id, checked)}
-                        disabled={deletePending}
+                        disabled={isGuest || deletePending}
                         aria-label={`${match.player1} vs ${match.player2} 선택`}
                         className="border-2 border-slate-400 dark:border-slate-400 data-[state=checked]:border-primary"
                       />
@@ -293,24 +295,22 @@ export function MatchHistory({
                   <TableCell className="text-muted-foreground text-sm whitespace-nowrap">
                     {match.matchType ?? "—"}
                   </TableCell>
-                  {isAdmin && (
+                  {(isAdmin || isGuest) && (
                     <TableCell className="text-center p-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-8 border-amber-400 dark:border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300"
-                        disabled={editPending || deletePending}
-                        onClick={() => {
-                          if (!isAdmin) {
-                            window.alert("운영진에게 문의하세요.")
-                            return
-                          }
-                          onEditMatch?.(match)
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 border-amber-400 dark:border-amber-500/50 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:text-amber-700 dark:hover:text-amber-300"
+                          disabled={isGuest || editPending || deletePending}
+                          title={isGuest ? "관리자 권한이 필요합니다" : undefined}
+                          onClick={() => onEditMatch?.(match)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        {isGuest && <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />}
+                      </div>
                     </TableCell>
                   )}
                 </TableRow>
