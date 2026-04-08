@@ -35,7 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor, Lock } from "lucide-react"
+import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor, Lock, FileSpreadsheet } from "lucide-react"
 import { useTheme } from "next-themes"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
@@ -435,6 +435,19 @@ export function DashboardPage({
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
+              <Button
+                asChild
+                className="bg-green-600 hover:bg-green-700 text-white font-semibold border-0"
+              >
+                <a
+                  href="https://docs.google.com/spreadsheets/d/1kKeA8Y8AmO99qS6v4Xsu_95z6kdKnXL8DXLSLXoCUx8/edit?gid=501558484#gid=501558484"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  전적시트
+                </a>
+              </Button>
               <Button
                 type="button"
                 onClick={() => setIsManualOpen(true)}
