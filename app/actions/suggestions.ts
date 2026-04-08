@@ -6,8 +6,6 @@ import { getClientIp } from "@/lib/request-ip"
 import { insertAdminLog } from "@/lib/admin-log"
 import type { ActionResult } from "@/lib/types/tufelo"
 
-export type { ActionResult }
-
 export interface SuggestionReply {
   id: string
   suggestion_id: string

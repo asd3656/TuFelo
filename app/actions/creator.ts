@@ -5,8 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
 import bcrypt from "bcryptjs"
-
-export type ActionResult = { ok: true } | { ok: false; error: string }
+import type { ActionResult } from "@/lib/types/tufelo"
 
 async function requireCreator() {
   const session = await getSessionFromCookies()

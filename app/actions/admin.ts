@@ -7,8 +7,6 @@ import { ADMIN_SESSION_COOKIE } from "@/lib/auth/admin"
 import bcrypt from "bcryptjs"
 import type { ActionResult } from "@/lib/types/tufelo"
 
-export type { ActionResult }
-
 export async function loginAdminAction(
   username: string,
   password: string,

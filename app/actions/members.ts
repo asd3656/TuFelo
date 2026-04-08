@@ -7,8 +7,6 @@ import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
 import type { Race, Tier, ActionResult } from "@/lib/types/tufelo"
 
-export type { ActionResult }
-
 /** 클랜원 관련 경로 캐시를 모두 무효화합니다 */
 function revalidateMemberPaths() {
   revalidatePath("/")

@@ -39,14 +39,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Search, Users, ArrowLeft, Plus, Pencil, Trash2, RotateCcw, Lock } from "lucide-react"
-import type { ClanMember, Race, Tier } from "@/lib/types/tufelo"
+import type { ClanMember, Race, Tier, ActionResult } from "@/lib/types/tufelo"
 import {
   addMemberAction,
   deleteMemberAction,
   permanentDeleteMemberAction,
   reactivateMemberAction,
   updateMemberAction,
-  type ActionResult,
 } from "@/app/actions/members"
 
 type CliqueTier = Tier

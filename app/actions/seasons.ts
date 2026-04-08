@@ -9,8 +9,6 @@ import { computeStreakFromMatchList } from "@/lib/match-streak"
 import type { EloTier } from "@/lib/elo"
 import type { ActionResult } from "@/lib/types/tufelo"
 
-export type { ActionResult }
-
 /** 시즌/랭킹 관련 모든 경로 캐시를 무효화합니다 */
 function revalidateSeasonPaths() {
   revalidatePath("/")

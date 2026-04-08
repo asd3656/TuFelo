@@ -9,8 +9,6 @@ import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
 import type { RegisterMatchInput, UpdateMatchInput, ActionResult } from "@/lib/types/tufelo"
 
-export type { ActionResult }
-
 const mapNamePattern = /^[가-힣]+$/
 
 /** 전적 관련 경로 캐시를 모두 무효화합니다 */
