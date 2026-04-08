@@ -34,7 +34,7 @@ export default async function CreatorPage() {
       .from("admin_logs")
       .select("id, admin_username, action, target, detail, created_at")
       .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(200),
     supabase
       .from("seasons")
       .select("id, name, start_date, end_date, created_at")

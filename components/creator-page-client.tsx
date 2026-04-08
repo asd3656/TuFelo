@@ -593,7 +593,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
               활동 로그
             </h2>
             <p className="text-sm text-muted-foreground">
-              최근 50개 기록 (최신순)
+              최근 200개 기록 (최신순)
               {hasFilter && (
                 <span className="ml-2 text-primary">· 필터 적용 중 — {filteredLogs.length}건</span>
               )}
