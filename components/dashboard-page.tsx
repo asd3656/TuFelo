@@ -415,9 +415,9 @@ export function DashboardPage({
 
         {/* ── 전적 기록 섹션 ── */}
         <section className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+          <div className="px-4 py-4 sm:px-6 border-b border-border flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-foreground flex flex-wrap items-center gap-2">
                 전적 기록
                 {isLoadingMatches && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                 {currentSeason && (
@@ -434,10 +434,10 @@ export function DashboardPage({
                     : `전체 경기 기록 (총 ${totalCount}경기)`}
               </p>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-col gap-2 w-full md:w-auto md:flex-row md:flex-wrap md:justify-end md:shrink-0">
               <Button
                 asChild
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold border-0"
+                className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold border-0"
               >
                 <a
                   href="https://docs.google.com/spreadsheets/d/1kKeA8Y8AmO99qS6v4Xsu_95z6kdKnXL8DXLSLXoCUx8/edit?gid=501558484#gid=501558484"
@@ -451,7 +451,7 @@ export function DashboardPage({
               <Button
                 type="button"
                 onClick={() => setIsManualOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold border-0"
+                className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-semibold border-0"
               >
                 <BookOpen className="h-4 w-4 mr-2" />
                 사용설명서
@@ -459,7 +459,7 @@ export function DashboardPage({
               <Button
                 type="button"
                 onClick={() => setIsNoticeOpen(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold border-0"
+                className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold border-0"
               >
                 <Megaphone className="h-4 w-4 mr-2" />
                 공지 및 건의
