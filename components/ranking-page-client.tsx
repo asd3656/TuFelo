@@ -19,7 +19,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Crown, TrendingUp, Award, Search, Trophy, ArrowLeft } from "lucide-react"
+import {
+  Award,
+  ArrowLeft,
+  BarChart3,
+  Crown,
+  Percent,
+  Search,
+  Swords,
+  TrendingUp,
+  Trophy,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { MemberForRanking, MatchForRanking, Season, SeasonRankingEntry } from "@/lib/types/tufelo"
 import {
@@ -92,6 +102,34 @@ export function RankingPageClient({
     ? rankedPlayers.reduce((mx, p) => (p.rankChange > mx.rankChange ? p : mx), rankedPlayers[0])
     : null
 
+  const topWins = useMemo(() => {
+    if (!rankedPlayers.length) return null
+    return rankedPlayers.reduce((mx, p) => {
+      if (p.wins > mx.wins) return p
+      if (p.wins < mx.wins) return mx
+      return p.elo > mx.elo ? p : mx
+    }, rankedPlayers[0])
+  }, [rankedPlayers])
+
+  const topWinRate = useMemo(() => {
+    const qualified = rankedPlayers.filter((p) => p.wins + p.losses >= 20)
+    if (!qualified.length) return null
+    return qualified.reduce((best, p) => {
+      const bt = best.wins + best.losses
+      const pt = p.wins + p.losses
+      return p.wins * bt > best.wins * pt ? p : best
+    }, qualified[0])
+  }, [rankedPlayers])
+
+  const topGames = useMemo(() => {
+    if (!rankedPlayers.length) return null
+    return rankedPlayers.reduce((mx, p) => {
+      const gt = p.wins + p.losses
+      const mt = mx.wins + mx.losses
+      return gt > mt ? p : mx
+    }, rankedPlayers[0])
+  }, [rankedPlayers])
+
   const isPastSeason = filterSeasonId !== "__current__"
   const selectedSeason = isPastSeason
     ? pastSeasons.find((s) => s.id === filterSeasonId) ?? null
@@ -116,7 +154,7 @@ export function RankingPageClient({
         </header>
 
         {/* 요약 카드 */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           <div className="bg-card rounded-lg border border-border p-5">
             <div className="flex items-center gap-3 mb-2">
               <Crown className="h-6 w-6 text-orange-500" />
@@ -146,6 +184,46 @@ export function RankingPageClient({
             </div>
             <p className="text-2xl font-bold text-foreground">{rankedPlayersAllTiers.length}</p>
             <p className="text-sm text-muted-foreground">명 (전 티어 합산)</p>
+          </div>
+          <div className="bg-card rounded-lg border border-border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <Swords className="h-6 w-6 text-amber-500" />
+              <span className="text-sm text-muted-foreground">최다승</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{topWins?.name ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">
+              {topWins != null ? `${topWins.wins}승 (${topWins.wins}W / ${topWins.losses}L)` : ""}
+            </p>
+          </div>
+          <div className="bg-card rounded-lg border border-border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <Percent className="h-6 w-6 text-emerald-500" />
+              <span className="text-sm text-muted-foreground">최고승률 (20판 이상)</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{topWinRate?.name ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">
+              {topWinRate != null
+                ? (() => {
+                    const t = topWinRate.wins + topWinRate.losses
+                    const pct = t > 0 ? ((topWinRate.wins / t) * 100).toFixed(1) : "0.0"
+                    return `${pct}% · ${t}판`
+                  })()
+                : rankedPlayers.some((p) => p.wins + p.losses > 0)
+                  ? "20판 이상인 선수 없음"
+                  : ""}
+            </p>
+          </div>
+          <div className="bg-card rounded-lg border border-border p-5">
+            <div className="flex items-center gap-3 mb-2">
+              <BarChart3 className="h-6 w-6 text-sky-500" />
+              <span className="text-sm text-muted-foreground">최다판수</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{topGames?.name ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">
+              {topGames != null
+                ? `${topGames.wins + topGames.losses}판 (${topGames.wins}W / ${topGames.losses}L)`
+                : ""}
+            </p>
           </div>
         </section>
 
