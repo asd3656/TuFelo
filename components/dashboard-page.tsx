@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
@@ -35,7 +35,26 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor, Lock, FileSpreadsheet, Coffee } from "lucide-react"
+import {
+  Plus,
+  Trophy,
+  BarChart3,
+  Users,
+  Megaphone,
+  Loader2,
+  BookOpen,
+  AlertTriangle,
+  Sun,
+  Moon,
+  Monitor,
+  Lock,
+  FileSpreadsheet,
+  Coffee,
+  X,
+  Vote,
+  type LucideIcon,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useTheme } from "next-themes"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
@@ -70,6 +89,200 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return [1, "...", current - 1, current, current + 1, "...", total]
 }
 
+type DashboardFabItemDef =
+  | {
+      id: string
+      label: string
+      icon: LucideIcon
+      iconRingClass: string
+      kind: "external"
+      href: string
+    }
+  | {
+      id: string
+      label: string
+      icon: LucideIcon
+      iconRingClass: string
+      kind: "manual"
+    }
+  | {
+      id: string
+      label: string
+      icon: LucideIcon
+      iconRingClass: string
+      kind: "notice"
+    }
+  | {
+      id: string
+      label: string
+      icon: LucideIcon
+      iconRingClass: string
+      kind: "comingSoon"
+    }
+
+const DASHBOARD_FAB_ITEMS: DashboardFabItemDef[] = [
+  {
+    id: "cafe",
+    label: "카페",
+    icon: Coffee,
+    iconRingClass: "bg-[#03C75A] hover:bg-[#02b351]",
+    kind: "external",
+    href: "https://cafe.naver.com/taiscateam",
+  },
+  {
+    id: "sheet",
+    label: "전적시트",
+    icon: FileSpreadsheet,
+    iconRingClass: "bg-green-600 hover:bg-green-700",
+    kind: "external",
+    href: "https://docs.google.com/spreadsheets/d/1kKeA8Y8AmO99qS6v4Xsu_95z6kdKnXL8DXLSLXoCUx8/edit?gid=501558484#gid=501558484",
+  },
+  {
+    id: "tfpl",
+    label: "승부예측",
+    icon: Vote,
+    iconRingClass: "bg-violet-600 hover:bg-violet-700",
+    /* 오픈 시: kind를 external로 바꾸고 href: "https://tfpl-gray.vercel.app/" */
+    kind: "comingSoon",
+  },
+  {
+    id: "manual",
+    label: "사용설명서",
+    icon: BookOpen,
+    iconRingClass: "bg-emerald-600 hover:bg-emerald-700",
+    kind: "manual",
+  },
+  {
+    id: "notice",
+    label: "공지 및 건의",
+    icon: Megaphone,
+    iconRingClass: "bg-indigo-600 hover:bg-indigo-700",
+    kind: "notice",
+  },
+]
+
+/** 라벨 문자 수 짧은 순(동일 길이는 한글 정렬). PC 세로: 위→아래 짧은→긴 / 모바일 col-reverse용으로 역순 사용 */
+function compareFabItemsByLabelWidth(a: DashboardFabItemDef, b: DashboardFabItemDef) {
+  const w = a.label.length - b.label.length
+  if (w !== 0) return w
+  return a.label.localeCompare(b.label, "ko")
+}
+
+const DASHBOARD_FAB_ITEMS_SORTED_ASC = [...DASHBOARD_FAB_ITEMS].sort(compareFabItemsByLabelWidth)
+
+const fabCapsuleShellBase =
+  "flex max-w-full cursor-pointer items-center rounded-full border border-border/40 bg-background/65 text-left shadow-md ring-1 ring-black/[0.06] backdrop-blur-md transition-colors hover:bg-background/82 dark:ring-white/[0.08]"
+const fabCapsuleLabelBase =
+  "mr-1 rounded-full border border-border/35 bg-background/50 font-medium text-foreground backdrop-blur-sm whitespace-nowrap"
+
+const fabCapsuleSizes = {
+  default: {
+    shell: "min-h-10 py-1 pl-1",
+    iconWrap: "h-9 w-9",
+    icon: "h-5 w-5",
+    label: "px-3 py-1 text-sm",
+  },
+  /** PC 전용 — 약 2pt(8px) 정도 더 큰 터치/클릭 영역 */
+  comfortable: {
+    shell: "min-h-12 py-1.5 pl-1.5",
+    iconWrap: "h-11 w-11",
+    icon: "h-6 w-6",
+    label: "px-3.5 py-1.5 text-[0.9375rem] leading-snug",
+  },
+} as const
+
+function DashboardFabCapsule({
+  item,
+  className,
+  size = "default",
+  onAfterInteract,
+  onManual,
+  onNotice,
+}: {
+  item: DashboardFabItemDef
+  className?: string
+  size?: keyof typeof fabCapsuleSizes
+  onAfterInteract?: () => void
+  onManual: () => void
+  onNotice: () => void
+}) {
+  const Icon = item.icon
+  const s = fabCapsuleSizes[size]
+  const iconEl = (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center rounded-full text-white shadow-sm",
+        s.iconWrap,
+        item.iconRingClass,
+      )}
+    >
+      <Icon className={cn("shrink-0", s.icon)} aria-hidden />
+    </span>
+  )
+  const labelEl = (
+    <span className={cn(fabCapsuleLabelBase, s.label)}>{item.label}</span>
+  )
+  const shellClass = cn(fabCapsuleShellBase, s.shell, className)
+
+  if (item.kind === "external") {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={shellClass}
+        onClick={onAfterInteract}
+      >
+        {iconEl}
+        {labelEl}
+      </a>
+    )
+  }
+  if (item.kind === "manual") {
+    return (
+      <button
+        type="button"
+        className={shellClass}
+        onClick={() => {
+          onAfterInteract?.()
+          onManual()
+        }}
+      >
+        {iconEl}
+        {labelEl}
+      </button>
+    )
+  }
+  if (item.kind === "comingSoon") {
+    return (
+      <button
+        type="button"
+        className={shellClass}
+        onClick={() => {
+          onAfterInteract?.()
+          window.alert("개발중입니다. 커밍쑨 by 범부")
+        }}
+      >
+        {iconEl}
+        {labelEl}
+      </button>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className={shellClass}
+      onClick={() => {
+        onAfterInteract?.()
+        onNotice()
+      }}
+    >
+      {iconEl}
+      {labelEl}
+    </button>
+  )
+}
+
 export function DashboardPage({
   initialMatches,
   initialTotalCount,
@@ -100,6 +313,16 @@ export function DashboardPage({
   const [adminLoginOpen, setAdminLoginOpen] = useState(false)
   const [isPageJumpOpen, setIsPageJumpOpen] = useState(false)
   const [pageJumpInput, setPageJumpInput] = useState("")
+  const [fabLinksOpen, setFabLinksOpen] = useState(false)
+
+  useEffect(() => {
+    if (!fabLinksOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFabLinksOpen(false)
+    }
+    document.addEventListener("keydown", onKey)
+    return () => document.removeEventListener("keydown", onKey)
+  }, [fabLinksOpen])
 
   // 필터 상태 + fetch 로직을 커스텀 훅으로 위임
   const {
@@ -111,7 +334,7 @@ export function DashboardPage({
     wins,
     losses,
     isLoading: isLoadingMatches,
-    handlePageChange,
+    handlePageChange: changeMatchPage,
     setPlayer1,
     setPlayer2,
     setMap,
@@ -120,6 +343,20 @@ export function DashboardPage({
     setMatchType,
     setSeasonId,
   } = useMatchFilter({ initialMatches, initialTotalCount, initialTotalPages })
+
+  const matchHistorySectionRef = useRef<HTMLElement | null>(null)
+
+  const scrollMatchHistoryIntoView = useCallback(() => {
+    requestAnimationFrame(() => {
+      matchHistorySectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    })
+  }, [])
+
+  /** 페이지네이션 시 맨 위가 아니라 전적 기록 섹션으로 스크롤 */
+  function handleMatchPageChange(page: number, totalPgs: number) {
+    changeMatchPage(page, totalPgs)
+    scrollMatchHistoryIntoView()
+  }
 
   const seoulToday = getSeoulDateString()
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
@@ -177,7 +414,7 @@ export function DashboardPage({
   function handlePageJump() {
     const page = parseInt(pageJumpInput, 10)
     if (!isNaN(page) && page >= 1 && page <= totalPages) {
-      handlePageChange(page, totalPages)
+      handleMatchPageChange(page, totalPages)
     }
     setIsPageJumpOpen(false)
     setPageJumpInput("")
@@ -413,8 +650,12 @@ export function DashboardPage({
         )}
 
         {/* ── 전적 기록 섹션 ── */}
-        <section className="bg-card rounded-lg border border-border overflow-hidden">
-          <div className="px-4 py-4 sm:px-6 border-b border-border flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <section
+          ref={matchHistorySectionRef}
+          id="match-history"
+          className="scroll-mt-4 bg-card rounded-lg border border-border overflow-hidden"
+        >
+          <div className="px-4 py-4 sm:px-6 border-b border-border">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-foreground flex flex-wrap items-center gap-2">
                 전적 기록
@@ -432,50 +673,6 @@ export function DashboardPage({
                     ? `전체 경기 기록 (${totalCount}경기 · ${currentPage}/${totalPages} 페이지)`
                     : `전체 경기 기록 (총 ${totalCount}경기)`}
               </p>
-            </div>
-            <div className="flex flex-col gap-2 w-full md:w-auto md:flex-row md:flex-wrap md:justify-end md:shrink-0">
-              <Button
-                asChild
-                className="w-full md:w-auto bg-[#03C75A] hover:bg-[#02b351] text-white font-semibold border-0"
-              >
-                <a
-                  href="https://cafe.naver.com/taiscateam"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Coffee className="h-4 w-4 mr-2" />
-                  카페
-                </a>
-              </Button>
-              <Button
-                asChild
-                className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold border-0"
-              >
-                <a
-                  href="https://docs.google.com/spreadsheets/d/1kKeA8Y8AmO99qS6v4Xsu_95z6kdKnXL8DXLSLXoCUx8/edit?gid=501558484#gid=501558484"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  전적시트
-                </a>
-              </Button>
-              <Button
-                type="button"
-                onClick={() => setIsManualOpen(true)}
-                className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-semibold border-0"
-              >
-                <BookOpen className="h-4 w-4 mr-2" />
-                사용설명서
-              </Button>
-              <Button
-                type="button"
-                onClick={() => setIsNoticeOpen(true)}
-                className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold border-0"
-              >
-                <Megaphone className="h-4 w-4 mr-2" />
-                공지 및 건의
-              </Button>
             </div>
           </div>
 
@@ -499,7 +696,7 @@ export function DashboardPage({
                 <PaginationContent>
                   <PaginationItem>
                     <PaginationPrevious
-                      onClick={(e) => { e.preventDefault(); handlePageChange(currentPage - 1, totalPages) }}
+                      onClick={(e) => { e.preventDefault(); handleMatchPageChange(currentPage - 1, totalPages) }}
                       aria-disabled={currentPage === 1}
                       className={currentPage === 1 ? "pointer-events-none opacity-40" : "cursor-pointer"}
                     />
@@ -518,7 +715,7 @@ export function DashboardPage({
                       <PaginationItem key={p}>
                         <PaginationLink
                           isActive={p === currentPage}
-                          onClick={(e) => { e.preventDefault(); handlePageChange(p as number, totalPages) }}
+                          onClick={(e) => { e.preventDefault(); handleMatchPageChange(p as number, totalPages) }}
                           className="cursor-pointer"
                         >
                           {p}
@@ -529,7 +726,7 @@ export function DashboardPage({
 
                   <PaginationItem>
                     <PaginationNext
-                      onClick={(e) => { e.preventDefault(); handlePageChange(currentPage + 1, totalPages) }}
+                      onClick={(e) => { e.preventDefault(); handleMatchPageChange(currentPage + 1, totalPages) }}
                       aria-disabled={currentPage === totalPages}
                       className={currentPage === totalPages ? "pointer-events-none opacity-40" : "cursor-pointer"}
                     />
@@ -680,6 +877,75 @@ export function DashboardPage({
           knownMaps={knownMaps}
           knownMatchTypes={knownMatchTypes}
         />
+
+        {/* PC: 카페·전적시트 등 — 우하단 상시 캡슐 바 */}
+        <div
+          className="hidden md:flex fixed bottom-6 right-6 z-50 max-w-[calc(100vw-3rem)] flex-col items-end gap-2"
+          role="group"
+          aria-label="클랜 바로가기"
+        >
+          {DASHBOARD_FAB_ITEMS_SORTED_ASC.map((item) => (
+            <DashboardFabCapsule
+              key={item.id}
+              item={item}
+              size="comfortable"
+              className="shrink-0"
+              onManual={() => setIsManualOpen(true)}
+              onNotice={() => setIsNoticeOpen(true)}
+            />
+          ))}
+        </div>
+
+        {/* 모바일: + 로 펼치는 동일 캡슐 액션 */}
+        {fabLinksOpen && (
+          <button
+            type="button"
+            aria-label="바로가기 메뉴 닫기"
+            className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px] md:hidden"
+            onClick={() => setFabLinksOpen(false)}
+          />
+        )}
+        <div
+          className="fixed bottom-6 right-4 z-50 flex flex-col-reverse items-end gap-3 sm:right-6 md:hidden"
+          role="group"
+          aria-label="클랜 바로가기"
+        >
+          <Button
+            type="button"
+            size="icon"
+            aria-expanded={fabLinksOpen}
+            aria-controls="dashboard-fab-actions"
+            title={fabLinksOpen ? "닫기" : "바로가기"}
+            className={cn(
+              "h-12 w-12 shrink-0 rounded-full border-0 shadow-lg",
+              "bg-primary hover:bg-primary/90 text-primary-foreground",
+            )}
+            onClick={() => setFabLinksOpen((o) => !o)}
+          >
+            {fabLinksOpen ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
+          </Button>
+
+          <div
+            id="dashboard-fab-actions"
+            className={cn(
+              "flex flex-col-reverse items-end gap-3 transition-all duration-200 ease-out",
+              fabLinksOpen
+                ? "pointer-events-auto max-h-[1000px] translate-y-0 opacity-100"
+                : "pointer-events-none max-h-0 translate-y-3 overflow-hidden opacity-0",
+            )}
+          >
+            {[...DASHBOARD_FAB_ITEMS_SORTED_ASC].reverse().map((item) => (
+              <DashboardFabCapsule
+                key={item.id}
+                item={item}
+                className="shrink-0"
+                onAfterInteract={() => setFabLinksOpen(false)}
+                onManual={() => setIsManualOpen(true)}
+                onNotice={() => setIsNoticeOpen(true)}
+              />
+            ))}
+          </div>
+        </div>
       </div>
     </main>
   )

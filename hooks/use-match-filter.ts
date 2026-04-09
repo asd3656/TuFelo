@@ -123,7 +123,6 @@ export function useMatchFilter({
   function handlePageChange(page: number, totalPgs: number) {
     if (page < 1 || page > totalPgs || page === currentPage) return
     doFetch(page, filtersRef.current)
-    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   function setPlayer1(val: string) {
