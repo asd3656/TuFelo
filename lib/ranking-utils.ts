@@ -24,7 +24,7 @@ export function getTodayDate(): string {
 
 /**
  * 필터 조건에 맞는 선수 목록을 ELO 순으로 정렬하여 반환합니다.
- * @param hideUnplayed true이면 전적이 없는 선수(0승 0패)를 제외합니다 (공개 랭킹용).
+ * @param hideUnplayed true이면 해당 시즌 기준 전적이 없는 선수(0승 0패)를 제외합니다.
  */
 export function computeRankedPlayers(
   members: MemberForRanking[],

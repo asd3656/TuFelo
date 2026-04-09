@@ -251,14 +251,6 @@ export function DashboardPage({
                 {loggedInUsername ? "계정 관리" : "관리자 로그인"}
               </Button>
               {(isAdmin || isGuest) && (
-                <Link href="/ranking">
-                  <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    ELO 랭킹(관리자)
-                  </Button>
-                </Link>
-              )}
-              {(isAdmin || isGuest) && (
                 <Link href="/admin">
                   <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
                     <Users className="h-4 w-4 mr-2" />
@@ -266,7 +258,7 @@ export function DashboardPage({
                   </Button>
                 </Link>
               )}
-              <Link href="/ranking/public">
+              <Link href="/ranking">
                 <Button className="bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-md border-0">
                   <BarChart3 className="h-4 w-4 mr-2" />
                   ELO 랭킹

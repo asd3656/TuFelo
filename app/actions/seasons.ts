@@ -13,7 +13,6 @@ import type { ActionResult } from "@/lib/types/tufelo"
 function revalidateSeasonPaths() {
   revalidatePath("/")
   revalidatePath("/ranking")
-  revalidatePath("/ranking/public")
   revalidatePath("/creator")
 }
 
