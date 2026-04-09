@@ -67,6 +67,21 @@ export function RankingPageClient({
     [members, allMatches, filterSeasonId, filterRace, filterTier, pastSeasonRankings],
   )
 
+  /** 총 선수 카드: 시즌·종족·전적 조건은 동일, 티어 필터는 적용하지 않음 */
+  const rankedPlayersAllTiers = useMemo(
+    () =>
+      computeRankedPlayers(
+        members,
+        allMatches,
+        filterSeasonId,
+        filterRace,
+        "__all__",
+        pastSeasonRankings,
+        true,
+      ),
+    [members, allMatches, filterSeasonId, filterRace, pastSeasonRankings],
+  )
+
   const filteredPlayers = useMemo(
     () => rankedPlayers.filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase())),
     [rankedPlayers, searchQuery],
@@ -129,8 +144,8 @@ export function RankingPageClient({
               <Award className="h-6 w-6 text-primary" />
               <span className="text-sm text-muted-foreground">총 선수</span>
             </div>
-            <p className="text-2xl font-bold text-foreground">{rankedPlayers.length}</p>
-            <p className="text-sm text-muted-foreground">명 등록됨</p>
+            <p className="text-2xl font-bold text-foreground">{rankedPlayersAllTiers.length}</p>
+            <p className="text-sm text-muted-foreground">명 (전 티어 합산)</p>
           </div>
         </section>
 
