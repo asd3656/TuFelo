@@ -69,7 +69,7 @@ export async function changePasswordAction(
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from("admins")
-    .select("password_hash")
+    .select("password_hash, role")
     .eq("username", username.trim().toLowerCase())
     .single()
 
@@ -80,6 +80,10 @@ export async function changePasswordAction(
   const match = await bcrypt.compare(currentPassword, data.password_hash as string)
   if (!match) {
     return { ok: false, error: "아이디 또는 현재 비밀번호가 올바르지 않습니다." }
+  }
+
+  if (data.role === "guest") {
+    return { ok: false, error: "손님 계정은 사이트에서 비밀번호를 변경할 수 없습니다." }
   }
 
   const newHash = await bcrypt.hash(newPassword, 10)

@@ -35,7 +35,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor, Lock, FileSpreadsheet } from "lucide-react"
+import { Plus, Trophy, BarChart3, Users, Megaphone, Loader2, BookOpen, AlertTriangle, Sun, Moon, Monitor, Lock, FileSpreadsheet, Coffee } from "lucide-react"
 import { useTheme } from "next-themes"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
@@ -444,6 +444,19 @@ export function DashboardPage({
             <div className="flex flex-col gap-2 w-full md:w-auto md:flex-row md:flex-wrap md:justify-end md:shrink-0">
               <Button
                 asChild
+                className="w-full md:w-auto bg-[#03C75A] hover:bg-[#02b351] text-white font-semibold border-0"
+              >
+                <a
+                  href="https://cafe.naver.com/taiscateam"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Coffee className="h-4 w-4 mr-2" />
+                  카페
+                </a>
+              </Button>
+              <Button
+                asChild
                 className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white font-semibold border-0"
               >
                 <a
@@ -630,7 +643,7 @@ export function DashboardPage({
                     <li className="flex gap-2">
                       <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
                       <span>
-                        ELO 시스템은 표준 ELO 시스템과 크게 차이가 없습니다.{" "}
+                        ELO 시스템은 스타 래더 시스템과 크게 차이가 없습니다.{" "}
                         <span className="text-foreground font-semibold">최대 상승폭은 32점</span>입니다.
                       </span>
                     </li>

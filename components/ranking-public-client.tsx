@@ -49,7 +49,7 @@ export function RankingPublicClient({
   const [searchQuery, setSearchQuery] = useState("")
   const [filterSeasonId, setFilterSeasonId] = useState("__current__")
   const [filterRace, setFilterRace] = useState("__all__")
-  const [filterTier, setFilterTier] = useState("__all__")
+  const [filterTier, setFilterTier] = useState("1")
 
   const pastSeasons = useMemo(() => seasons.filter((s) => s.endDate !== null), [seasons])
 
@@ -150,10 +150,9 @@ export function RankingPublicClient({
 
             <Select value={filterTier} onValueChange={setFilterTier}>
               <SelectTrigger className="w-36 bg-card border-border text-foreground">
-                <SelectValue placeholder="전체 티어" />
+                <SelectValue placeholder="티어" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">전체 티어</SelectItem>
                 <SelectItem value="1">1티어</SelectItem>
                 <SelectItem value="2">2티어</SelectItem>
                 <SelectItem value="3">3티어</SelectItem>
@@ -173,14 +172,14 @@ export function RankingPublicClient({
               </SelectContent>
             </Select>
 
-            {(filterSeasonId !== "__current__" || filterTier !== "__all__" || filterRace !== "__all__") && (
+            {(filterSeasonId !== "__current__" || filterTier !== "1" || filterRace !== "__all__") && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground hover:text-foreground"
                 onClick={() => {
                   setFilterSeasonId("__current__")
-                  setFilterTier("__all__")
+                  setFilterTier("1")
                   setFilterRace("__all__")
                 }}
               >
