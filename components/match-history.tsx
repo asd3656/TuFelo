@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Pencil, Trash2, Lock } from "lucide-react"
+import { Pencil, Trash2, Lock, Trophy } from "lucide-react"
 
 interface MatchHistoryProps {
   matches: Match[]
@@ -77,13 +77,22 @@ function RaceBadge({ race }: { race?: Race }) {
   )
 }
 
-const winnerMarkClass =
-  "shrink-0 text-sm font-black tracking-tight text-emerald-600 dark:text-emerald-400"
-
 const winnerNameClass =
   "font-bold text-emerald-600 dark:text-emerald-400"
 
 const loserNameClass = "text-foreground font-medium"
+
+function WinnerTrophyMark() {
+  return (
+    <span className="inline-flex shrink-0" aria-label="승리" title="승리">
+      <Trophy
+        className="h-4 w-4 text-emerald-600 dark:text-emerald-400"
+        strokeWidth={2.25}
+        aria-hidden
+      />
+    </span>
+  )
+}
 
 function formatEloDelta(delta: number | undefined): string {
   if (delta === undefined) return "—"
@@ -264,11 +273,7 @@ export function MatchHistory({
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
-                      {leftWon && (
-                        <span className={winnerMarkClass} aria-label="승리">
-                          [W]
-                        </span>
-                      )}
+                      {leftWon && <WinnerTrophyMark />}
                       <span className={leftWon ? winnerNameClass : loserNameClass}>
                         {leftName}
                       </span>
@@ -299,11 +304,7 @@ export function MatchHistory({
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
-                      {!leftWon && (
-                        <span className={winnerMarkClass} aria-label="승리">
-                          [W]
-                        </span>
-                      )}
+                      {!leftWon && <WinnerTrophyMark />}
                       <span className={!leftWon ? winnerNameClass : loserNameClass}>
                         {rightName}
                       </span>
