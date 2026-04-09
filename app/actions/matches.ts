@@ -1,7 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { createServiceClient } from "@/lib/supabase/service"
 import { computeEloMatch } from "@/lib/elo"
 import { getClientIp } from "@/lib/request-ip"
 import { computeStreakForMember } from "@/lib/match-streak"
@@ -19,7 +20,7 @@ function revalidateMatchPaths() {
 }
 
 /** 현재 활성 시즌 조회 (없으면 null) */
-async function getActiveSeason(supabase: Awaited<ReturnType<typeof createClient>>) {
+async function getActiveSeason(supabase: SupabaseClient) {
   const { data } = await supabase
     .from("seasons")
     .select("id, start_date")
@@ -44,7 +45,7 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
     return { ok: false, error: "경기 유형을 입력해 주세요." }
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: m1, error: e1 } = await supabase
     .from("members")
@@ -158,7 +159,7 @@ export async function deleteMatchAction(matchId: string): Promise<ActionResult> 
     return { ok: false, error: "권한이 없습니다." }
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const { data: row, error: fErr } = await supabase.from("matches").select("*").eq("id", matchId).single()
   if (fErr || !row) {
     return { ok: false, error: "전적을 찾을 수 없습니다." }
@@ -279,7 +280,7 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
     return { ok: false, error: "경기 유형을 입력해 주세요." }
   }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: row, error: fErr } = await supabase
     .from("matches")

@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/service"
 import { getStartingEloForTier } from "@/lib/elo"
 import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
@@ -25,7 +25,7 @@ export async function addMemberAction(input: {
   const name = input.name.trim()
   if (!name) return { ok: false, error: "이름을 입력하세요." }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const elo = getStartingEloForTier(input.tier)
 
   const { error } = await supabase.from("members").insert({
@@ -63,7 +63,7 @@ export async function updateMemberAction(input: {
   const name = input.name.trim()
   if (!name) return { ok: false, error: "이름을 입력하세요." }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const { error } = await supabase
     .from("members")
     .update({
@@ -90,7 +90,7 @@ export async function deleteMemberAction(id: string): Promise<ActionResult> {
   const session = await getSessionFromCookies()
   if (!session) return { ok: false, error: "권한이 없습니다." }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: member } = await supabase.from("members").select("name").eq("id", id).single()
 
@@ -111,7 +111,7 @@ export async function reactivateMemberAction(id: string): Promise<ActionResult> 
   const session = await getSessionFromCookies()
   if (!session) return { ok: false, error: "권한이 없습니다." }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: member } = await supabase
     .from("members")
@@ -163,7 +163,7 @@ export async function permanentDeleteMemberAction(id: string): Promise<ActionRes
   const session = await getSessionFromCookies()
   if (!session) return { ok: false, error: "권한이 없습니다." }
 
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const { data: member } = await supabase.from("members").select("name").eq("id", id).single()
   const memberName = member?.name ?? id
