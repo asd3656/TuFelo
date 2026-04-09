@@ -30,6 +30,8 @@ export function mapDbRowToMatch(
   const w = byId.get(row.winner_id)
   return {
     id: row.id,
+    player1Id: row.player1_id,
+    player2Id: row.player2_id,
     player1: p1?.name ?? "?",
     player2: p2?.name ?? "?",
     player1Race: p1?.race,
@@ -41,6 +43,7 @@ export function mapDbRowToMatch(
     date: row.played_date,
     matchType: row.match_type ?? undefined,
     player1EloDelta: row.player1_elo_delta ?? undefined,
+    player2EloDelta: row.player2_elo_delta ?? undefined,
   } satisfies Match
 }
 

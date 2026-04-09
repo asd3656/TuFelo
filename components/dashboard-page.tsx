@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
@@ -124,6 +124,13 @@ export function DashboardPage({
   const seoulToday = getSeoulDateString()
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
   const pageNumbers = getPageNumbers(currentPage, totalPages)
+
+  /** 선수(기준) 필터와 동일 규칙으로 ID 목록 — 전적 테이블에서 기준 선수를 항상 왼쪽에 두는 데 사용 */
+  const baselinePlayerIds = useMemo(() => {
+    const q = filters.player1.trim().toLowerCase()
+    if (!q) return [] as string[]
+    return members.filter((m) => m.name.toLowerCase().includes(q)).map((m) => m.id)
+  }, [filters.player1, members])
 
   // ── 전적 액션 핸들러 ──
 
@@ -471,6 +478,7 @@ export function DashboardPage({
             <MatchHistory
               matches={matches}
               searchPlayer={filters.player1}
+              baselinePlayerIds={baselinePlayerIds}
               isAdmin={isAdmin}
               isGuest={isGuest}
               deletePending={isDeletePending}

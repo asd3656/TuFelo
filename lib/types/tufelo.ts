@@ -20,6 +20,8 @@ export type MatchType = (typeof MATCH_TYPES)[number]
 
 export interface Match {
   id: string
+  player1Id: string
+  player2Id: string
   player1: string
   player2: string
   player1Race?: Race
@@ -27,6 +29,7 @@ export interface Match {
   player1Tier?: Tier
   player2Tier?: Tier
   player1EloDelta?: number
+  player2EloDelta?: number
   winner: string
   map: string
   date: string

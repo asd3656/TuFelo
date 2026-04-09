@@ -18,6 +18,8 @@ import { Pencil, Trash2, Lock } from "lucide-react"
 interface MatchHistoryProps {
   matches: Match[]
   searchPlayer: string
+  /** 선수(기준) 필터와 같은 방식으로 해석된 멤버 ID — 있으면 해당 선수가 항상 왼쪽(선수1 칸)에 오도록 표시합니다 */
+  baselinePlayerIds?: string[]
   isAdmin?: boolean
   isGuest?: boolean
   deletePending?: boolean
@@ -89,9 +91,19 @@ function formatEloDelta(delta: number | undefined): string {
   return String(delta)
 }
 
+function shouldSwapForBaseline(match: Match, baselinePlayerIds: string[]): boolean {
+  if (baselinePlayerIds.length === 0) return false
+  const in1 = baselinePlayerIds.includes(match.player1Id)
+  const in2 = baselinePlayerIds.includes(match.player2Id)
+  if (in1 && !in2) return false
+  if (in2 && !in1) return true
+  return false
+}
+
 export function MatchHistory({
   matches,
   searchPlayer,
+  baselinePlayerIds = [],
   isAdmin = false,
   isGuest = false,
   deletePending = false,
@@ -194,7 +206,9 @@ export function MatchHistory({
               <TableHead className="text-muted-foreground font-semibold">선수 2</TableHead>
               <TableHead className="text-muted-foreground font-semibold text-right text-xs whitespace-nowrap">
                 ELO 변동
-                <span className="block font-normal text-[10px] text-muted-foreground/90">(선수1)</span>
+                <span className="block font-normal text-[10px] text-muted-foreground/90">
+                  {searchPlayer.trim() ? "(기준)" : "(선수1)"}
+                </span>
               </TableHead>
               <TableHead className="text-muted-foreground font-semibold">맵</TableHead>
               <TableHead className="text-muted-foreground font-semibold whitespace-nowrap">경기 유형</TableHead>
@@ -207,9 +221,16 @@ export function MatchHistory({
           </TableHeader>
           <TableBody>
             {matches.map((match) => {
-              const player1Won = match.winner === match.player1
+              const swap = shouldSwapForBaseline(match, baselinePlayerIds)
+              const leftName = swap ? match.player2 : match.player1
+              const rightName = swap ? match.player1 : match.player2
+              const leftRace = swap ? match.player2Race : match.player1Race
+              const rightRace = swap ? match.player1Race : match.player2Race
+              const leftTier = swap ? match.player2Tier : match.player1Tier
+              const rightTier = swap ? match.player1Tier : match.player2Tier
+              const leftWon = swap ? match.winner === match.player2 : match.winner === match.player1
               const searchPlayerWon = searchPlayer ? isPlayerWinner(match, searchPlayer) : null
-              const delta = match.player1EloDelta
+              const delta = swap ? match.player2EloDelta : match.player1EloDelta
               const deltaClass =
                 delta === undefined
                   ? "text-muted-foreground"
@@ -220,6 +241,7 @@ export function MatchHistory({
                       : "text-muted-foreground tabular-nums"
 
               const isSelected = selectedIds.has(match.id)
+              const eloTitle = searchPlayer.trim() ? "기준 선수 기준" : "DB 선수1 기준"
 
               return (
                 <TableRow
@@ -242,19 +264,19 @@ export function MatchHistory({
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
-                      {player1Won && (
+                      {leftWon && (
                         <span className={winnerMarkClass} aria-label="승리">
                           [W]
                         </span>
                       )}
-                      <span className={player1Won ? winnerNameClass : loserNameClass}>
-                        {match.player1}
+                      <span className={leftWon ? winnerNameClass : loserNameClass}>
+                        {leftName}
                       </span>
-                      <TierBadge tier={match.player1Tier} />
+                      <TierBadge tier={leftTier} />
                     </span>
                   </TableCell>
                   <TableCell className="text-center">
-                    <RaceBadge race={match.player1Race} />
+                    <RaceBadge race={leftRace} />
                   </TableCell>
                   <TableCell className="text-center">
                     {searchPlayer ? (
@@ -273,22 +295,22 @@ export function MatchHistory({
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    <RaceBadge race={match.player2Race} />
+                    <RaceBadge race={rightRace} />
                   </TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
-                      {!player1Won && (
+                      {!leftWon && (
                         <span className={winnerMarkClass} aria-label="승리">
                           [W]
                         </span>
                       )}
-                      <span className={!player1Won ? winnerNameClass : loserNameClass}>
-                        {match.player2}
+                      <span className={!leftWon ? winnerNameClass : loserNameClass}>
+                        {rightName}
                       </span>
-                      <TierBadge tier={match.player2Tier} />
+                      <TierBadge tier={rightTier} />
                     </span>
                   </TableCell>
-                  <TableCell className={`text-right text-sm ${deltaClass}`} title="선수1 기준">
+                  <TableCell className={`text-right text-sm ${deltaClass}`} title={eloTitle}>
                     {formatEloDelta(delta)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{match.map}</TableCell>
