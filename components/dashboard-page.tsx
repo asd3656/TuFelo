@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
@@ -313,12 +313,33 @@ export function DashboardPage({
   const [adminLoginOpen, setAdminLoginOpen] = useState(false)
   const [isPageJumpOpen, setIsPageJumpOpen] = useState(false)
   const [pageJumpInput, setPageJumpInput] = useState("")
-  const [fabLinksOpen, setFabLinksOpen] = useState(false)
+  /** 모바일: 기본 접힘(+만) · PC(md↑): 기본 펼침 */
+  const [fabLinksOpenMobile, setFabLinksOpenMobile] = useState(false)
+  const [fabLinksOpenDesktop, setFabLinksOpenDesktop] = useState(true)
+  const [isMdViewport, setIsMdViewport] = useState(false)
+  const [fabCapsuleSize, setFabCapsuleSize] = useState<"default" | "comfortable">("default")
+
+  const fabLinksOpen = isMdViewport ? fabLinksOpenDesktop : fabLinksOpenMobile
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)")
+    const sync = () => {
+      const md = mq.matches
+      setIsMdViewport(md)
+      setFabCapsuleSize(md ? "comfortable" : "default")
+    }
+    sync()
+    mq.addEventListener("change", sync)
+    return () => mq.removeEventListener("change", sync)
+  }, [])
 
   useEffect(() => {
     if (!fabLinksOpen) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFabLinksOpen(false)
+      if (e.key === "Escape") {
+        setFabLinksOpenMobile(false)
+        setFabLinksOpenDesktop(false)
+      }
     }
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
@@ -342,6 +363,7 @@ export function DashboardPage({
     setDateTo,
     setMatchType,
     setSeasonId,
+    setPlayer1Tier,
   } = useMatchFilter({ initialMatches, initialTotalCount, initialTotalPages })
 
   const matchHistorySectionRef = useRef<HTMLElement | null>(null)
@@ -561,7 +583,7 @@ export function DashboardPage({
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 pt-6 border-t border-border">
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 pt-6 border-t border-border">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">날짜 필터</Label>
               <div className="flex items-center gap-2">
@@ -636,6 +658,25 @@ export function DashboardPage({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">기본값 전체</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-muted-foreground">티어 필터 (선수1 기준)</Label>
+              <Select value={filters.player1Tier} onValueChange={setPlayer1Tier}>
+                <SelectTrigger className="bg-input border-border text-foreground">
+                  <SelectValue placeholder="전체 티어" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">전체</SelectItem>
+                  <SelectItem value="1">1티어</SelectItem>
+                  <SelectItem value="2">2티어</SelectItem>
+                  <SelectItem value="3">3티어</SelectItem>
+                  <SelectItem value="4">4티어</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                기본값 전체
+              </p>
             </div>
           </div>
         </section>
@@ -878,35 +919,17 @@ export function DashboardPage({
           knownMatchTypes={knownMatchTypes}
         />
 
-        {/* PC: 카페·전적시트 등 — 우하단 상시 캡슐 바 */}
-        <div
-          className="hidden md:flex fixed bottom-6 right-6 z-50 max-w-[calc(100vw-3rem)] flex-col items-end gap-2"
-          role="group"
-          aria-label="클랜 바로가기"
-        >
-          {DASHBOARD_FAB_ITEMS_SORTED_ASC.map((item) => (
-            <DashboardFabCapsule
-              key={item.id}
-              item={item}
-              size="comfortable"
-              className="shrink-0"
-              onManual={() => setIsManualOpen(true)}
-              onNotice={() => setIsNoticeOpen(true)}
-            />
-          ))}
-        </div>
-
-        {/* 모바일: + 로 펼치는 동일 캡슐 액션 */}
-        {fabLinksOpen && (
+        {/* 우하단 바로가기: PC 기본 펼침 · 모바일 기본 접힘(+만) · X/배경으로 닫기 */}
+        {fabLinksOpenMobile && !isMdViewport && (
           <button
             type="button"
             aria-label="바로가기 메뉴 닫기"
             className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px] md:hidden"
-            onClick={() => setFabLinksOpen(false)}
+            onClick={() => setFabLinksOpenMobile(false)}
           />
         )}
         <div
-          className="fixed bottom-6 right-4 z-50 flex flex-col-reverse items-end gap-3 sm:right-6 md:hidden"
+          className="fixed bottom-6 right-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col-reverse items-end gap-3 sm:right-6 md:max-w-[calc(100vw-3rem)] md:right-6"
           role="group"
           aria-label="클랜 바로가기"
         >
@@ -920,7 +943,11 @@ export function DashboardPage({
               "h-12 w-12 shrink-0 rounded-full border-0 shadow-lg",
               "bg-primary hover:bg-primary/90 text-primary-foreground",
             )}
-            onClick={() => setFabLinksOpen((o) => !o)}
+            onClick={() =>
+              isMdViewport
+                ? setFabLinksOpenDesktop((o) => !o)
+                : setFabLinksOpenMobile((o) => !o)
+            }
           >
             {fabLinksOpen ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
           </Button>
@@ -928,7 +955,7 @@ export function DashboardPage({
           <div
             id="dashboard-fab-actions"
             className={cn(
-              "flex flex-col-reverse items-end gap-3 transition-all duration-200 ease-out",
+              "flex flex-col-reverse items-end gap-3 transition-all duration-200 ease-out md:gap-2",
               fabLinksOpen
                 ? "pointer-events-auto max-h-[1000px] translate-y-0 opacity-100"
                 : "pointer-events-none max-h-0 translate-y-3 overflow-hidden opacity-0",
@@ -938,8 +965,12 @@ export function DashboardPage({
               <DashboardFabCapsule
                 key={item.id}
                 item={item}
+                size={fabCapsuleSize}
                 className="shrink-0"
-                onAfterInteract={() => setFabLinksOpen(false)}
+                onAfterInteract={() => {
+                  setFabLinksOpenMobile(false)
+                  setFabLinksOpenDesktop(false)
+                }}
                 onManual={() => setIsManualOpen(true)}
                 onNotice={() => setIsNoticeOpen(true)}
               />

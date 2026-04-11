@@ -17,7 +17,7 @@ type MemberRow = {
 /**
  * GET /api/matches
  * 대시보드 전적 목록을 필터·페이지네이션하여 반환합니다.
- * 쿼리 파라미터: page, player1, player2, dateFrom, dateTo, map, matchType, seasonId
+ * 쿼리 파라미터: page, player1, player2, dateFrom, dateTo, map, matchType, seasonId, player1Tier
  */
 export async function GET(req: NextRequest) {
   try {
@@ -30,6 +30,11 @@ export async function GET(req: NextRequest) {
     const mapFilter = searchParams.get("map")?.trim() ?? ""
     const matchType = searchParams.get("matchType") ?? ""
     const seasonId = searchParams.get("seasonId") ?? ""  // "__none__" | UUID | ""
+    const player1TierRaw = searchParams.get("player1Tier")?.trim() ?? ""
+    const player1TierFilter: Tier | null =
+      player1TierRaw === "1" || player1TierRaw === "2" || player1TierRaw === "3" || player1TierRaw === "4"
+        ? (Number(player1TierRaw) as Tier)
+        : null
 
     const supabase = await createClient()
 
@@ -62,6 +67,14 @@ export async function GET(req: NextRequest) {
         .filter((m) => m.name.toLowerCase().includes(player2.toLowerCase()))
         .map((m) => m.id)
       if (player2Ids.length === 0) {
+        return NextResponse.json({ matches: [], totalCount: 0, totalPages: 0, wins: 0, losses: 0 })
+      }
+    }
+
+    let player1IdTierFilter: string[] = []
+    if (player1TierFilter !== null) {
+      player1IdTierFilter = members.filter((m) => m.tier === player1TierFilter).map((m) => m.id)
+      if (player1IdTierFilter.length === 0) {
         return NextResponse.json({ matches: [], totalCount: 0, totalPages: 0, wins: 0, losses: 0 })
       }
     }
@@ -102,6 +115,9 @@ export async function GET(req: NextRequest) {
     if (matchType) query = query.eq("match_type", matchType)
     if (seasonId === "__none__") query = query.is("season_id", null)
     else if (seasonId) query = query.eq("season_id", seasonId)
+    if (player1IdTierFilter.length > 0) {
+      query = query.in("player1_id", player1IdTierFilter)
+    }
 
     const { data, count, error } = await query
 
@@ -132,6 +148,9 @@ export async function GET(req: NextRequest) {
       if (matchType) winsQuery = winsQuery.eq("match_type", matchType)
       if (seasonId === "__none__") winsQuery = winsQuery.is("season_id", null)
       else if (seasonId) winsQuery = winsQuery.eq("season_id", seasonId)
+      if (player1IdTierFilter.length > 0) {
+        winsQuery = winsQuery.in("player1_id", player1IdTierFilter)
+      }
 
       const { count: winsCount } = await winsQuery
       wins = winsCount ?? 0

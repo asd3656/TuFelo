@@ -11,6 +11,8 @@ export interface MatchFilterState {
   map: string
   matchType: string
   seasonId: string
+  /** DB 행 기준 선수1(player1_id)의 현재 티어 — `__all__`이면 미적용 */
+  player1Tier: string
 }
 
 const DEFAULT_FILTERS: MatchFilterState = {
@@ -21,6 +23,7 @@ const DEFAULT_FILTERS: MatchFilterState = {
   map: "",
   matchType: "__all__",
   seasonId: "__all__",
+  player1Tier: "__all__",
 }
 
 interface UseMatchFilterOptions {
@@ -73,6 +76,7 @@ export function useMatchFilter({
       map: f.map,
       matchType: f.matchType === "__all__" ? "" : f.matchType,
       seasonId: f.seasonId === "__all__" ? "" : f.seasonId,
+      player1Tier: f.player1Tier === "__all__" ? "" : f.player1Tier,
     })
 
     try {
@@ -160,6 +164,11 @@ export function useMatchFilter({
     triggerImmediateFetch({ seasonId: val })
   }
 
+  function setPlayer1Tier(val: string) {
+    setFilters((f) => ({ ...f, player1Tier: val }))
+    triggerImmediateFetch({ player1Tier: val })
+  }
+
   return {
     filters,
     currentPage,
@@ -177,5 +186,6 @@ export function useMatchFilter({
     setDateTo,
     setMatchType,
     setSeasonId,
+    setPlayer1Tier,
   }
 }
