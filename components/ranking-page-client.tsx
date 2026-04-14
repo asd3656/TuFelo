@@ -313,7 +313,7 @@ export function RankingPageClient({
                   <TableHead className="text-muted-foreground font-semibold text-center">종족</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-right">ELO</TableHead>
                   {!isPastSeason && (
-                    <TableHead className="text-muted-foreground font-semibold text-center">변동</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center">변동(최근5경기)</TableHead>
                   )}
                   <TableHead className="text-muted-foreground font-semibold text-center">전적</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">승률</TableHead>

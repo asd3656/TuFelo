@@ -11,7 +11,7 @@ export interface ComputedPlayer {
   wins: number
   losses: number
   streak: number
-  /** 마지막 경기의 ELO 변동 (현재 시즌 한정) */
+  /** 최근 최대 5경기의 ELO 변동 합계 (현재 시즌 한정) */
   change: number
   /** 오늘 기준 순위 변동 (현재 시즌 한정) */
   rankChange: number
@@ -66,13 +66,20 @@ export function computeRankedPlayers(
       }))
   }
 
-  // ── 현재 시즌: members.elo 기준, 마지막 ELO 변동 계산 ──
-  const lastChangeMap = new Map<string, number>()
+  // ── 현재 시즌: members.elo 기준, 최근 최대 5경기 ELO 변동 합계 계산 ──
+  const RECENT_MATCH_COUNT = 5
+  const recentChangeMap = new Map<string, number>()
+  const recentChangeCountMap = new Map<string, number>()
+  const pushRecentChange = (memberId: string, delta: number | null) => {
+    if (delta === null) return
+    const count = recentChangeCountMap.get(memberId) ?? 0
+    if (count >= RECENT_MATCH_COUNT) return
+    recentChangeMap.set(memberId, (recentChangeMap.get(memberId) ?? 0) + delta)
+    recentChangeCountMap.set(memberId, count + 1)
+  }
   for (const m of allMatches) {
-    if (!lastChangeMap.has(m.player1Id) && m.player1EloDelta !== null)
-      lastChangeMap.set(m.player1Id, m.player1EloDelta)
-    if (!lastChangeMap.has(m.player2Id) && m.player2EloDelta !== null)
-      lastChangeMap.set(m.player2Id, m.player2EloDelta)
+    pushRecentChange(m.player1Id, m.player1EloDelta)
+    pushRecentChange(m.player2Id, m.player2EloDelta)
   }
 
   // 오늘 경기의 ELO 변동 합계 (순위 변동 계산용)
@@ -97,7 +104,7 @@ export function computeRankedPlayers(
       wins: m.wins,
       losses: m.losses,
       streak: m.streak,
-      change: lastChangeMap.get(m.id) ?? 0,
+      change: recentChangeMap.get(m.id) ?? 0,
       rankChange: 0,
       rank: 0,
     }))
