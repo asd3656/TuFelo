@@ -35,7 +35,7 @@ import {
 import { ArrowLeft, Shield, Plus, Trash2, ScrollText, X, CalendarDays, Pencil, Play, Lock } from "lucide-react"
 import { addAdminAccountAction, deleteAdminAccountAction } from "@/app/actions/creator"
 import { logoutAdminAction } from "@/app/actions/admin"
-import { startNewSeasonAction, updateSeasonAction, deleteSeasonAction } from "@/app/actions/seasons"
+import { startNewSeasonAction, updateSeasonAction, deleteSeasonAction, syncCurrentSeasonStatsAction } from "@/app/actions/seasons"
 import type { Season } from "@/lib/types/tufelo"
 
 interface AdminRow {
@@ -77,6 +77,7 @@ const ACTION_OPTIONS = [
   "시즌 시작",
   "시즌 수정",
   "시즌 삭제",
+  "시즌 전적 재동기화",
 ] as const
 
 function formatDate(iso: string) {
@@ -194,6 +195,26 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
     })
   }
 
+  function handleSyncCurrentSeasonStats() {
+    setSeasonErr(null)
+    startTransition(async () => {
+      try {
+        const res = await syncCurrentSeasonStatsAction()
+        if (!res.ok) {
+          setSeasonErr(res.error)
+          window.alert(res.error)
+          return
+        }
+        window.alert("현재 시즌 전적 재동기화가 완료되었습니다.")
+        router.refresh()
+      } catch (e) {
+        const message = `재동기화 요청 실패: ${String(e)}`
+        setSeasonErr(message)
+        window.alert(message)
+      }
+    })
+  }
+
   // 로그 필터
   const [filterAdmin, setFilterAdmin] = useState("")
   const [filterTarget, setFilterTarget] = useState("")
@@ -307,15 +328,30 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                   : "현재 진행 중인 시즌 없음"}
               </p>
             </div>
-            <Button
-              size="sm"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => { setShowNewSeasonForm((v) => !v); setSeasonErr(null) }}
-              disabled={isGuest || pending}
-            >
-              {isGuest ? <Lock className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
-              새 시즌 시작
-            </Button>
+            <div className="flex items-center gap-2">
+              {activeSeason && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-border text-foreground hover:bg-secondary"
+                  onClick={handleSyncCurrentSeasonStats}
+                  disabled={isGuest || pending}
+                  title={isGuest ? "관리자 권한이 필요합니다" : "현재 시즌 전적 재동기화"}
+                >
+                  {isGuest ? <Lock className="h-4 w-4 mr-1" /> : <ScrollText className="h-4 w-4 mr-1" />}
+                  전적 재동기화
+                </Button>
+              )}
+              <Button
+                size="sm"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={() => { setShowNewSeasonForm((v) => !v); setSeasonErr(null) }}
+                disabled={isGuest || pending}
+              >
+                {isGuest ? <Lock className="h-4 w-4 mr-1" /> : <Play className="h-4 w-4 mr-1" />}
+                새 시즌 시작
+              </Button>
+            </div>
           </div>
 
           {/* 새 시즌 시작 폼 */}

@@ -51,9 +51,10 @@ async function saveSeasonSnapshot(supabase: any, seasonId: string): Promise<void
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, startDate: string): Promise<void> {
-  const { data: allMembers } = await supabase
+  const { data: allMembers, error: allMembersErr } = await supabase
     .from("members")
     .select("id, tier, is_active")
+  if (allMembersErr) throw new Error(`멤버 조회 실패: ${allMembersErr.message}`)
 
   if (!allMembers?.length) return
 
@@ -64,7 +65,6 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
   const winsMap = new Map<string, number>()
   const lossesMap = new Map<string, number>()
   const tierMap = new Map<string, EloTier>()
-  const isActiveMap = new Map<string, boolean>()
 
   for (const m of memberList) {
     const tier = m.tier as EloTier
@@ -72,23 +72,24 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     winsMap.set(m.id, 0)
     lossesMap.set(m.id, 0)
     tierMap.set(m.id, tier)
-    isActiveMap.set(m.id, m.is_active)
   }
 
   // startDate 이전이면서 이 시즌 id를 가진 경기 → 비시즌으로 되돌리기
-  await supabase
+  const { error: resetPreSeasonErr } = await supabase
     .from("matches")
     .update({ season_id: null, player1_elo_before: null, player2_elo_before: null, player1_elo_delta: null, player2_elo_delta: null })
     .eq("season_id", seasonId)
     .lt("played_date", startDate)
+  if (resetPreSeasonErr) throw new Error(`시즌 이전 경기 초기화 실패: ${resetPreSeasonErr.message}`)
 
   // startDate 이후 모든 경기 (시간순)
-  const { data: matches } = await supabase
+  const { data: matches, error: matchesErr } = await supabase
     .from("matches")
     .select("id, player1_id, player2_id, winner_id, played_date, created_at")
     .gte("played_date", startDate)
     .order("played_date", { ascending: true })
     .order("created_at", { ascending: true })
+  if (matchesErr) throw new Error(`경기 조회 실패: ${matchesErr.message}`)
 
   const matchList = (matches ?? []) as Array<{
     id: string
@@ -103,10 +104,11 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
   if (matchList.length > 0) {
     const ids = matchList.map((m) => m.id)
     // Supabase는 in() 필터 bulk update를 지원합니다
-    await supabase.from("matches").update({ season_id: seasonId }).in("id", ids)
+    const { error: seasonTagErr } = await supabase.from("matches").update({ season_id: seasonId }).in("id", ids)
+    if (seasonTagErr) throw new Error(`시즌 태깅 실패: ${seasonTagErr.message}`)
   }
 
-  // ELO 시뮬레이션 (player1이 항상 승자인 기존 관례 준수)
+  // ELO 시뮬레이션 (winner_id 기준)
   type MatchUpdate = {
     id: string
     p1_elo_before: number
@@ -122,28 +124,52 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     const elo1 = eloMap.get(p1Id) ?? getStartingEloForTier(tierMap.get(p1Id) ?? 4)
     const elo2 = eloMap.get(p2Id) ?? getStartingEloForTier(tierMap.get(p2Id) ?? 4)
 
-    const { newWinnerElo, newLoserElo, winnerDelta, loserDelta } = computeEloMatch(elo1, elo2)
+    const isP1Winner = match.winner_id === p1Id
+    const isP2Winner = match.winner_id === p2Id
+    if (!isP1Winner && !isP2Winner) {
+      throw new Error(`winner_id가 player1/player2와 일치하지 않습니다. match_id=${match.id}`)
+    }
 
-    eloMap.set(p1Id, newWinnerElo)
-    eloMap.set(p2Id, newLoserElo)
-    winsMap.set(p1Id, (winsMap.get(p1Id) ?? 0) + 1)
-    lossesMap.set(p2Id, (lossesMap.get(p2Id) ?? 0) + 1)
+    const winnerBaseElo = isP1Winner ? elo1 : elo2
+    const loserBaseElo = isP1Winner ? elo2 : elo1
+    const { newWinnerElo, newLoserElo, winnerDelta, loserDelta } = computeEloMatch(winnerBaseElo, loserBaseElo)
 
-    matchUpdates.push({ id: match.id, p1_elo_before: elo1, p2_elo_before: elo2, p1_elo_delta: winnerDelta, p2_elo_delta: loserDelta })
+    const p1NewElo = isP1Winner ? newWinnerElo : newLoserElo
+    const p2NewElo = isP1Winner ? newLoserElo : newWinnerElo
+    const p1Delta = isP1Winner ? winnerDelta : loserDelta
+    const p2Delta = isP1Winner ? loserDelta : winnerDelta
+
+    eloMap.set(p1Id, p1NewElo)
+    eloMap.set(p2Id, p2NewElo)
+
+    const winnerId = isP1Winner ? p1Id : p2Id
+    const loserId = isP1Winner ? p2Id : p1Id
+    winsMap.set(winnerId, (winsMap.get(winnerId) ?? 0) + 1)
+    lossesMap.set(loserId, (lossesMap.get(loserId) ?? 0) + 1)
+
+    matchUpdates.push({
+      id: match.id,
+      p1_elo_before: elo1,
+      p2_elo_before: elo2,
+      p1_elo_delta: p1Delta,
+      p2_elo_delta: p2Delta,
+    })
   }
 
-  // 경기별 ELO 값 일괄 업데이트 (N번 개별 요청 → 1번 upsert로 최적화)
+  // 경기별 ELO 값 업데이트
   if (matchUpdates.length > 0) {
-    await supabase.from("matches").upsert(
-      matchUpdates.map((u) => ({
-        id: u.id,
-        player1_elo_before: u.p1_elo_before,
-        player2_elo_before: u.p2_elo_before,
-        player1_elo_delta: u.p1_elo_delta,
-        player2_elo_delta: u.p2_elo_delta,
-      })),
-      { onConflict: "id" },
-    )
+    for (const u of matchUpdates) {
+      const { error: matchUpdateErr } = await supabase
+        .from("matches")
+        .update({
+          player1_elo_before: u.p1_elo_before,
+          player2_elo_before: u.p2_elo_before,
+          player1_elo_delta: u.p1_elo_delta,
+          player2_elo_delta: u.p2_elo_delta,
+        })
+        .eq("id", u.id)
+      if (matchUpdateErr) throw new Error(`경기 ELO 업데이트 실패(${u.id}): ${matchUpdateErr.message}`)
+    }
   }
 
   // streak 인메모리 계산 (최신순으로 뒤집어서)
@@ -177,7 +203,18 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     .filter((v): v is NonNullable<typeof v> => v !== null)
 
   if (memberUpdateData.length > 0) {
-    await supabase.from("members").upsert(memberUpdateData, { onConflict: "id" })
+    for (const row of memberUpdateData) {
+      const { error: memberUpdErr } = await supabase
+        .from("members")
+        .update({
+          elo: row.elo,
+          wins: row.wins,
+          losses: row.losses,
+          streak: row.streak,
+        })
+        .eq("id", row.id)
+      if (memberUpdErr) throw new Error(`멤버 스탯 업데이트 실패(${row.id}): ${memberUpdErr.message}`)
+    }
   }
 }
 
@@ -312,6 +349,43 @@ export async function updateSeasonAction(input: {
   }
 
   await insertAdminLog(session.username, "시즌 수정", name, `start_date=${input.startDate}`)
+
+  revalidateSeasonPaths()
+  return { ok: true }
+}
+
+/**
+ * 현재 활성 시즌의 ELO/전적/연속 기록을 경기 원본 기준으로 재동기화합니다.
+ */
+export async function syncCurrentSeasonStatsAction(): Promise<ActionResult> {
+  const session = await getSessionFromCookies()
+  if (!session || session.role !== "creator") {
+    return { ok: false, error: "제작자만 시즌을 관리할 수 있습니다." }
+  }
+
+  const supabase = createServiceClient()
+  const { data: activeSeason } = await supabase
+    .from("seasons")
+    .select("id, name, start_date")
+    .is("end_date", null)
+    .maybeSingle()
+
+  if (!activeSeason) {
+    return { ok: false, error: "진행 중인 시즌이 없습니다." }
+  }
+
+  try {
+    await recalculateCurrentSeasonElo(supabase, activeSeason.id as string, activeSeason.start_date as string)
+  } catch (e) {
+    return { ok: false, error: `재동기화 실패: ${String(e)}` }
+  }
+
+  await insertAdminLog(
+    session.username,
+    "시즌 전적 재동기화",
+    activeSeason.name as string,
+    `start_date=${activeSeason.start_date as string}`,
+  )
 
   revalidateSeasonPaths()
   return { ok: true }

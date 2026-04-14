@@ -34,12 +34,14 @@ export async function POST(req: NextRequest) {
       player1Result,
       mapName,
       matchType,
+      played_date: playedDateRaw,
     }: {
       player1Name: string
       player2Name: string
       player1Result: "승" | "패"
       mapName: string
       matchType: string
+      played_date?: string
     } = body
 
     if (!player1Name?.trim()) return NextResponse.json({ ok: false, error: "닉네임(나) 누락" }, { status: 400 })
@@ -76,8 +78,10 @@ export async function POST(req: NextRequest) {
     const isPlayer1Winner = player1Result === "승"
     const winnerId = isPlayer1Winner ? (m1.id as string) : (m2.id as string)
 
-    // 4. 활성 시즌 확인 — 체크박스 누른 오늘 날짜 기준
-    const today = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }) // YYYY-MM-DD
+    // 4. 활성 시즌 확인 — 경기 입력 시점 날짜 기준 (없으면 승인 시점 사용)
+    const today = playedDateRaw
+      ? playedDateRaw.slice(0, 10) // "yyyy-MM-dd HH:mm:ss" → "yyyy-MM-dd"
+      : new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }) // YYYY-MM-DD
     const activeSeason = await getActiveSeason(supabase)
     const isSeasonMatch = activeSeason !== null && today >= activeSeason.start_date
     const seasonId = isSeasonMatch ? activeSeason!.id : null
