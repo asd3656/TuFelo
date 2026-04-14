@@ -859,15 +859,14 @@ export function DashboardPage({
                 <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 text-emerald-400 shrink-0" />
-                    <p className="text-sm font-bold text-emerald-300">사용설명서(26.04.08)</p>
+                    <p className="text-sm font-bold text-emerald-300">사용설명서(26.04.14)</p>
                   </div>
                   <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
                     <li className="flex gap-2">
                       <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
-                      <span>
-                        날짜는 경기한 날짜가 아닌{" "}
-                        <span className="text-foreground font-semibold">사이트에 등록된 날짜</span>로 등록됩니다.
-                        날짜 수정이 필요한 경우 건의 게시판에 써주세요.
+                      <span>            
+                        날짜 수정이 필요한 경우 건의 게시판에 써주세요. 날짜는 <span className="text-foreground font-semibold">시트 H열(경기유형) 작성 시점</span>
+                        기준으로 올라갑니다.
                       </span>
                     </li>
                     <li className="flex gap-2">

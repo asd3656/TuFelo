@@ -400,7 +400,7 @@ export function NoticeSuggestionDialog({
             <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-indigo-400 shrink-0" />
-                <p className="text-sm font-bold text-indigo-300">공지사항(26.04.06)</p>
+                <p className="text-sm font-bold text-indigo-300">공지사항(26.04.14)</p>
               </div>
               <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
                 <li className="flex gap-2">
@@ -424,6 +424,13 @@ export function NoticeSuggestionDialog({
                   <span>
                     모든 건의사항들은{" "}
                     <span className="text-foreground font-semibold">해결 완료 또는 반영불가 시 삭제</span>됩니다.
+                  </span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
+                  <span>
+                    ELO 랭킹페이지에 4월 초 데이터가 누락되는 이슈가 있었습니다. 4/14 기준 고쳤으니 
+                    elo 랭킹페이지와 현재시즌 경기 수가 안맞는 분들은 건의 게시판에 써주세요.
                   </span>
                 </li>
               </ul>
