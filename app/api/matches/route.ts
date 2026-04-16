@@ -18,7 +18,8 @@ type MemberRow = {
 /**
  * GET /api/matches
  * 대시보드 전적 목록을 필터·페이지네이션하여 반환합니다.
- * 쿼리 파라미터: page, player1, player2, dateFrom, dateTo, map, matchType(복수 가능), seasonId, player1Tier
+ * 쿼리 파라미터: page, player1, player2, dateFrom, dateTo, map,
+ * matchType(복수 가능), seasonId(복수 가능), player1Tier(복수 가능)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -37,12 +38,22 @@ export async function GET(req: NextRequest) {
           .filter(Boolean),
       ),
     )
-    const seasonId = searchParams.get("seasonId") ?? ""  // "__none__" | UUID | ""
-    const player1TierRaw = searchParams.get("player1Tier")?.trim() ?? ""
-    const player1TierFilter: Tier | null =
-      player1TierRaw === "1" || player1TierRaw === "2" || player1TierRaw === "3" || player1TierRaw === "4"
-        ? (Number(player1TierRaw) as Tier)
-        : null
+    const seasonIds = Array.from(
+      new Set(
+        searchParams
+          .getAll("seasonId")
+          .map((v) => v.trim())
+          .filter(Boolean),
+      ),
+    )
+    const player1Tiers = Array.from(
+      new Set(
+        searchParams
+          .getAll("player1Tier")
+          .map((v) => v.trim())
+          .filter((v): v is "1" | "2" | "3" | "4" => v === "1" || v === "2" || v === "3" || v === "4"),
+      ),
+    )
 
     const supabase = await createClient()
 
@@ -76,8 +87,9 @@ export async function GET(req: NextRequest) {
     }
 
     let player1IdTierFilter: string[] = []
-    if (player1TierFilter !== null) {
-      player1IdTierFilter = members.filter((m) => m.tier === player1TierFilter).map((m) => m.id)
+    if (player1Tiers.length > 0) {
+      const tierSet = new Set(player1Tiers.map((v) => Number(v) as Tier))
+      player1IdTierFilter = members.filter((m) => tierSet.has(m.tier)).map((m) => m.id)
       if (player1IdTierFilter.length === 0) {
         return NextResponse.json({ matches: [], totalCount: 0, totalPages: 0, wins: 0, losses: 0 })
       }
@@ -117,8 +129,17 @@ export async function GET(req: NextRequest) {
     if (dateTo) query = query.lte("played_date", dateTo)
     if (mapFilter) query = query.ilike("map_name", `%${mapFilter}%`)
     if (matchTypes.length > 0) query = query.in("match_type", matchTypes)
-    if (seasonId === "__none__") query = query.is("season_id", null)
-    else if (seasonId) query = query.eq("season_id", seasonId)
+    if (seasonIds.length > 0) {
+      const includeNone = seasonIds.includes("__none__")
+      const seasonIdValues = seasonIds.filter((id) => id !== "__none__")
+      if (includeNone && seasonIdValues.length > 0) {
+        query = query.or(`season_id.is.null,season_id.in.(${seasonIdValues.join(",")})`)
+      } else if (includeNone) {
+        query = query.is("season_id", null)
+      } else {
+        query = query.in("season_id", seasonIdValues)
+      }
+    }
     if (player1IdTierFilter.length > 0) {
       query = query.in("player1_id", player1IdTierFilter)
     }
@@ -150,8 +171,17 @@ export async function GET(req: NextRequest) {
       if (dateTo) winsQuery = winsQuery.lte("played_date", dateTo)
       if (mapFilter) winsQuery = winsQuery.ilike("map_name", `%${mapFilter}%`)
       if (matchTypes.length > 0) winsQuery = winsQuery.in("match_type", matchTypes)
-      if (seasonId === "__none__") winsQuery = winsQuery.is("season_id", null)
-      else if (seasonId) winsQuery = winsQuery.eq("season_id", seasonId)
+      if (seasonIds.length > 0) {
+        const includeNone = seasonIds.includes("__none__")
+        const seasonIdValues = seasonIds.filter((id) => id !== "__none__")
+        if (includeNone && seasonIdValues.length > 0) {
+          winsQuery = winsQuery.or(`season_id.is.null,season_id.in.(${seasonIdValues.join(",")})`)
+        } else if (includeNone) {
+          winsQuery = winsQuery.is("season_id", null)
+        } else {
+          winsQuery = winsQuery.in("season_id", seasonIdValues)
+        }
+      }
       if (player1IdTierFilter.length > 0) {
         winsQuery = winsQuery.in("player1_id", player1IdTierFilter)
       }

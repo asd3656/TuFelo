@@ -13,13 +13,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -371,9 +364,12 @@ export function DashboardPage({
     setDateFrom,
     setDateTo,
     setMatchTypes,
-    setSeasonId,
-    setPlayer1Tier,
+    setSeasonIds,
+    setPlayer1Tiers,
   } = useMatchFilter({ initialMatches, initialTotalCount, initialTotalPages })
+  const [matchTypeFilterOpen, setMatchTypeFilterOpen] = useState(false)
+  const [seasonFilterOpen, setSeasonFilterOpen] = useState(false)
+  const [tierFilterOpen, setTierFilterOpen] = useState(false)
 
   const matchHistorySectionRef = useRef<HTMLElement | null>(null)
 
@@ -635,7 +631,7 @@ export function DashboardPage({
 
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">경기 유형 필터</Label>
-              <DropdownMenu>
+              <DropdownMenu open={matchTypeFilterOpen} onOpenChange={setMatchTypeFilterOpen}>
                 <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
@@ -673,7 +669,10 @@ export function DashboardPage({
                   <button
                     type="button"
                     className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-                    onClick={() => setMatchTypes([])}
+                    onClick={() => {
+                      setMatchTypes([])
+                      setMatchTypeFilterOpen(false)
+                    }}
                   >
                     전체 선택(초기화)
                   </button>
@@ -684,39 +683,120 @@ export function DashboardPage({
 
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">시즌 필터</Label>
-              <Select value={filters.seasonId} onValueChange={setSeasonId}>
-                <SelectTrigger className="bg-input border-border text-foreground">
-                  <SelectValue placeholder="전체 시즌" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">전체</SelectItem>
-                  <SelectItem value="__none__">비시즌</SelectItem>
-                  {seasons.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}{s.endDate === null ? " (현재)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">기본값 전체</p>
+              <DropdownMenu open={seasonFilterOpen} onOpenChange={setSeasonFilterOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between bg-input border-border text-foreground font-normal"
+                  >
+                    {filters.seasonIds.length === 0
+                      ? "전체 시즌"
+                      : filters.seasonIds.length === 1
+                        ? (filters.seasonIds[0] === "__none__"
+                            ? "비시즌"
+                            : seasons.find((s) => s.id === filters.seasonIds[0])?.name ?? "시즌")
+                        : `${filters.seasonIds.length}개 선택`}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel>시즌 선택</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={filters.seasonIds.includes("__none__")}
+                    onCheckedChange={(isChecked) => {
+                      const next = isChecked
+                        ? [...filters.seasonIds, "__none__"]
+                        : filters.seasonIds.filter((v) => v !== "__none__")
+                      setSeasonIds(next)
+                    }}
+                  >
+                    비시즌
+                  </DropdownMenuCheckboxItem>
+                  {seasons.map((s) => {
+                    const checked = filters.seasonIds.includes(s.id)
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={s.id}
+                        checked={checked}
+                        onCheckedChange={(isChecked) => {
+                          const next = isChecked
+                            ? [...filters.seasonIds, s.id]
+                            : filters.seasonIds.filter((v) => v !== s.id)
+                          setSeasonIds(next)
+                        }}
+                      >
+                        {s.name}{s.endDate === null ? " (현재)" : ""}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+                  <DropdownMenuSeparator />
+                  <button
+                    type="button"
+                    className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    onClick={() => {
+                      setSeasonIds([])
+                      setSeasonFilterOpen(false)
+                    }}
+                  >
+                    전체 선택(초기화)
+                  </button>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <p className="text-xs text-muted-foreground">여러 시즌 동시 선택 가능 · 기본값 전체</p>
             </div>
 
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">티어 필터 (선수1 기준)</Label>
-              <Select value={filters.player1Tier} onValueChange={setPlayer1Tier}>
-                <SelectTrigger className="bg-input border-border text-foreground">
-                  <SelectValue placeholder="전체 티어" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">전체</SelectItem>
-                  <SelectItem value="1">1티어</SelectItem>
-                  <SelectItem value="2">2티어</SelectItem>
-                  <SelectItem value="3">3티어</SelectItem>
-                  <SelectItem value="4">4티어</SelectItem>
-                </SelectContent>
-              </Select>
+              <DropdownMenu open={tierFilterOpen} onOpenChange={setTierFilterOpen}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between bg-input border-border text-foreground font-normal"
+                  >
+                    {filters.player1Tiers.length === 0
+                      ? "전체 티어"
+                      : filters.player1Tiers.length === 1
+                        ? `${filters.player1Tiers[0]}티어`
+                        : `${filters.player1Tiers.length}개 선택`}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel>티어 선택 (선수1 기준)</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {["1", "2", "3", "4"].map((tier) => {
+                    const checked = filters.player1Tiers.includes(tier)
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={tier}
+                        checked={checked}
+                        onCheckedChange={(isChecked) => {
+                          const next = isChecked
+                            ? [...filters.player1Tiers, tier]
+                            : filters.player1Tiers.filter((v) => v !== tier)
+                          setPlayer1Tiers(next)
+                        }}
+                      >
+                        {tier}티어
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+                  <DropdownMenuSeparator />
+                  <button
+                    type="button"
+                    className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    onClick={() => {
+                      setPlayer1Tiers([])
+                      setTierFilterOpen(false)
+                    }}
+                  >
+                    전체 선택(초기화)
+                  </button>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <p className="text-xs text-muted-foreground">
-                기본값 전체
+                여러 티어 동시 선택 가능 · 기본값 전체
               </p>
             </div>
           </div>

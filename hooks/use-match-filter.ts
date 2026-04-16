@@ -10,9 +10,9 @@ export interface MatchFilterState {
   dateTo: string
   map: string
   matchTypes: string[]
-  seasonId: string
-  /** DB 행 기준 선수1(player1_id)의 현재 티어 — `__all__`이면 미적용 */
-  player1Tier: string
+  seasonIds: string[]
+  /** DB 행 기준 선수1(player1_id)의 현재 티어 목록 — 비어있으면 미적용 */
+  player1Tiers: string[]
 }
 
 const DEFAULT_FILTERS: MatchFilterState = {
@@ -22,8 +22,8 @@ const DEFAULT_FILTERS: MatchFilterState = {
   dateTo: "",
   map: "",
   matchTypes: [],
-  seasonId: "__all__",
-  player1Tier: "__all__",
+  seasonIds: [],
+  player1Tiers: [],
 }
 
 interface UseMatchFilterOptions {
@@ -74,10 +74,10 @@ export function useMatchFilter({
       dateFrom: f.dateFrom,
       dateTo: f.dateTo,
       map: f.map,
-      seasonId: f.seasonId === "__all__" ? "" : f.seasonId,
-      player1Tier: f.player1Tier === "__all__" ? "" : f.player1Tier,
     })
     f.matchTypes.forEach((type) => params.append("matchType", type))
+    f.seasonIds.forEach((seasonId) => params.append("seasonId", seasonId))
+    f.player1Tiers.forEach((tier) => params.append("player1Tier", tier))
 
     try {
       const res = await fetch(`/api/matches?${params}`, {
@@ -159,14 +159,14 @@ export function useMatchFilter({
     triggerImmediateFetch({ matchTypes: vals })
   }
 
-  function setSeasonId(val: string) {
-    setFilters((f) => ({ ...f, seasonId: val }))
-    triggerImmediateFetch({ seasonId: val })
+  function setSeasonIds(vals: string[]) {
+    setFilters((f) => ({ ...f, seasonIds: vals }))
+    triggerImmediateFetch({ seasonIds: vals })
   }
 
-  function setPlayer1Tier(val: string) {
-    setFilters((f) => ({ ...f, player1Tier: val }))
-    triggerImmediateFetch({ player1Tier: val })
+  function setPlayer1Tiers(vals: string[]) {
+    setFilters((f) => ({ ...f, player1Tiers: vals }))
+    triggerImmediateFetch({ player1Tiers: vals })
   }
 
   return {
@@ -185,7 +185,7 @@ export function useMatchFilter({
     setDateFrom,
     setDateTo,
     setMatchTypes,
-    setSeasonId,
-    setPlayer1Tier,
+    setSeasonIds,
+    setPlayer1Tiers,
   }
 }
