@@ -18,7 +18,7 @@ type MemberRow = {
 /**
  * GET /api/matches
  * 대시보드 전적 목록을 필터·페이지네이션하여 반환합니다.
- * 쿼리 파라미터: page, player1, player2, dateFrom, dateTo, map, matchType, seasonId, player1Tier
+ * 쿼리 파라미터: page, player1, player2, dateFrom, dateTo, map, matchType(복수 가능), seasonId, player1Tier
  */
 export async function GET(req: NextRequest) {
   try {
@@ -29,7 +29,14 @@ export async function GET(req: NextRequest) {
     const dateFrom = searchParams.get("dateFrom") ?? ""
     const dateTo = searchParams.get("dateTo") ?? ""
     const mapFilter = searchParams.get("map")?.trim() ?? ""
-    const matchType = searchParams.get("matchType") ?? ""
+    const matchTypes = Array.from(
+      new Set(
+        searchParams
+          .getAll("matchType")
+          .map((v) => v.trim())
+          .filter(Boolean),
+      ),
+    )
     const seasonId = searchParams.get("seasonId") ?? ""  // "__none__" | UUID | ""
     const player1TierRaw = searchParams.get("player1Tier")?.trim() ?? ""
     const player1TierFilter: Tier | null =
@@ -109,7 +116,7 @@ export async function GET(req: NextRequest) {
     if (dateFrom) query = query.gte("played_date", dateFrom)
     if (dateTo) query = query.lte("played_date", dateTo)
     if (mapFilter) query = query.ilike("map_name", `%${mapFilter}%`)
-    if (matchType) query = query.eq("match_type", matchType)
+    if (matchTypes.length > 0) query = query.in("match_type", matchTypes)
     if (seasonId === "__none__") query = query.is("season_id", null)
     else if (seasonId) query = query.eq("season_id", seasonId)
     if (player1IdTierFilter.length > 0) {
@@ -142,7 +149,7 @@ export async function GET(req: NextRequest) {
       if (dateFrom) winsQuery = winsQuery.gte("played_date", dateFrom)
       if (dateTo) winsQuery = winsQuery.lte("played_date", dateTo)
       if (mapFilter) winsQuery = winsQuery.ilike("map_name", `%${mapFilter}%`)
-      if (matchType) winsQuery = winsQuery.eq("match_type", matchType)
+      if (matchTypes.length > 0) winsQuery = winsQuery.in("match_type", matchTypes)
       if (seasonId === "__none__") winsQuery = winsQuery.is("season_id", null)
       else if (seasonId) winsQuery = winsQuery.eq("season_id", seasonId)
       if (player1IdTierFilter.length > 0) {

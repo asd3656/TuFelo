@@ -17,6 +17,7 @@ import { Pencil, Trash2, Lock, Trophy } from "lucide-react"
 
 interface MatchHistoryProps {
   matches: Match[]
+  rowStartNumber?: number
   searchPlayer: string
   /** 선수(기준) 필터와 같은 방식으로 해석된 멤버 ID — 있으면 해당 선수가 항상 왼쪽(선수1 칸)에 오도록 표시합니다 */
   baselinePlayerIds?: string[]
@@ -111,6 +112,7 @@ function shouldSwapForBaseline(match: Match, baselinePlayerIds: string[]): boole
 
 export function MatchHistory({
   matches,
+  rowStartNumber = 1,
   searchPlayer,
   baselinePlayerIds = [],
   isAdmin = false,
@@ -216,6 +218,7 @@ export function MatchHistory({
                   />
                 </TableHead>
               )}
+              <TableHead className="w-12 text-center text-muted-foreground font-semibold">번호</TableHead>
               <TableHead className="text-muted-foreground font-semibold">날짜</TableHead>
               <TableHead className="text-muted-foreground font-semibold">선수 1</TableHead>
               <TableHead className="text-muted-foreground font-semibold text-center">종족</TableHead>
@@ -238,7 +241,7 @@ export function MatchHistory({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {matches.map((match) => {
+            {matches.map((match, index) => {
               const swap = shouldSwapForBaseline(match, baselinePlayerIds)
               const leftName = swap ? match.player2 : match.player1
               const rightName = swap ? match.player1 : match.player2
@@ -277,6 +280,9 @@ export function MatchHistory({
                       />
                     </TableCell>
                   )}
+                  <TableCell className="text-center text-muted-foreground tabular-nums">
+                    {rowStartNumber + index}
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {formatDate(match.date)}
                   </TableCell>

@@ -20,6 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -362,7 +370,7 @@ export function DashboardPage({
     setMap,
     setDateFrom,
     setDateTo,
-    setMatchType,
+    setMatchTypes,
     setSeasonId,
     setPlayer1Tier,
   } = useMatchFilter({ initialMatches, initialTotalCount, initialTotalPages })
@@ -627,18 +635,51 @@ export function DashboardPage({
 
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">경기 유형 필터</Label>
-              <Select value={filters.matchType} onValueChange={setMatchType}>
-                <SelectTrigger className="bg-input border-border text-foreground">
-                  <SelectValue placeholder="전체 경기 유형" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">전체</SelectItem>
-                  {knownMatchTypes.map((t) => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">기본값 전체</p>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between bg-input border-border text-foreground font-normal"
+                  >
+                    {filters.matchTypes.length === 0
+                      ? "전체 경기 유형"
+                      : filters.matchTypes.length === 1
+                        ? filters.matchTypes[0]
+                        : `${filters.matchTypes.length}개 선택`}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel>경기 유형 선택</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {knownMatchTypes.map((type) => {
+                    const checked = filters.matchTypes.includes(type)
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={type}
+                        checked={checked}
+                        onCheckedChange={(isChecked) => {
+                          const next = isChecked
+                            ? [...filters.matchTypes, type]
+                            : filters.matchTypes.filter((v) => v !== type)
+                          setMatchTypes(next)
+                        }}
+                      >
+                        {type}
+                      </DropdownMenuCheckboxItem>
+                    )
+                  })}
+                  <DropdownMenuSeparator />
+                  <button
+                    type="button"
+                    className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                    onClick={() => setMatchTypes([])}
+                  >
+                    전체 선택(초기화)
+                  </button>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <p className="text-xs text-muted-foreground">여러 유형 동시 선택 가능 · 기본값 전체</p>
             </div>
 
             <div className="space-y-2">
@@ -720,6 +761,7 @@ export function DashboardPage({
           <div className={isLoadingMatches ? "opacity-50 pointer-events-none transition-opacity" : "transition-opacity"}>
             <MatchHistory
               matches={matches}
+              rowStartNumber={(currentPage - 1) * PAGE_SIZE + 1}
               searchPlayer={filters.player1}
               baselinePlayerIds={baselinePlayerIds}
               isAdmin={isAdmin}
@@ -913,7 +955,7 @@ export function DashboardPage({
           isSubmitting={isPending}
           prefillDate={filters.dateFrom}
           prefillMap={filters.map.trim()}
-          prefillMatchType={filters.matchType === "__all__" ? "" : filters.matchType}
+          prefillMatchType={filters.matchTypes[0] ?? ""}
           knownMaps={knownMaps}
           knownMatchTypes={knownMatchTypes}
         />

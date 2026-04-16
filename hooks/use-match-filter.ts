@@ -9,7 +9,7 @@ export interface MatchFilterState {
   dateFrom: string
   dateTo: string
   map: string
-  matchType: string
+  matchTypes: string[]
   seasonId: string
   /** DB 행 기준 선수1(player1_id)의 현재 티어 — `__all__`이면 미적용 */
   player1Tier: string
@@ -21,7 +21,7 @@ const DEFAULT_FILTERS: MatchFilterState = {
   dateFrom: "",
   dateTo: "",
   map: "",
-  matchType: "__all__",
+  matchTypes: [],
   seasonId: "__all__",
   player1Tier: "__all__",
 }
@@ -74,10 +74,10 @@ export function useMatchFilter({
       dateFrom: f.dateFrom,
       dateTo: f.dateTo,
       map: f.map,
-      matchType: f.matchType === "__all__" ? "" : f.matchType,
       seasonId: f.seasonId === "__all__" ? "" : f.seasonId,
       player1Tier: f.player1Tier === "__all__" ? "" : f.player1Tier,
     })
+    f.matchTypes.forEach((type) => params.append("matchType", type))
 
     try {
       const res = await fetch(`/api/matches?${params}`, {
@@ -154,9 +154,9 @@ export function useMatchFilter({
     triggerImmediateFetch({ dateTo: val })
   }
 
-  function setMatchType(val: string) {
-    setFilters((f) => ({ ...f, matchType: val }))
-    triggerImmediateFetch({ matchType: val })
+  function setMatchTypes(vals: string[]) {
+    setFilters((f) => ({ ...f, matchTypes: vals }))
+    triggerImmediateFetch({ matchTypes: vals })
   }
 
   function setSeasonId(val: string) {
@@ -184,7 +184,7 @@ export function useMatchFilter({
     setMap,
     setDateFrom,
     setDateTo,
-    setMatchType,
+    setMatchTypes,
     setSeasonId,
     setPlayer1Tier,
   }
