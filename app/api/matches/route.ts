@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import type { Match, Race, Tier } from "@/lib/types/tufelo"
 import { mapDbRowToMatch, type DbMatchRow } from "@/lib/data/matches"
+import { resolveMemberIdsByPlayerQuery } from "@/lib/resolve-member-ids-by-player-query"
 
 export const dynamic = "force-dynamic"
 
@@ -53,9 +54,7 @@ export async function GET(req: NextRequest) {
     // 선수 이름 → ID 목록 변환 (양쪽 포지션 모두 검색)
     let player1Ids: string[] = []
     if (player1) {
-      player1Ids = members
-        .filter((m) => m.name.toLowerCase().includes(player1.toLowerCase()))
-        .map((m) => m.id)
+      player1Ids = resolveMemberIdsByPlayerQuery(members, player1)
       if (player1Ids.length === 0) {
         return NextResponse.json({ matches: [], totalCount: 0, totalPages: 0, wins: 0, losses: 0 })
       }
@@ -63,9 +62,7 @@ export async function GET(req: NextRequest) {
 
     let player2Ids: string[] = []
     if (player2) {
-      player2Ids = members
-        .filter((m) => m.name.toLowerCase().includes(player2.toLowerCase()))
-        .map((m) => m.id)
+      player2Ids = resolveMemberIdsByPlayerQuery(members, player2)
       if (player2Ids.length === 0) {
         return NextResponse.json({ matches: [], totalCount: 0, totalPages: 0, wins: 0, losses: 0 })
       }

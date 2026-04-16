@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/service"
+import { applySeasonMatchMemberUpdatesRpc } from "@/lib/supabase/apply-season-match-members"
 import { computeEloMatch } from "@/lib/elo"
 import { computeStreakForMember } from "@/lib/match-streak"
 import { insertAdminLog } from "@/lib/admin-log"
@@ -58,13 +59,13 @@ export async function POST(req: NextRequest) {
     // 3. 선수 조회 (대소문자 무시)
     const { data: m1, error: e1 } = await supabase
       .from("members")
-      .select("id, name, elo, wins, losses, streak")
+      .select("id, name, elo, streak")
       .ilike("name", player1Name.trim())
       .maybeSingle()
 
     const { data: m2, error: e2 } = await supabase
       .from("members")
-      .select("id, name, elo, wins, losses, streak")
+      .select("id, name, elo, streak")
       .ilike("name", player2Name.trim())
       .maybeSingle()
 
@@ -88,10 +89,6 @@ export async function POST(req: NextRequest) {
 
     const elo1 = m1.elo as number
     const elo2 = m2.elo as number
-    const wins1 = m1.wins as number
-    const losses1 = m1.losses as number
-    const wins2 = m2.wins as number
-    const losses2 = m2.losses as number
     const streak1 = m1.streak as number
     const streak2 = m2.streak as number
 
@@ -132,37 +129,31 @@ export async function POST(req: NextRequest) {
 
       const matchId = inserted?.id as string
 
-      const { error: u1 } = await supabase
-        .from("members")
-        .update({
-          elo: newElo1,
-          wins: isPlayer1Winner ? wins1 + 1 : wins1,
-          losses: isPlayer1Winner ? losses1 : losses1 + 1,
-          streak: nextStreak1,
-        })
-        .eq("id", m1.id)
+      const loserId = isPlayer1Winner ? (m2.id as string) : (m1.id as string)
+      const winnerElo = isPlayer1Winner ? newElo1 : newElo2
+      const loserElo = isPlayer1Winner ? newElo2 : newElo1
+      const winnerStreak = isPlayer1Winner ? nextStreak1 : nextStreak2
+      const loserStreak = isPlayer1Winner ? nextStreak2 : nextStreak1
 
-      const { error: u2 } = await supabase
-        .from("members")
-        .update({
-          elo: newElo2,
-          wins: isPlayer1Winner ? wins2 : wins2 + 1,
-          losses: isPlayer1Winner ? losses2 + 1 : losses2,
-          streak: nextStreak2,
-        })
-        .eq("id", m2.id)
+      const { error: rpcErr } = await applySeasonMatchMemberUpdatesRpc(supabase, {
+        winnerId,
+        loserId,
+        winnerElo,
+        loserElo,
+        winnerStreak,
+        loserStreak,
+      })
 
-      if (u1 || u2) {
+      if (rpcErr) {
         await supabase.from("matches").delete().eq("id", matchId)
         return NextResponse.json(
-          { ok: false, error: u1?.message ?? u2?.message ?? "ELO 업데이트 실패" },
+          { ok: false, error: rpcErr.message ?? "ELO update failed" },
           { status: 500 },
         )
       }
-
       // streak 재계산 (정확도 향상)
-      const s1 = await computeStreakForMember(supabase, m1.id as string, seasonId)
-      const s2 = await computeStreakForMember(supabase, m2.id as string, seasonId)
+      const s1 = await computeStreakForMember(supabase, m1.id as string, seasonId as string)
+      const s2 = await computeStreakForMember(supabase, m2.id as string, seasonId as string)
       await supabase.from("members").update({ streak: s1 }).eq("id", m1.id)
       await supabase.from("members").update({ streak: s2 }).eq("id", m2.id)
     } else {

@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createServiceClient } from "@/lib/supabase/service"
+import {
+  applySeasonMatchMemberUpdatesRpc,
+  applySeasonMatchUndoStatsRpc,
+} from "@/lib/supabase/apply-season-match-members"
 import { computeEloMatch } from "@/lib/elo"
 import { getClientIp } from "@/lib/request-ip"
 import { computeStreakForMember } from "@/lib/match-streak"
@@ -201,55 +205,52 @@ export async function deleteMatchAction(matchId: string): Promise<ActionResult> 
 
   // 현재 활성 시즌 경기: ELO/스탯 역산
   const winnerId = row.winner_id as string
-  const d1 = row.player1_elo_delta as number | null
-  const d2 = row.player2_elo_delta as number | null
+  const loserId = winnerId === p1 ? p2 : p1
+  const d1 = Number(row.player1_elo_delta ?? 0)
+  const d2 = Number(row.player2_elo_delta ?? 0)
 
-  const { data: m1, error: e1 } = await supabase.from("members").select("*").eq("id", p1).single()
-  const { data: m2, error: e2 } = await supabase.from("members").select("*").eq("id", p2).single()
+  const { data: m1, error: e1 } = await supabase.from("members").select("id, name, elo").eq("id", p1).single()
+  const { data: m2, error: e2 } = await supabase.from("members").select("id, name, elo").eq("id", p2).single()
   if (e1 || !m1 || e2 || !m2) {
     return { ok: false, error: "선수 정보를 불러올 수 없습니다." }
   }
 
-  const elo1 = m1.elo as number
-  const elo2 = m2.elo as number
-  const w1 = m1.wins as number
-  const l1 = m1.losses as number
-  const w2 = m2.wins as number
-  const l2 = m2.losses as number
+  const oldWinnerElo = winnerId === p1 ? (m1.elo as number) : (m2.elo as number)
+  const oldLoserElo = winnerId === p1 ? (m2.elo as number) : (m1.elo as number)
 
-  const nextElo1 = d1 != null ? elo1 - d1 : elo1
-  const nextElo2 = d2 != null ? elo2 - d2 : elo2
-
-  let nextW1 = w1, nextL1 = l1, nextW2 = w2, nextL2 = l2
-  if (winnerId === p1) {
-    nextW1 = Math.max(0, w1 - 1)
-    nextL2 = Math.max(0, l2 - 1)
-  } else {
-    nextW2 = Math.max(0, w2 - 1)
-    nextL1 = Math.max(0, l1 - 1)
-  }
-
-  const { error: up1 } = await supabase
-    .from("members")
-    .update({ elo: nextElo1, wins: nextW1, losses: nextL1 })
-    .eq("id", p1)
-
-  const { error: up2 } = await supabase
-    .from("members")
-    .update({ elo: nextElo2, wins: nextW2, losses: nextL2 })
-    .eq("id", p2)
-
-  if (up1 || up2) {
-    return { ok: false, error: up1?.message ?? up2?.message ?? "ELO/전적 복구 실패" }
+  const { error: undoErr } = await applySeasonMatchUndoStatsRpc(supabase, {
+    player1Id: p1,
+    player2Id: p2,
+    winnerId,
+    player1EloDelta: d1,
+    player2EloDelta: d2,
+  })
+  if (undoErr) {
+    return { ok: false, error: undoErr.message }
   }
 
   const { error: delErr } = await supabase.from("matches").delete().eq("id", matchId)
   if (delErr) {
-    await supabase.from("members").update({ elo: elo1, wins: w1, losses: l1 }).eq("id", p1)
-    await supabase.from("members").update({ elo: elo2, wins: w2, losses: l2 }).eq("id", p2)
+    const { error: restoreErr } = await applySeasonMatchMemberUpdatesRpc(supabase, {
+      winnerId,
+      loserId,
+      winnerElo: oldWinnerElo,
+      loserElo: oldLoserElo,
+      winnerStreak: 0,
+      loserStreak: 0,
+    })
+    if (restoreErr) {
+      return {
+        ok: false,
+        error: `전적 삭제 실패 후 복구도 실패: ${delErr.message} / ${restoreErr.message}`,
+      }
+    }
+    const rs1 = await computeStreakForMember(supabase, p1, rowSeasonId)
+    const rs2 = await computeStreakForMember(supabase, p2, rowSeasonId)
+    await supabase.from("members").update({ streak: rs1 }).eq("id", p1)
+    await supabase.from("members").update({ streak: rs2 }).eq("id", p2)
     return { ok: false, error: delErr.message }
   }
-
   // 현재 시즌 경기만으로 연속승패 재계산
   const s1 = await computeStreakForMember(supabase, p1, rowSeasonId)
   const s2 = await computeStreakForMember(supabase, p2, rowSeasonId)
@@ -339,42 +340,67 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
     return { ok: true }
   }
 
-  // 현재 활성 시즌 경기: ELO 역산 후 재계산
+  // 현재 활성 시즌 경기: undo RPC -> 경기 행 갱신 -> apply RPC
   const oldWinnerId = row.winner_id as string
-  const oldD1 = row.player1_elo_delta as number | null
-  const oldD2 = row.player2_elo_delta as number | null
+  const oldLoserId = oldWinnerId === oldP1Id ? oldP2Id : oldP1Id
+  const oldD1n = Number(row.player1_elo_delta ?? 0)
+  const oldD2n = Number(row.player2_elo_delta ?? 0)
 
   const { data: m1, error: e1 } = await supabase
     .from("members")
-    .select("id, name, elo, wins, losses, streak")
+    .select("id, name, elo")
     .eq("id", oldP1Id)
     .single()
   const { data: m2, error: e2 } = await supabase
     .from("members")
-    .select("id, name, elo, wins, losses, streak")
+    .select("id, name, elo")
     .eq("id", oldP2Id)
     .single()
   if (e1 || !m1 || e2 || !m2) {
     return { ok: false, error: "선수 정보를 불러올 수 없습니다." }
   }
 
-  const baseElo1 = (m1.elo as number) - (oldD1 ?? 0)
-  const baseElo2 = (m2.elo as number) - (oldD2 ?? 0)
+  const oldWinnerElo = oldWinnerId === oldP1Id ? (m1.elo as number) : (m2.elo as number)
+  const oldLoserElo = oldWinnerId === oldP1Id ? (m2.elo as number) : (m1.elo as number)
 
-  let baseW1 = m1.wins as number
-  let baseL1 = m1.losses as number
-  let baseW2 = m2.wins as number
-  let baseL2 = m2.losses as number
-
-  if (oldWinnerId === oldP1Id) {
-    baseW1 = Math.max(0, baseW1 - 1)
-    baseL2 = Math.max(0, baseL2 - 1)
-  } else {
-    baseW2 = Math.max(0, baseW2 - 1)
-    baseL1 = Math.max(0, baseL1 - 1)
+  async function restoreOldSeasonMatchEffect() {
+    await applySeasonMatchMemberUpdatesRpc(supabase, {
+      winnerId: oldWinnerId,
+      loserId: oldLoserId,
+      winnerElo: oldWinnerElo,
+      loserElo: oldLoserElo,
+      winnerStreak: 0,
+      loserStreak: 0,
+    })
+    const rs1 = await computeStreakForMember(supabase, oldP1Id, rowSeasonId)
+    const rs2 = await computeStreakForMember(supabase, oldP2Id, rowSeasonId)
+    await supabase.from("members").update({ streak: rs1 }).eq("id", oldP1Id)
+    await supabase.from("members").update({ streak: rs2 }).eq("id", oldP2Id)
   }
 
+  const { error: undoErr } = await applySeasonMatchUndoStatsRpc(supabase, {
+    player1Id: oldP1Id,
+    player2Id: oldP2Id,
+    winnerId: oldWinnerId,
+    player1EloDelta: oldD1n,
+    player2EloDelta: oldD2n,
+  })
+  if (undoErr) {
+    return { ok: false, error: undoErr.message }
+  }
+
+  const { data: m1b, error: e1b } = await supabase.from("members").select("elo").eq("id", oldP1Id).single()
+  const { data: m2b, error: e2b } = await supabase.from("members").select("elo").eq("id", oldP2Id).single()
+  if (e1b || !m1b || e2b || !m2b) {
+    await restoreOldSeasonMatchEffect()
+    return { ok: false, error: "선수 정보를 불러올 수 없습니다." }
+  }
+
+  const baseElo1 = m1b.elo as number
+  const baseElo2 = m2b.elo as number
+
   const newWinnerId = input.isPlayer1Winner ? oldP1Id : oldP2Id
+  const newLoserId = input.isPlayer1Winner ? oldP2Id : oldP1Id
   const winnerBaseElo = input.isPlayer1Winner ? baseElo1 : baseElo2
   const loserBaseElo = input.isPlayer1Winner ? baseElo2 : baseElo1
 
@@ -382,12 +408,6 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
 
   const newD1 = input.isPlayer1Winner ? winnerDelta : loserDelta
   const newD2 = input.isPlayer1Winner ? loserDelta : winnerDelta
-  const newElo1 = input.isPlayer1Winner ? newWinnerElo : newLoserElo
-  const newElo2 = input.isPlayer1Winner ? newLoserElo : newWinnerElo
-  const newW1 = input.isPlayer1Winner ? baseW1 + 1 : baseW1
-  const newL1 = input.isPlayer1Winner ? baseL1 : baseL1 + 1
-  const newW2 = input.isPlayer1Winner ? baseW2 : baseW2 + 1
-  const newL2 = input.isPlayer1Winner ? baseL2 + 1 : baseL2
 
   const { error: updMatchErr } = await supabase
     .from("matches")
@@ -404,19 +424,20 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
     .eq("id", input.matchId)
 
   if (updMatchErr) {
+    await restoreOldSeasonMatchEffect()
     return { ok: false, error: updMatchErr.message }
   }
 
-  const { error: upd1 } = await supabase
-    .from("members")
-    .update({ elo: newElo1, wins: newW1, losses: newL1 })
-    .eq("id", oldP1Id)
-  const { error: upd2 } = await supabase
-    .from("members")
-    .update({ elo: newElo2, wins: newW2, losses: newL2 })
-    .eq("id", oldP2Id)
+  const { error: applyErr } = await applySeasonMatchMemberUpdatesRpc(supabase, {
+    winnerId: newWinnerId,
+    loserId: newLoserId,
+    winnerElo: newWinnerElo,
+    loserElo: newLoserElo,
+    winnerStreak: 0,
+    loserStreak: 0,
+  })
 
-  if (upd1 || upd2) {
+  if (applyErr) {
     await supabase
       .from("matches")
       .update({
@@ -426,13 +447,13 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
         played_date: row.played_date,
         player1_elo_before: row.player1_elo_before,
         player2_elo_before: row.player2_elo_before,
-        player1_elo_delta: oldD1,
-        player2_elo_delta: oldD2,
+        player1_elo_delta: row.player1_elo_delta,
+        player2_elo_delta: row.player2_elo_delta,
       })
       .eq("id", input.matchId)
-    return { ok: false, error: upd1?.message ?? upd2?.message ?? "ELO 업데이트 실패" }
+    await restoreOldSeasonMatchEffect()
+    return { ok: false, error: applyErr.message }
   }
-
   // 현재 시즌 경기만으로 연속승패 재계산
   const s1 = await computeStreakForMember(supabase, oldP1Id, rowSeasonId)
   const s2 = await computeStreakForMember(supabase, oldP2Id, rowSeasonId)

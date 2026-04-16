@@ -16,6 +16,17 @@ function revalidateSeasonPaths() {
   revalidatePath("/creator")
 }
 
+/** Many match IDs in one `.in("id", ids)` can exceed PostgREST URL limits (400 Bad Request). */
+const MATCH_ID_IN_CHUNK_SIZE = 120
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size))
+  }
+  return out
+}
+
 // ─── 내부 헬퍼 ──────────────────────────────────────────────
 
 /** 현재 활성 시즌의 최종 순위를 season_rankings 테이블에 스냅샷으로 저장 */
@@ -103,9 +114,13 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
   // 이 시즌에 속하도록 season_id 일괄 업데이트
   if (matchList.length > 0) {
     const ids = matchList.map((m) => m.id)
-    // Supabase는 in() 필터 bulk update를 지원합니다
-    const { error: seasonTagErr } = await supabase.from("matches").update({ season_id: seasonId }).in("id", ids)
-    if (seasonTagErr) throw new Error(`시즌 태깅 실패: ${seasonTagErr.message}`)
+    for (const idChunk of chunkArray(ids, MATCH_ID_IN_CHUNK_SIZE)) {
+      const { error: seasonTagErr } = await supabase
+        .from("matches")
+        .update({ season_id: seasonId })
+        .in("id", idChunk)
+      if (seasonTagErr) throw new Error(`시즌 태깅 실패: ${seasonTagErr.message}`)
+    }
   }
 
   // ELO 시뮬레이션 (winner_id 기준)

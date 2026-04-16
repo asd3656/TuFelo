@@ -136,11 +136,20 @@ export function MatchHistory({
     )
   }
 
-  const isPlayerWinner = (match: Match, playerName: string) => {
+  const isPlayerWinner = (match: Match, playerName: string, baseline: string[]) => {
     if (!playerName) return false
-    const player1Matches = match.player1.toLowerCase().includes(playerName.toLowerCase())
-    const player2Matches = match.player2.toLowerCase().includes(playerName.toLowerCase())
-
+    const winnerId =
+      match.winner === match.player1
+        ? match.player1Id
+        : match.winner === match.player2
+          ? match.player2Id
+          : null
+    if (winnerId !== null && baseline.length > 0) {
+      return baseline.includes(winnerId)
+    }
+    const q = playerName.toLowerCase()
+    const player1Matches = match.player1.toLowerCase().includes(q)
+    const player2Matches = match.player2.toLowerCase().includes(q)
     if (player1Matches && match.winner === match.player1) return true
     if (player2Matches && match.winner === match.player2) return true
     return false
@@ -238,7 +247,7 @@ export function MatchHistory({
               const leftTier = swap ? match.player2Tier : match.player1Tier
               const rightTier = swap ? match.player1Tier : match.player2Tier
               const leftWon = swap ? match.winner === match.player2 : match.winner === match.player1
-              const searchPlayerWon = searchPlayer ? isPlayerWinner(match, searchPlayer) : null
+              const searchPlayerWon = searchPlayer ? isPlayerWinner(match, searchPlayer, baselinePlayerIds) : null
               const delta = swap ? match.player2EloDelta : match.player1EloDelta
               const deltaClass =
                 delta === undefined

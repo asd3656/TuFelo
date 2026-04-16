@@ -60,6 +60,7 @@ import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
 import { useMatchFilter } from "@/hooks/use-match-filter"
+import { resolveMemberIdsByPlayerQuery } from "@/lib/resolve-member-ids-by-player-query"
 
 export type { Tier, Race, Match } from "@/lib/types/tufelo"
 
@@ -386,9 +387,8 @@ export function DashboardPage({
 
   /** 선수(기준) 필터와 동일 규칙으로 ID 목록 — 전적 테이블에서 기준 선수를 항상 왼쪽에 두는 데 사용 */
   const baselinePlayerIds = useMemo(() => {
-    const q = filters.player1.trim().toLowerCase()
-    if (!q) return [] as string[]
-    return members.filter((m) => m.name.toLowerCase().includes(q)).map((m) => m.id)
+    if (!filters.player1.trim()) return [] as string[]
+    return resolveMemberIdsByPlayerQuery(members, filters.player1)
   }, [filters.player1, members])
 
   // ── 전적 액션 핸들러 ──
