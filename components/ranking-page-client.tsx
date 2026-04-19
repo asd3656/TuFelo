@@ -24,6 +24,7 @@ import {
   ArrowLeft,
   BarChart3,
   Crown,
+  Database,
   Percent,
   Search,
   Swords,
@@ -139,16 +140,24 @@ export function RankingPageClient({
     <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         <header className="mb-10">
-          <div className="flex items-center gap-4 mb-4">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-5 w-5" />
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Link href="/">
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+              </Link>
+              <div className="flex items-center gap-3">
+                <Trophy className="h-8 w-8 text-primary" />
+                <h1 className="text-3xl font-bold text-foreground">ELO Ranking Board</h1>
+              </div>
+            </div>
+            <Link href="/data-center">
+              <Button className="bg-sky-600 hover:bg-sky-700 text-white">
+                <Database className="mr-2 h-4 w-4" />
+                데이터센터
               </Button>
             </Link>
-            <div className="flex items-center gap-3">
-              <Trophy className="h-8 w-8 text-primary" />
-              <h1 className="text-3xl font-bold text-foreground">ELO Ranking Board</h1>
-            </div>
           </div>
           <p className="text-muted-foreground ml-14">클랜 내 선수들의 ELO 점수 기반 랭킹</p>
         </header>

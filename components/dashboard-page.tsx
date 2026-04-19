@@ -53,6 +53,8 @@ import {
   Coffee,
   X,
   Vote,
+  Database,
+  RotateCcw,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -376,6 +378,7 @@ export function DashboardPage({
     setMatchTypes,
     setSeasonIds,
     setPlayer1Tiers,
+    resetFilters,
   } = useMatchFilter({ initialMatches, initialTotalCount, initialTotalPages })
   const [matchTypeFilterOpen, setMatchTypeFilterOpen] = useState(false)
   const [seasonFilterOpen, setSeasonFilterOpen] = useState(false)
@@ -398,6 +401,28 @@ export function DashboardPage({
   const seoulToday = getSeoulDateString()
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
   const pageNumbers = getPageNumbers(currentPage, totalPages)
+
+  const hasActiveFilters = useMemo(() => {
+    const f = filters
+    return (
+      f.player1.trim() !== "" ||
+      f.player2.trim() !== "" ||
+      f.dateFrom !== "" ||
+      f.dateTo !== "" ||
+      f.map.trim() !== "" ||
+      f.matchTypes.length > 0 ||
+      f.seasonIds.length > 0 ||
+      f.player1Tiers.length > 0
+    )
+  }, [filters])
+
+  function handleResetAllFilters() {
+    resetFilters()
+    setMatchTypeFilterOpen(false)
+    setSeasonFilterOpen(false)
+    setTierFilterOpen(false)
+    scrollMatchHistoryIntoView()
+  }
 
   /** 선수(기준) 필터와 동일 규칙으로 ID 목록 — 전적 테이블에서 기준 선수를 항상 왼쪽에 두는 데 사용 */
   const baselinePlayerIds = useMemo(() => {
@@ -537,6 +562,12 @@ export function DashboardPage({
                   ELO 랭킹
                 </Button>
               </Link>
+              <Link href="/data-center">
+                <Button className="bg-sky-600 hover:bg-sky-700 text-white font-semibold shadow-md border-0">
+                  <Database className="h-4 w-4 mr-2" />
+                  데이터센터
+                </Button>
+              </Link>
             </div>
           </div>
         </header>
@@ -597,7 +628,22 @@ export function DashboardPage({
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 pt-6 border-t border-border">
+          <div className="relative mt-6 border-t border-border pt-6">
+            <div className="mb-3 flex justify-end xl:absolute xl:top-6 xl:right-0 xl:z-10 xl:mb-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 shrink-0 border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
+                onClick={handleResetAllFilters}
+                disabled={!hasActiveFilters}
+                title={hasActiveFilters ? "모든 검색·필터 조건을 지웁니다" : "적용 중인 필터가 없습니다"}
+                aria-label="필터 전체 초기화"
+              >
+                <RotateCcw className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 xl:pr-11 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">날짜 필터</Label>
               <div className="flex items-center gap-2">
@@ -822,6 +868,7 @@ export function DashboardPage({
               <p className="text-xs text-muted-foreground">
                 여러 티어 동시 선택 가능 · 기본값 전체
               </p>
+            </div>
             </div>
           </div>
         </section>

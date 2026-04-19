@@ -169,6 +169,16 @@ export function useMatchFilter({
     triggerImmediateFetch({ player1Tiers: vals })
   }
 
+  /** 모든 필터를 기본값으로 되돌리고 1페이지부터 다시 조회합니다. */
+  const resetFilters = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = null
+    }
+    setFilters(DEFAULT_FILTERS)
+    doFetch(1, DEFAULT_FILTERS)
+  }, [doFetch])
+
   return {
     filters,
     currentPage,
@@ -187,5 +197,6 @@ export function useMatchFilter({
     setMatchTypes,
     setSeasonIds,
     setPlayer1Tiers,
+    resetFilters,
   }
 }
