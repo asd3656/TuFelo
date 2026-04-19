@@ -83,6 +83,16 @@ interface DashboardPageProps {
   currentSeason?: Season | null
 }
 
+/** 시즌 필터 가상 ID (`/api/matches` 의 `seasonId` 와 동일) */
+const SEASON_FILTER_TFPL_S1 = "__tfpl_s1__"
+const SEASON_FILTER_TFPL_S2 = "__tfpl_s2__"
+
+function labelForSeasonFilterChoice(seasonId: string, seasons: Season[]): string {
+  if (seasonId === SEASON_FILTER_TFPL_S1) return "시즌1"
+  if (seasonId === SEASON_FILTER_TFPL_S2) return "시즌2"
+  return seasons.find((s) => s.id === seasonId)?.name ?? "시즌"
+}
+
 /** 페이지네이션 번호 배열을 생성합니다 (최대 7개, 중간 생략은 "...") */
 function getPageNumbers(current: number, total: number): (number | "...")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
@@ -654,6 +664,7 @@ export function DashboardPage({
                       <DropdownMenuCheckboxItem
                         key={type}
                         checked={checked}
+                        onSelect={(e) => e.preventDefault()}
                         onCheckedChange={(isChecked) => {
                           const next = isChecked
                             ? [...filters.matchTypes, type]
@@ -693,9 +704,7 @@ export function DashboardPage({
                     {filters.seasonIds.length === 0
                       ? "전체 시즌"
                       : filters.seasonIds.length === 1
-                        ? (filters.seasonIds[0] === "__none__"
-                            ? "비시즌"
-                            : seasons.find((s) => s.id === filters.seasonIds[0])?.name ?? "시즌")
+                        ? labelForSeasonFilterChoice(filters.seasonIds[0], seasons)
                         : `${filters.seasonIds.length}개 선택`}
                   </Button>
                 </DropdownMenuTrigger>
@@ -703,15 +712,28 @@ export function DashboardPage({
                   <DropdownMenuLabel>시즌 선택</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuCheckboxItem
-                    checked={filters.seasonIds.includes("__none__")}
+                    checked={filters.seasonIds.includes(SEASON_FILTER_TFPL_S1)}
+                    onSelect={(e) => e.preventDefault()}
                     onCheckedChange={(isChecked) => {
                       const next = isChecked
-                        ? [...filters.seasonIds, "__none__"]
-                        : filters.seasonIds.filter((v) => v !== "__none__")
+                        ? [...filters.seasonIds, SEASON_FILTER_TFPL_S1]
+                        : filters.seasonIds.filter((v) => v !== SEASON_FILTER_TFPL_S1)
                       setSeasonIds(next)
                     }}
                   >
-                    비시즌
+                    시즌1
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={filters.seasonIds.includes(SEASON_FILTER_TFPL_S2)}
+                    onSelect={(e) => e.preventDefault()}
+                    onCheckedChange={(isChecked) => {
+                      const next = isChecked
+                        ? [...filters.seasonIds, SEASON_FILTER_TFPL_S2]
+                        : filters.seasonIds.filter((v) => v !== SEASON_FILTER_TFPL_S2)
+                      setSeasonIds(next)
+                    }}
+                  >
+                    시즌2
                   </DropdownMenuCheckboxItem>
                   {seasons.map((s) => {
                     const checked = filters.seasonIds.includes(s.id)
@@ -719,6 +741,7 @@ export function DashboardPage({
                       <DropdownMenuCheckboxItem
                         key={s.id}
                         checked={checked}
+                        onSelect={(e) => e.preventDefault()}
                         onCheckedChange={(isChecked) => {
                           const next = isChecked
                             ? [...filters.seasonIds, s.id]
@@ -771,6 +794,7 @@ export function DashboardPage({
                       <DropdownMenuCheckboxItem
                         key={tier}
                         checked={checked}
+                        onSelect={(e) => e.preventDefault()}
                         onCheckedChange={(isChecked) => {
                           const next = isChecked
                             ? [...filters.player1Tiers, tier]

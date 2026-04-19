@@ -8,11 +8,52 @@ export const dynamic = "force-dynamic"
 
 const PAGE_SIZE = 50
 
+/** 대시보드 시즌 필터용 가상 ID — `seasons` 테이블 행과 구분 */
+const SEASON_FILTER_TFPL_S1 = "__tfpl_s1__"
+const SEASON_FILTER_TFPL_S2 = "__tfpl_s2__"
+
 type MemberRow = {
   id: string
   name: string
   race: Race
   tier: Tier
+}
+
+/**
+ * 시즌 필터: DB 시즌 UUID + 경기유형 TFPL_S1/S2(시즌1·2) 를 OR 로 결합
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applySeasonIdsFilter(query: any, seasonIds: string[]) {
+  if (seasonIds.length === 0) return query
+
+  const uuidSeasonIds = seasonIds.filter(
+    (id) => id !== SEASON_FILTER_TFPL_S1 && id !== SEASON_FILTER_TFPL_S2,
+  )
+
+  const onlyDbSeasons =
+    seasonIds.length > 0 &&
+    seasonIds.every(
+      (id) => id !== SEASON_FILTER_TFPL_S1 && id !== SEASON_FILTER_TFPL_S2,
+    )
+
+  if (onlyDbSeasons) {
+    if (uuidSeasonIds.length === 1) return query.eq("season_id", uuidSeasonIds[0])
+    return query.in("season_id", uuidSeasonIds)
+  }
+
+  const branches: string[] = []
+  if (seasonIds.includes(SEASON_FILTER_TFPL_S1)) {
+    branches.push("match_type.eq.TFPL_S1")
+  }
+  if (seasonIds.includes(SEASON_FILTER_TFPL_S2)) {
+    branches.push("match_type.eq.TFPL_S2")
+  }
+  for (const id of uuidSeasonIds) {
+    branches.push(`season_id.eq.${id}`)
+  }
+
+  if (branches.length === 0) return query
+  return branches.length === 1 ? query.or(branches[0]) : query.or(branches.join(","))
 }
 
 /**
@@ -130,15 +171,7 @@ export async function GET(req: NextRequest) {
     if (mapFilter) query = query.ilike("map_name", `%${mapFilter}%`)
     if (matchTypes.length > 0) query = query.in("match_type", matchTypes)
     if (seasonIds.length > 0) {
-      const includeNone = seasonIds.includes("__none__")
-      const seasonIdValues = seasonIds.filter((id) => id !== "__none__")
-      if (includeNone && seasonIdValues.length > 0) {
-        query = query.or(`season_id.is.null,season_id.in.(${seasonIdValues.join(",")})`)
-      } else if (includeNone) {
-        query = query.is("season_id", null)
-      } else {
-        query = query.in("season_id", seasonIdValues)
-      }
+      query = applySeasonIdsFilter(query, seasonIds)
     }
     if (player1IdTierFilter.length > 0) {
       query = query.in("player1_id", player1IdTierFilter)
@@ -172,15 +205,7 @@ export async function GET(req: NextRequest) {
       if (mapFilter) winsQuery = winsQuery.ilike("map_name", `%${mapFilter}%`)
       if (matchTypes.length > 0) winsQuery = winsQuery.in("match_type", matchTypes)
       if (seasonIds.length > 0) {
-        const includeNone = seasonIds.includes("__none__")
-        const seasonIdValues = seasonIds.filter((id) => id !== "__none__")
-        if (includeNone && seasonIdValues.length > 0) {
-          winsQuery = winsQuery.or(`season_id.is.null,season_id.in.(${seasonIdValues.join(",")})`)
-        } else if (includeNone) {
-          winsQuery = winsQuery.is("season_id", null)
-        } else {
-          winsQuery = winsQuery.in("season_id", seasonIdValues)
-        }
+        winsQuery = applySeasonIdsFilter(winsQuery, seasonIds)
       }
       if (player1IdTierFilter.length > 0) {
         winsQuery = winsQuery.in("player1_id", player1IdTierFilter)
