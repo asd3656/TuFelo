@@ -398,6 +398,10 @@ export function DashboardPage({
     [members],
   )
   const pageNumbers = getPageNumbers(currentPage, totalPages)
+  const winRate = useMemo(() => {
+    if (totalCount === 0) return 0
+    return (wins / totalCount) * 100
+  }, [totalCount, wins])
 
   const hasActiveFilters = useMemo(() => {
     const f = filters
@@ -829,10 +833,11 @@ export function DashboardPage({
 
         {/* ── 선수1 검색 시 승/패 요약 카드 ── */}
         {filters.player1 && (
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
             <StatCard title="총 경기" value={totalCount} color="text-foreground" />
             <StatCard title="승리" value={wins} color="text-accent" />
             <StatCard title="패배" value={losses} color="text-destructive" />
+            <StatCard title="승률" value={`${winRate.toFixed(1)}%`} color="text-primary" />
           </section>
         )}
 
@@ -1121,7 +1126,7 @@ export function DashboardPage({
 }
 
 /** 선수 검색 시 나타나는 통계 카드 (총 경기 / 승 / 패) */
-function StatCard({ title, value, color }: { title: string; value: number; color: string }) {
+function StatCard({ title, value, color }: { title: string; value: number | string; color: string }) {
   return (
     <div className="bg-card rounded-lg border border-border p-4">
       <p className="text-sm text-muted-foreground mb-1">{title}</p>
