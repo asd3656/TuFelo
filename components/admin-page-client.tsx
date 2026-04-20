@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation"
 import { useMemo, useState, useTransition } from "react"
-import Link from "next/link"
 import {
   Table,
   TableBody,
@@ -38,8 +37,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Search, Users, ArrowLeft, Plus, Pencil, Trash2, RotateCcw, Lock } from "lucide-react"
+import { Search, Users, Plus, Pencil, Trash2, RotateCcw, Lock } from "lucide-react"
 import type { ClanMember, Race, Tier, ActionResult } from "@/lib/types/tufelo"
+import type { SiteHeaderData } from "@/lib/data/site-header"
+import { SiteHeader } from "@/components/site-header"
 import {
   addMemberAction,
   deleteMemberAction,
@@ -74,9 +75,10 @@ const TIERS: CliqueTier[] = [1, 2, 3, 4]
 interface AdminPageClientProps {
   initialMembers: ClanMember[]
   isGuest?: boolean
+  headerData: SiteHeaderData
 }
 
-export function AdminPageClient({ initialMembers, isGuest }: AdminPageClientProps) {
+export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPageClientProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [searchQuery, setSearchQuery] = useState("")
@@ -197,19 +199,19 @@ export function AdminPageClient({ initialMembers, isGuest }: AdminPageClientProp
 
   return (
     <main className="min-h-screen bg-background">
+      <SiteHeader
+        isAdmin={headerData.isAdmin}
+        isCreator={headerData.isCreator}
+        isGuest={headerData.isGuest}
+        loggedInUsername={headerData.loggedInUsername}
+        adminUsernames={headerData.adminUsernames}
+      />
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         <header className="mb-10">
           <div className="flex items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-4">
-              <Link href="/">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-3">
-                <Users className="h-8 w-8 text-primary" />
-                <h1 className="text-3xl font-bold text-foreground">클랜원 명단 관리</h1>
-              </div>
+            <div className="flex items-center gap-3">
+              <Users className="h-8 w-8 text-primary" />
+              <h1 className="text-3xl font-bold text-foreground">클랜원 명단 관리</h1>
             </div>
             <Button
               onClick={() => setIsNoticeOpen(true)}
@@ -218,7 +220,7 @@ export function AdminPageClient({ initialMembers, isGuest }: AdminPageClientProp
               관리자 필독
             </Button>
           </div>
-          <p className="text-muted-foreground ml-14">클랜원을 추가, 수정, 삭제하고 명단을 관리합니다</p>
+          <p className="text-muted-foreground">클랜원을 추가, 수정, 삭제하고 명단을 관리합니다</p>
         </header>
 
         <section className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">

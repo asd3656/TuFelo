@@ -2,26 +2,13 @@ import { DashboardPage } from "@/components/dashboard-page"
 import { fetchInitialDashboardData } from "@/lib/data/matches"
 import { fetchActiveMembers } from "@/lib/data/members"
 import { fetchSeasons } from "@/lib/data/seasons"
-import { getSessionFromCookies } from "@/lib/auth/admin"
-import { createServiceClient } from "@/lib/supabase/service"
-
-async function fetchAdminUsernames(): Promise<string[]> {
-  const supabase = createServiceClient()
-  const { data } = await supabase
-    .from("admins")
-    .select("username, role")
-    .neq("role", "guest")
-    .order("created_at", { ascending: true })
-  if (!data) return []
-  return data.map((row) => row.username as string)
-}
+import { fetchSiteHeaderData } from "@/lib/data/site-header"
 
 export default async function HomePage() {
-  const [dashboardData, members, session, adminUsernames, seasons] = await Promise.all([
+  const [dashboardData, members, headerData, seasons] = await Promise.all([
     fetchInitialDashboardData(),
     fetchActiveMembers(),
-    getSessionFromCookies(),
-    fetchAdminUsernames(),
+    fetchSiteHeaderData(),
     fetchSeasons(),
   ])
 
@@ -35,11 +22,11 @@ export default async function HomePage() {
       knownMaps={dashboardData.knownMaps}
       knownMatchTypes={dashboardData.knownMatchTypes}
       members={members}
-      isAdmin={session !== null && session.role !== "guest"}
-      isCreator={session?.role === "creator"}
-      isGuest={session?.role === "guest"}
-      loggedInUsername={session?.username}
-      adminUsernames={adminUsernames}
+      isAdmin={headerData.isAdmin}
+      isCreator={headerData.isCreator}
+      isGuest={headerData.isGuest}
+      loggedInUsername={headerData.loggedInUsername}
+      adminUsernames={headerData.adminUsernames}
       seasons={seasons}
       currentSeason={currentSeason}
     />

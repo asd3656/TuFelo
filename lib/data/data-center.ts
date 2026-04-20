@@ -11,6 +11,7 @@ export interface DataCenterMember {
   id: string
   name: string
   race: Race
+  tier: number | null
 }
 
 export interface DataCenterMatch {
@@ -59,7 +60,7 @@ export async function fetchDataCenterInitialData(): Promise<DataCenterInitialDat
   }
 
   const [membersRes, matchesRes, seasons] = await Promise.all([
-    supabase.from("members").select("id, name, race").eq("is_active", true).order("name", { ascending: true }),
+    supabase.from("members").select("id, name, race, tier").eq("is_active", true).order("name", { ascending: true }),
     supabase
       .from("matches")
       .select(
@@ -78,6 +79,7 @@ export async function fetchDataCenterInitialData(): Promise<DataCenterInitialDat
     id: row.id as string,
     name: row.name as string,
     race: row.race as Race,
+    tier: row.tier !== null && row.tier !== undefined ? Number(row.tier) : null,
   }))
 
   const matches: DataCenterMatch[] = (matchesRes.data ?? []).map((row) => ({

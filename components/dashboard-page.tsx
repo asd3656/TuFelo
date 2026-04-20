@@ -7,8 +7,8 @@ import { PlayerSearch } from "@/components/player-search"
 import { MatchHistory } from "@/components/match-history"
 import { RegisterMatchDialog } from "@/components/register-match-dialog"
 import { EditMatchDialog } from "@/components/edit-match-dialog"
-import { AdminLoginDialog } from "@/components/admin-login-dialog"
 import { NoticeSuggestionDialog } from "@/components/notice-suggestion-dialog"
+import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,9 +45,6 @@ import {
   Loader2,
   BookOpen,
   AlertTriangle,
-  Sun,
-  Moon,
-  Monitor,
   Lock,
   FileSpreadsheet,
   Coffee,
@@ -58,7 +55,6 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useTheme } from "next-themes"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
@@ -156,8 +152,8 @@ const DASHBOARD_FAB_ITEMS: DashboardFabItemDef[] = [
     label: "승부예측",
     icon: Vote,
     iconRingClass: "bg-violet-600 hover:bg-violet-700",
-    /* 오픈 시: kind를 external로 바꾸고 href: "https://tfpl-gray.vercel.app/" */
-    kind: "comingSoon",
+    kind: "external",
+    href: "https://tufpl.vercel.app/",
   },
   {
     id: "manual",
@@ -313,9 +309,6 @@ export function DashboardPage({
   currentSeason = null,
 }: DashboardPageProps) {
   const router = useRouter()
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
 
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
@@ -324,7 +317,6 @@ export function DashboardPage({
   const [isNoticeOpen, setIsNoticeOpen] = useState(false)
   const [isManualOpen, setIsManualOpen] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [adminLoginOpen, setAdminLoginOpen] = useState(false)
   const [isPageJumpOpen, setIsPageJumpOpen] = useState(false)
   const [pageJumpInput, setPageJumpInput] = useState("")
   /** 모바일: 기본 접힘(+만) · PC(md↑): 기본 펼침 */
@@ -493,84 +485,15 @@ export function DashboardPage({
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <SiteHeader
+        isAdmin={isAdmin}
+        isCreator={isCreator}
+        isGuest={isGuest}
+        loggedInUsername={loggedInUsername}
+        adminUsernames={adminUsernames}
+      />
 
-        {/* ── 헤더 ── */}
-        <header className="mb-10">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <Trophy className="h-8 w-8 text-primary" />
-                <h1 className="text-4xl font-bold text-foreground">TuF Clan ELO board</h1>
-              </div>
-              {adminUsernames.length > 0 && (
-                <p className="text-base text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-300 dark:border-indigo-500/25 rounded-md px-2.5 py-1 w-fit font-medium">
-                  관리자 : {adminUsernames.join(", ")}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2 justify-end">
-              {/* 테마 토글 버튼 (system → light → dark → system) */}
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={() => {
-                  if (theme === "system") setTheme("light")
-                  else if (theme === "light") setTheme("dark")
-                  else setTheme("system")
-                }}
-                className="border-border text-foreground hover:bg-secondary shrink-0"
-                suppressHydrationWarning
-                title={
-                  !mounted ? undefined
-                  : theme === "system" ? "시스템 설정 (클릭: 라이트 모드)"
-                  : theme === "light" ? "라이트 모드 (클릭: 다크 모드)"
-                  : "다크 모드 (클릭: 시스템 설정)"
-                }
-              >
-                {!mounted ? <Monitor className="h-4 w-4" />
-                  : theme === "light" ? <Sun className="h-4 w-4" />
-                  : theme === "dark" ? <Moon className="h-4 w-4" />
-                  : <Monitor className="h-4 w-4" />}
-              </Button>
-              {(isCreator || isGuest) && (
-                <Link href="/creator">
-                  <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold shadow-md border-0">
-                    제작자 페이지
-                  </Button>
-                </Link>
-              )}
-              <Button
-                type="button"
-                className="bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-md border-0"
-                onClick={() => setAdminLoginOpen(true)}
-              >
-                {loggedInUsername ? "계정 관리" : "관리자 로그인"}
-              </Button>
-              {(isAdmin || isGuest) && (
-                <Link href="/admin">
-                  <Button variant="outline" className="border-border text-foreground hover:bg-secondary">
-                    <Users className="h-4 w-4 mr-2" />
-                    클랜원 명단
-                  </Button>
-                </Link>
-              )}
-              <Link href="/ranking">
-                <Button className="bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-md border-0">
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  ELO 랭킹
-                </Button>
-              </Link>
-              <Link href="/data-center">
-                <Button className="bg-sky-600 hover:bg-sky-700 text-white font-semibold shadow-md border-0">
-                  <Database className="h-4 w-4 mr-2" />
-                  데이터센터
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </header>
+      <div className="container mx-auto px-4 py-6 max-w-6xl">
 
         {/* ── 검색 & 필터 섹션 ── */}
         <section className="bg-card rounded-lg border border-border p-6 mb-8">
@@ -1019,14 +942,6 @@ export function DashboardPage({
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        <AdminLoginDialog
-          open={adminLoginOpen}
-          onOpenChange={setAdminLoginOpen}
-          onSuccess={() => router.refresh()}
-          isLoggedIn={!!loggedInUsername}
-          loggedInUsername={loggedInUsername}
-        />
 
         <EditMatchDialog
           open={editingMatch !== null}

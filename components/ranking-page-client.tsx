@@ -1,7 +1,6 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import Link from "next/link"
 import {
   Table,
   TableBody,
@@ -21,18 +20,16 @@ import {
 } from "@/components/ui/select"
 import {
   Award,
-  ArrowLeft,
   BarChart3,
   Crown,
-  Database,
   Percent,
   Search,
   Swords,
   TrendingUp,
-  Trophy,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { MemberForRanking, MatchForRanking, Season, SeasonRankingEntry } from "@/lib/types/tufelo"
+import type { SiteHeaderData } from "@/lib/data/site-header"
 import {
   computeRankedPlayers,
   formatSeasonDateRange,
@@ -41,6 +38,7 @@ import {
   tierColors,
 } from "@/lib/ranking-utils"
 import { RankIcon, ChangeDisplay, StreakDisplay } from "@/components/ranking-shared"
+import { SiteHeader } from "@/components/site-header"
 
 interface RankingPageClientProps {
   members: MemberForRanking[]
@@ -48,6 +46,7 @@ interface RankingPageClientProps {
   seasons: Season[]
   currentSeason: Season | null
   pastSeasonRankings: Record<string, SeasonRankingEntry[]>
+  headerData: SiteHeaderData
 }
 
 export function RankingPageClient({
@@ -56,6 +55,7 @@ export function RankingPageClient({
   seasons,
   currentSeason,
   pastSeasonRankings,
+  headerData,
 }: RankingPageClientProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterSeasonId, setFilterSeasonId] = useState("__current__")
@@ -138,28 +138,19 @@ export function RankingPageClient({
 
   return (
     <main className="min-h-screen bg-background">
+      <SiteHeader
+        isAdmin={headerData.isAdmin}
+        isCreator={headerData.isCreator}
+        isGuest={headerData.isGuest}
+        loggedInUsername={headerData.loggedInUsername}
+        adminUsernames={headerData.adminUsernames}
+      />
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         <header className="mb-10">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <Link href="/">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-3">
-                <Trophy className="h-8 w-8 text-primary" />
-                <h1 className="text-3xl font-bold text-foreground">ELO Ranking Board</h1>
-              </div>
-            </div>
-            <Link href="/data-center">
-              <Button className="bg-sky-600 hover:bg-sky-700 text-white">
-                <Database className="mr-2 h-4 w-4" />
-                데이터센터
-              </Button>
-            </Link>
+          <div className="mb-4">
+            <h1 className="text-3xl font-bold text-foreground">ELO Ranking Board</h1>
           </div>
-          <p className="text-muted-foreground ml-14">클랜 내 선수들의 ELO 점수 기반 랭킹</p>
+          <p className="text-muted-foreground">클랜 내 선수들의 ELO 점수 기반 랭킹</p>
         </header>
 
         {/* 요약 카드 */}

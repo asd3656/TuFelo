@@ -1,16 +1,17 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
-  ArrowLeft,
   BarChart3,
+  ChevronDown,
   Database,
   Filter,
   LineChart as LineChartIcon,
   Percent,
   RotateCcw,
+  Swords,
+  User,
 } from "lucide-react"
 import {
   Bar,
@@ -22,51 +23,55 @@ import {
   Legend,
   Line,
   LineChart,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  ReferenceLine,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts"
 
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Progress } from "@/components/ui/progress"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { resolveMemberIdsByPlayerQuery } from "@/lib/resolve-member-ids-by-player-query"
+import { cn } from "@/lib/utils"
 import type { Race, Season } from "@/lib/types/tufelo"
+import type { SiteHeaderData } from "@/lib/data/site-header"
 import type { DataCenterMatch, DataCenterMember } from "@/lib/data/data-center"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { SiteHeader } from "@/components/site-header"
 import {
-  endOfISOWeek,
   format,
-  getISOWeek,
-  getISOWeekYear,
   parseISO,
-  startOfISOWeek,
+  startOfDay,
+  subDays,
 } from "date-fns"
 
-/** 선수 맵별 승률 막대 색 (맵당 순환) */
-const PLAYER_MAP_BAR_COLORS = [
-  "hsl(217 91% 55%)",
-  "hsl(160 72% 42%)",
-  "hsl(42 96% 48%)",
-  "hsl(283 72% 52%)",
-  "hsl(0 84% 56%)",
-  "hsl(199 89% 48%)",
-  "hsl(32 95% 52%)",
-  "hsl(328 76% 58%)",
-  "hsl(142 71% 45%)",
-  "hsl(262 83% 58%)",
-  "hsl(48 96% 53%)",
-  "hsl(350 78% 56%)",
-]
-
-/** 주차별 Elo 차트 — SVG 내부에서 CSS 변수가 안 먹을 때 검은 점으로 보이는 문제 방지용 고정 색 */
-const ELO_WEEK_LINE_COLOR = "#38bdf8"
-const ELO_WEEK_DOT_FILL = "#fbbf24"
-const ELO_WEEK_DOT_RING = "#0f172a"
+/** 일자별 Elo 차트 — SVG 내부에서 CSS 변수가 안 먹을 때 검은 점으로 보이는 문제 방지용 고정 색 */
+const ELO_WEEK_LINE_COLOR = "#1d4ed8"
+const ELO_WEEK_DOT_FILL = "#2563eb"
+const ELO_WEEK_DOT_RING = "#000000"
 
 /** 이중축 차트 승률 꺾은선 — 테/프/저 막대색과 겹치지 않는 자주·보라 계열 */
 const MAP_WINRATE_LINE_COLOR = "#a855f7"
@@ -96,11 +101,43 @@ const raceColors: Record<Race, string> = {
   P: "hsl(42 96% 52%)",
   Z: "hsl(0 84% 60%)",
 }
+const raceTagClasses: Record<Race, string> = {
+  T: "bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
+  P: "bg-amber-100 dark:bg-amber-600/20 text-amber-700 dark:text-amber-400 border-amber-400/60 dark:border-amber-500/30",
+  Z: "bg-red-100 dark:bg-red-600/20 text-red-700 dark:text-red-400 border-red-400/60 dark:border-red-500/30",
+}
+const tierTagClasses: Record<number, string> = {
+  1: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-400/60 dark:border-yellow-500/30",
+  2: "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-400/60 dark:border-purple-500/30",
+  3: "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
+  4: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-400/60 dark:border-green-500/30",
+}
+
+const raceDotYOffset: Record<Race, number> = {
+  T: -6,
+  P: 0,
+  Z: 6,
+}
+
+function makeRaceDotShape(race: Race) {
+  return (props: { cx?: number; cy?: number; fill?: string }) => {
+    const cx = props.cx ?? 0
+    const cy = (props.cy ?? 0) + raceDotYOffset[race]
+    const fill = props.fill ?? raceColors[race]
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={6} fill={fill} fillOpacity={0.82} stroke="#000000" strokeWidth={2.8} />
+        <circle cx={cx} cy={cy} r={2.2} fill="#ffffff" fillOpacity={0.9} />
+      </g>
+    )
+  }
+}
 
 interface DataCenterPageClientProps {
   members: DataCenterMember[]
   matches: DataCenterMatch[]
   seasons: Season[]
+  headerData: SiteHeaderData
 }
 
 interface PerspectiveRow {
@@ -110,10 +147,86 @@ interface PerspectiveRow {
   seasonKey: string
 }
 
+type MultiOption = { value: string; label: string }
+
+function MultiSelectFilter({
+  label,
+  options,
+  selectedValues,
+  onChange,
+  open,
+  onOpenChange,
+  placeholder,
+  disabled,
+}: {
+  label: string
+  options: MultiOption[]
+  selectedValues: string[]
+  onChange: (values: string[]) => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  placeholder: string
+  disabled?: boolean
+}) {
+  const selectedLabel =
+    selectedValues.length === 0
+      ? placeholder
+      : selectedValues.length === 1
+        ? (options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0])
+        : `${selectedValues.length}개 선택`
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <DropdownMenu open={open} onOpenChange={onOpenChange}>
+        <DropdownMenuTrigger asChild disabled={disabled}>
+          <Button variant="outline" className={cn("w-full justify-between", disabled && "opacity-60")}>
+            <span className="truncate text-sm">{selectedLabel}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56">
+          {options.map((opt) => {
+            const checked = selectedValues.includes(opt.value)
+            return (
+              <DropdownMenuCheckboxItem
+                key={opt.value}
+                checked={checked}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(v) => {
+                  if (v) onChange([...selectedValues, opt.value])
+                  else onChange(selectedValues.filter((x) => x !== opt.value))
+                }}
+              >
+                {opt.label}
+              </DropdownMenuCheckboxItem>
+            )
+          })}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onSelect={() => {
+              onChange([])
+              onOpenChange(false)
+            }}
+            className="text-muted-foreground"
+          >
+            선택 초기화
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+}
+
 function parseMinGames(search: string | null): number {
   const parsed = Number(search ?? "0")
   if (!Number.isFinite(parsed)) return 0
   return Math.max(0, Math.min(100, Math.round(parsed)))
+}
+
+function parseRecentDays(search: string | null): number {
+  const parsed = Number(search ?? "0")
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(0, Math.round(parsed))
 }
 
 /** 선수1(anchorIds)이 출전한 포지션의 member id — 선수1 필터 전용 집계에 사용 */
@@ -123,45 +236,68 @@ function anchorPlayerIdFromMatch(match: DataCenterMatch, anchorIds: Set<string>)
   return null
 }
 
-/** 경기 일자 기준 ISO 주차 (정렬용 키 + 표시 라벨) */
-function weekKeyFromPlayedDate(playedDate: string): { sortKey: string; label: string } | null {
+/** 경기 일자 기준 일 단위 키 (정렬용 키 + 표시 라벨) */
+function dayKeyFromPlayedDate(playedDate: string): { sortKey: string; label: string } | null {
   const d = parseISO(playedDate)
   if (Number.isNaN(d.getTime())) return null
-  const y = getISOWeekYear(d)
-  const w = getISOWeek(d)
-  const sortKey = `${y}-W${String(w).padStart(2, "0")}`
-  const start = startOfISOWeek(d)
-  const end = endOfISOWeek(d)
-  const label = `${y}.${format(start, "M.d")}~${format(end, "M.d")}`
+  const sortKey = format(d, "yyyy-MM-dd")
+  const label = format(d, "M.d")
   return { sortKey, label }
 }
 
-export function DataCenterPageClient({ members, matches, seasons }: DataCenterPageClientProps) {
+export function DataCenterPageClient({ members, matches, seasons, headerData }: DataCenterPageClientProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  const parseCsvParam = (key: string) =>
+    (searchParams.get(key) ?? "")
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean)
+
   const currentSeason = useMemo(() => seasons.find((s) => s.endDate === null) ?? null, [seasons])
-  const [seasonId, setSeasonId] = useState(searchParams.get("season") ?? currentSeason?.id ?? "__all__")
-  const [mapName, setMapName] = useState(searchParams.get("map") ?? "__all__")
-  const [matchType, setMatchType] = useState(searchParams.get("matchType") ?? "__all__")
-  const [race, setRace] = useState(searchParams.get("race") ?? "__all__")
+  const [seasonIds, setSeasonIds] = useState(() => {
+    const parsed = parseCsvParam("season")
+    if (parsed.length > 0) return parsed
+    return currentSeason ? [currentSeason.id] : []
+  })
+  const [mapNames, setMapNames] = useState(() => parseCsvParam("map"))
+  const [matchTypes, setMatchTypes] = useState(() => parseCsvParam("matchType"))
+  const [races, setRaces] = useState<Race[]>(() => parseCsvParam("race").filter((v): v is Race => v === "T" || v === "P" || v === "Z"))
+  const [tiers, setTiers] = useState(() => parseCsvParam("tier"))
   const [playerFilterEnabled, setPlayerFilterEnabled] = useState(searchParams.get("players") === "on")
   const [playerQuery, setPlayerQuery] = useState(searchParams.get("player") ?? "")
-  const [player2Query, setPlayer2Query] = useState(searchParams.get("player2") ?? "__all__")
+  const [player2Queries, setPlayer2Queries] = useState(() => parseCsvParam("player2").slice(0, 1))
   const [minGames, setMinGames] = useState(parseMinGames(searchParams.get("minGames")))
+  const [recentDays, setRecentDays] = useState(parseRecentDays(searchParams.get("recentDays")))
+  const [seasonMenuOpen, setSeasonMenuOpen] = useState(false)
+  const [raceMenuOpen, setRaceMenuOpen] = useState(false)
+  const [tierMenuOpen, setTierMenuOpen] = useState(false)
+  const [mapMenuOpen, setMapMenuOpen] = useState(false)
+  const [matchTypeMenuOpen, setMatchTypeMenuOpen] = useState(false)
+  const [player2MenuOpen, setPlayer2MenuOpen] = useState(false)
+
+  const maxRecentDays = useMemo(() => {
+    const parsed = matches
+      .map((m) => parseISO(m.playedDate))
+      .filter((d) => !Number.isNaN(d.getTime()))
+      .sort((a, b) => a.getTime() - b.getTime())
+    if (parsed.length === 0) return 30
+    const days = Math.ceil((Date.now() - parsed[0].getTime()) / (1000 * 60 * 60 * 24))
+    return Math.max(1, Math.min(365, days))
+  }, [matches])
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
   const activePlayerQuery = playerFilterEnabled ? playerQuery : ""
-  const normalizedPlayer2Query = player2Query === "__all__" ? "" : player2Query
-  const activePlayer2Query = playerFilterEnabled ? normalizedPlayer2Query : ""
+  const activePlayer2Queries = playerFilterEnabled ? player2Queries : []
   const matchedPlayerIds = useMemo(
     () => new Set(resolveMemberIdsByPlayerQuery(members, activePlayerQuery)),
     [members, activePlayerQuery],
   )
   const matchedPlayer2Ids = useMemo(
-    () => new Set(resolveMemberIdsByPlayerQuery(members, activePlayer2Query)),
-    [members, activePlayer2Query],
+    () => new Set(activePlayer2Queries.flatMap((name) => resolveMemberIdsByPlayerQuery(members, name))),
+    [members, activePlayer2Queries],
   )
 
   /** 선수 필터 ON + 선수1 검색에 해당하는 ID가 있을 때만 선수1 기준 차트 */
@@ -169,7 +305,6 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
     playerFilterEnabled && activePlayerQuery.trim().length > 0 && matchedPlayerIds.size > 0
 
   const seasonOptions = useMemo(() => {
-    const base = [{ id: "__all__", label: "전체 시즌" }]
     const proLeague = [
       { id: SEASON_OPTION_PROLEAGUE_S1, label: "시즌1 (TFPL_S1)" },
       { id: SEASON_OPTION_PROLEAGUE_S2, label: "시즌2 (TFPL_S2)" },
@@ -178,12 +313,19 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
       id: s.id,
       label: s.endDate === null ? `${s.name} (현재)` : s.name,
     }))
-    return [...base, ...proLeague, ...rows]
+    return [...proLeague, ...rows]
   }, [seasons])
+  const tierOptions = useMemo(() => {
+    const uniq = Array.from(new Set(members.map((m) => m.tier).filter((v): v is number => v !== null)))
+      .sort((a, b) => a - b)
+      .map((t) => ({ value: String(t), label: `티어 ${t}` }))
+    return uniq
+  }, [members])
 
   const seasonFilteredMatches = useMemo(() => {
-    return matches.filter((m) => matchPassesSeasonFilter(seasonId, m))
-  }, [matches, seasonId])
+    if (seasonIds.length === 0) return matches
+    return matches.filter((m) => seasonIds.some((sid) => matchPassesSeasonFilter(sid, m)))
+  }, [matches, seasonIds])
 
   /** 시즌 필터로 걸린 경기에 출전한 서로 다른 선수 수 */
   const seasonPlayerCount = useMemo(() => {
@@ -196,34 +338,43 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
   }, [seasonFilteredMatches])
 
   const selectedSeason = useMemo(() => {
-    if (seasonId === "__all__") return null
-    if (PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[seasonId] !== undefined) return null
-    return seasons.find((s) => s.id === seasonId) ?? null
-  }, [seasonId, seasons])
+    if (seasonIds.length !== 1) return null
+    const selectedId = seasonIds[0]
+    if (PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[selectedId] !== undefined) return null
+    return seasons.find((s) => s.id === selectedId) ?? null
+  }, [seasonIds, seasons])
 
   function resetAllFilters() {
-    setSeasonId("__all__")
-    setMapName("__all__")
-    setMatchType("__all__")
-    setRace("__all__")
+    setSeasonIds(currentSeason ? [currentSeason.id] : [])
+    setMapNames([])
+    setMatchTypes([])
+    setRaces([])
+    setTiers([])
     setPlayerFilterEnabled(false)
     setPlayerQuery("")
-    setPlayer2Query("__all__")
+    setPlayer2Queries([])
     setMinGames(0)
+    setRecentDays(0)
+    setSeasonMenuOpen(false)
+    setRaceMenuOpen(false)
+    setTierMenuOpen(false)
+    setMapMenuOpen(false)
+    setMatchTypeMenuOpen(false)
+    setPlayer2MenuOpen(false)
   }
 
   const mapOptions = useMemo(() => {
     const rows = Array.from(new Set(seasonFilteredMatches.map((m) => m.mapName)))
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, "ko"))
-    return ["__all__", ...rows]
+    return rows
   }, [seasonFilteredMatches])
 
   const matchTypeOptions = useMemo(() => {
     const rows = Array.from(new Set(seasonFilteredMatches.map((m) => m.matchType)))
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, "ko"))
-    return ["__all__", ...rows]
+    return rows
   }, [seasonFilteredMatches])
 
   /** 시즌 필터를 적용한 상태에서 선수1과 실제로 경기한 상대 목록(경기 수 내림차순) */
@@ -246,42 +397,65 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
 
   useEffect(() => {
     const next = new URLSearchParams()
-    if (seasonId !== "__all__") next.set("season", seasonId)
-    if (mapName !== "__all__") next.set("map", mapName)
-    if (matchType !== "__all__") next.set("matchType", matchType)
-    if (race !== "__all__") next.set("race", race)
+    if (seasonIds.length > 0) next.set("season", seasonIds.join(","))
+    if (mapNames.length > 0) next.set("map", mapNames.join(","))
+    if (matchTypes.length > 0) next.set("matchType", matchTypes.join(","))
+    if (races.length > 0) next.set("race", races.join(","))
+    if (tiers.length > 0) next.set("tier", tiers.join(","))
     if (playerFilterEnabled) next.set("players", "on")
     if (playerFilterEnabled && playerQuery.trim()) next.set("player", playerQuery.trim())
-    if (playerFilterEnabled && normalizedPlayer2Query.trim()) next.set("player2", normalizedPlayer2Query.trim())
+    if (playerFilterEnabled && player2Queries.length > 0) next.set("player2", player2Queries.join(","))
     if (minGames !== 0) next.set("minGames", String(minGames))
+    if (recentDays !== 0) next.set("recentDays", String(recentDays))
     const query = next.toString()
+    const current = searchParams.toString()
+    if (query === current) return
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
-  }, [seasonId, mapName, matchType, race, playerFilterEnabled, playerQuery, normalizedPlayer2Query, minGames, pathname, router])
+  }, [seasonIds, mapNames, matchTypes, races, tiers, playerFilterEnabled, playerQuery, player2Queries, minGames, recentDays, pathname, router, searchParams])
 
   useEffect(() => {
-    if (mapName !== "__all__" && !mapOptions.includes(mapName)) {
-      setMapName("__all__")
-    }
-  }, [mapName, mapOptions])
+    setMapNames((prev) => {
+      const next = prev.filter((m) => mapOptions.includes(m))
+      if (next.length === prev.length && next.every((v, i) => v === prev[i])) return prev
+      return next
+    })
+  }, [mapOptions])
   useEffect(() => {
-    if (matchType !== "__all__" && !matchTypeOptions.includes(matchType)) {
-      setMatchType("__all__")
-    }
-  }, [matchType, matchTypeOptions])
+    setMatchTypes((prev) => {
+      const next = prev.filter((m) => matchTypeOptions.includes(m))
+      if (next.length === prev.length && next.every((v, i) => v === prev[i])) return prev
+      return next
+    })
+  }, [matchTypeOptions])
+  useEffect(() => {
+    const valid = new Set(tierOptions.map((o) => o.value))
+    setTiers((prev) => {
+      const next = prev.filter((t) => valid.has(t))
+      if (next.length === prev.length && next.every((v, i) => v === prev[i])) return prev
+      return next
+    })
+  }, [tierOptions])
   useEffect(() => {
     if (!playerFilterEnabled) return
-    if (player2Query === "__all__") return
-    const exists = player2Options.some((opt) => opt.name === player2Query)
-    if (!exists) setPlayer2Query("__all__")
-  }, [playerFilterEnabled, player2Query, player2Options])
+    setPlayer2Queries((prev) => {
+      const next = prev.filter((name) => player2Options.some((opt) => opt.name === name)).slice(0, 1)
+      if (next.length === prev.length && next.every((v, i) => v === prev[i])) return prev
+      return next
+    })
+  }, [playerFilterEnabled, player2Options])
 
   const filteredMatches = useMemo(() => {
     return matches.filter((match) => {
-      if (!matchPassesSeasonFilter(seasonId, match)) return false
-      if (mapName !== "__all__" && match.mapName !== mapName) return false
-      if (matchType !== "__all__" && match.matchType !== matchType) return false
+      if (seasonIds.length > 0 && !seasonIds.some((id) => matchPassesSeasonFilter(id, match))) return false
+      if (mapNames.length > 0 && !mapNames.includes(match.mapName)) return false
+      if (matchTypes.length > 0 && !matchTypes.includes(match.matchType)) return false
+      if (recentDays > 0) {
+        const cutoff = startOfDay(subDays(new Date(), recentDays - 1))
+        const playedAt = parseISO(match.playedDate)
+        if (Number.isNaN(playedAt.getTime()) || playedAt < cutoff) return false
+      }
       const hasPlayer1Filter = activePlayerQuery.trim().length > 0
-      const hasPlayer2Filter = activePlayer2Query.trim().length > 0
+      const hasPlayer2Filter = activePlayer2Queries.length > 0
       if (hasPlayer1Filter && matchedPlayerIds.size === 0) return false
       if (hasPlayer2Filter && matchedPlayer2Ids.size === 0) return false
       if (hasPlayer1Filter && hasPlayer2Filter) {
@@ -294,23 +468,32 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
       } else if (hasPlayer2Filter) {
         if (!matchedPlayer2Ids.has(match.player1Id) && !matchedPlayer2Ids.has(match.player2Id)) return false
       }
-      if (race !== "__all__") {
+      if (races.length > 0) {
         const p1Race = memberById.get(match.player1Id)?.race
         const p2Race = memberById.get(match.player2Id)?.race
-        if (p1Race !== race && p2Race !== race) return false
+        if ((!p1Race || !races.includes(p1Race)) && (!p2Race || !races.includes(p2Race))) return false
+      }
+      if (tiers.length > 0) {
+        const p1Tier = memberById.get(match.player1Id)?.tier
+        const p2Tier = memberById.get(match.player2Id)?.tier
+        const hasP1 = p1Tier !== null && p1Tier !== undefined && tiers.includes(String(p1Tier))
+        const hasP2 = p2Tier !== null && p2Tier !== undefined && tiers.includes(String(p2Tier))
+        if (!hasP1 && !hasP2) return false
       }
       return true
     })
   }, [
     matches,
-    seasonId,
-    mapName,
-    matchType,
-    race,
+    seasonIds,
+    mapNames,
+    matchTypes,
+    races,
+    tiers,
     activePlayerQuery,
-    activePlayer2Query,
+    activePlayer2Queries,
     matchedPlayerIds,
     matchedPlayer2Ids,
+    recentDays,
     memberById,
   ])
 
@@ -324,7 +507,7 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
       /** 시즌 테이블 UUID 없이도 메타 차트에 포함 — TFPL 등은 match_type만 있고 season_id 가 null 인 경우가 많음 */
       const seasonKey = match.seasonId ?? "__no_db_season__"
       const hasPlayer1Filter = activePlayerQuery.trim().length > 0 && matchedPlayerIds.size > 0
-      const hasPlayer2Filter = activePlayer2Query.trim().length > 0 && matchedPlayer2Ids.size > 0
+      const hasPlayer2Filter = activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
       const useAnchorPlayerIds = hasPlayer1Filter ? matchedPlayerIds : hasPlayer2Filter ? matchedPlayer2Ids : null
 
       if (!useAnchorPlayerIds || useAnchorPlayerIds.has(match.player1Id)) {
@@ -345,7 +528,7 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
       }
     }
     return rows
-  }, [filteredMatches, memberById, activePlayerQuery, activePlayer2Query, matchedPlayerIds, matchedPlayer2Ids])
+  }, [filteredMatches, memberById, activePlayerQuery, activePlayer2Queries, matchedPlayerIds, matchedPlayer2Ids])
 
   /** 메타: 전체 풀 — 선수 필터 없을 때 */
   const metaRaceWinRates = useMemo(() => {
@@ -383,6 +566,18 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
   }, [filteredMatches, matchedPlayerIds, memberById, minGames])
 
   const raceWinRates = usePlayer1Charts ? playerVsOpponentRaceWinRates : metaRaceWinRates
+  const metaDonutStats = useMemo(
+    () =>
+      raceOrder.map((r) => {
+        const row = metaRaceWinRates.find((x) => x.race === r)
+        return {
+          race: r,
+          winRate: row?.winRate ?? 0,
+          games: row?.games ?? 0,
+        }
+      }),
+    [metaRaceWinRates],
+  )
 
   const metaMapRaceWinRates = useMemo(() => {
     const mapRace = new Map<string, Record<Race, { games: number; wins: number }>>()
@@ -419,60 +614,196 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
       .slice(0, 12)
   }, [perspectiveRows, minGames])
 
-  /** 선수1 기준 맵별 승률 (막대 1열 — 선수2 있으면 이미 대전만 포함) */
-  const playerMapWinRates = useMemo(() => {
-    const byMap = new Map<string, { map: string; games: number; wins: number; winRate: number; fill: string }>()
+  /** 선수1 기준: 맵별 상대 종족(T/P/Z) 승률 */
+  const playerMapRaceWinRates = useMemo(() => {
+    const mapRace = new Map<string, Record<Race, { games: number; wins: number }>>()
     for (const match of filteredMatches) {
       const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
       if (!anchorId) continue
+      const opp = anchorId === match.player1Id ? memberById.get(match.player2Id) : memberById.get(match.player1Id)
+      if (!opp) continue
       const won = match.winnerId === anchorId
-      const prev = byMap.get(match.mapName) ?? { map: match.mapName, games: 0, wins: 0, winRate: 0, fill: "" }
-      prev.games += 1
-      if (won) prev.wins += 1
-      byMap.set(match.mapName, prev)
+      const prev = mapRace.get(match.mapName) ?? {
+        T: { games: 0, wins: 0 },
+        P: { games: 0, wins: 0 },
+        Z: { games: 0, wins: 0 },
+      }
+      prev[opp.race].games += 1
+      if (won) prev[opp.race].wins += 1
+      mapRace.set(match.mapName, prev)
     }
-    const rows = Array.from(byMap.values())
-      .filter((row) => row.games >= minGames)
-      .map((row) => ({
-        ...row,
-        winRate: Number(((row.wins / row.games) * 100).toFixed(1)),
-      }))
-      .sort((a, b) => b.games - a.games)
+    return Array.from(mapRace.entries())
+      .map(([map, values]) => {
+        const tGames = values.T.games
+        const pGames = values.P.games
+        const zGames = values.Z.games
+        const total = tGames + pGames + zGames
+        return {
+          map,
+          T: tGames >= minGames ? Number(((values.T.wins / tGames) * 100).toFixed(1)) : null,
+          P: pGames >= minGames ? Number(((values.P.wins / pGames) * 100).toFixed(1)) : null,
+          Z: zGames >= minGames ? Number(((values.Z.wins / zGames) * 100).toFixed(1)) : null,
+          tGames,
+          pGames,
+          zGames,
+          total,
+        }
+      })
+      .filter((item) => item.T !== null || item.P !== null || item.Z !== null)
+      .sort((a, b) => b.total - a.total)
       .slice(0, 12)
-    return rows.map((row, i) => ({
-      ...row,
-      fill: PLAYER_MAP_BAR_COLORS[i % PLAYER_MAP_BAR_COLORS.length],
-    }))
-  }, [filteredMatches, matchedPlayerIds, minGames])
+  }, [filteredMatches, matchedPlayerIds, memberById, minGames])
 
-  /** 메타: 주차별 클랜 풀 종족 승률 추이 */
-  const metaWeekRaceTrend = useMemo(() => {
+  const playerMapDotSeries = useMemo(
+    () => ({
+      T: playerMapRaceWinRates
+        .filter((row) => row.T !== null)
+        .map((row) => ({ map: row.map, winRate: row.T as number, games: row.tGames, race: "T" as Race })),
+      P: playerMapRaceWinRates
+        .filter((row) => row.P !== null)
+        .map((row) => ({ map: row.map, winRate: row.P as number, games: row.pGames, race: "P" as Race })),
+      Z: playerMapRaceWinRates
+        .filter((row) => row.Z !== null)
+        .map((row) => ({ map: row.map, winRate: row.Z as number, games: row.zGames, race: "Z" as Race })),
+    }),
+    [playerMapRaceWinRates],
+  )
+  const playerMapRows = useMemo(() => playerMapRaceWinRates.map((row) => row.map), [playerMapRaceWinRates])
+  const playerMapMasteryData = useMemo(() => {
+    type MapPerf = { games: number; wins: number; losses: number; winRate: number }
+
+    const buildMapPerf = (anchorIds: Set<string> | null): Map<string, MapPerf> => {
+      const byMap = new Map<string, { games: number; wins: number }>()
+      for (const match of filteredMatches) {
+        if (anchorIds === null) {
+          // 클랜 평균: 한 경기에서 양 선수 관점을 모두 반영
+          const p1 = byMap.get(match.mapName) ?? { games: 0, wins: 0 }
+          p1.games += 1
+          if (match.winnerId === match.player1Id) p1.wins += 1
+          byMap.set(match.mapName, p1)
+
+          const p2 = byMap.get(match.mapName) ?? { games: 0, wins: 0 }
+          p2.games += 1
+          if (match.winnerId === match.player2Id) p2.wins += 1
+          byMap.set(match.mapName, p2)
+          continue
+        }
+
+        const anchorId = anchorPlayerIdFromMatch(match, anchorIds)
+        if (!anchorId) continue
+        const prev = byMap.get(match.mapName) ?? { games: 0, wins: 0 }
+        prev.games += 1
+        if (match.winnerId === anchorId) prev.wins += 1
+        byMap.set(match.mapName, prev)
+      }
+
+      const rows = [...byMap.values()].filter((x) => x.games >= minGames)
+      const result = new Map<string, MapPerf>()
+      for (const [map, stat] of byMap.entries()) {
+        if (stat.games < minGames) continue
+        const losses = Math.max(0, stat.games - stat.wins)
+        const winRate = stat.games > 0 ? Number(((stat.wins / stat.games) * 100).toFixed(1)) : 0
+        result.set(map, { games: stat.games, wins: stat.wins, losses, winRate })
+      }
+      return result
+    }
+
+    if (!usePlayer1Charts) {
+      return [] as Array<{
+        map: string
+        p1Wins: number
+        p1Losses: number
+        p1WinRate: number
+        p1Games: number
+        compareWins: number
+        compareLosses: number
+        compareWinRate: number
+        compareGames: number
+      }>
+    }
+
+    const hasHeadToHead = usePlayer1Charts && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
+    const p1Perf = buildMapPerf(matchedPlayerIds)
+    const p2Perf = hasHeadToHead ? buildMapPerf(matchedPlayer2Ids) : null
+    const clanPerf = hasHeadToHead ? null : buildMapPerf(null)
+    const comparePerf = p2Perf ?? clanPerf
+    if (!comparePerf) return []
+
+    // 왜곡 방지: 비교 대상 모두 데이터가 있는 맵(교집합)만 사용
+    const mapCandidates = [...p1Perf.keys()]
+      .filter((map) => comparePerf.has(map))
+      .map((map) => {
+        const p1 = p1Perf.get(map)!
+        const cp = comparePerf.get(map)!
+        return {
+          map,
+          p1,
+          cp,
+          score: p1.games + cp.games,
+        }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10)
+
+    return mapCandidates.map((row) => ({
+      map: row.map,
+      p1Wins: row.p1.wins,
+      p1Losses: row.p1.losses,
+      p1WinRate: row.p1.winRate,
+      p1Games: row.p1.games,
+      compareWins: row.cp.wins,
+      compareLosses: row.cp.losses,
+      compareWinRate: row.cp.winRate,
+      compareGames: row.cp.games,
+    }))
+  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, matchedPlayer2Ids, activePlayer2Queries, minGames])
+  const metaMapDotSeries = useMemo(
+    () => ({
+      T: metaMapRaceWinRates
+        .filter((row) => row.T !== null)
+        .map((row) => ({ map: row.map, winRate: row.T as number, games: row.tGames, race: "T" as Race })),
+      P: metaMapRaceWinRates
+        .filter((row) => row.P !== null)
+        .map((row) => ({ map: row.map, winRate: row.P as number, games: row.pGames, race: "P" as Race })),
+      Z: metaMapRaceWinRates
+        .filter((row) => row.Z !== null)
+        .map((row) => ({ map: row.map, winRate: row.Z as number, games: row.zGames, race: "Z" as Race })),
+    }),
+    [metaMapRaceWinRates],
+  )
+  const metaMapRows = useMemo(() => metaMapRaceWinRates.map((row) => row.map), [metaMapRaceWinRates])
+
+  /** 메타: 최근 14일 일자별 클랜 풀 종족 승률 추이 */
+  const metaDayRaceTrend = useMemo(() => {
     const grouped = new Map<string, { sortKey: string; label: string; stats: Record<Race, { games: number; wins: number }> }>()
+    const cutoff = startOfDay(subDays(new Date(), 13))
 
     for (const match of filteredMatches) {
-      const wk = weekKeyFromPlayedDate(match.playedDate)
-      if (!wk) continue
+      const playedAt = parseISO(match.playedDate)
+      if (Number.isNaN(playedAt.getTime()) || playedAt < cutoff) continue
+      const day = dayKeyFromPlayedDate(match.playedDate)
+      if (!day) continue
 
       const p1 = memberById.get(match.player1Id)
       const p2 = memberById.get(match.player2Id)
       if (!p1 || !p2) continue
 
       const hasPlayer1Filter = activePlayerQuery.trim().length > 0 && matchedPlayerIds.size > 0
-      const hasPlayer2Filter = activePlayer2Query.trim().length > 0 && matchedPlayer2Ids.size > 0
+      const hasPlayer2Filter = activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
       const useAnchorPlayerIds = hasPlayer1Filter ? matchedPlayerIds : hasPlayer2Filter ? matchedPlayer2Ids : null
 
-      let bucket = grouped.get(wk.sortKey)
+      let bucket = grouped.get(day.sortKey)
       if (!bucket) {
         bucket = {
-          sortKey: wk.sortKey,
-          label: wk.label,
+          sortKey: day.sortKey,
+          label: day.label,
           stats: {
             T: { games: 0, wins: 0 },
             P: { games: 0, wins: 0 },
             Z: { games: 0, wins: 0 },
           },
         }
-        grouped.set(wk.sortKey, bucket)
+        grouped.set(day.sortKey, bucket)
       }
 
       if (!useAnchorPlayerIds || useAnchorPlayerIds.has(match.player1Id)) {
@@ -487,7 +818,7 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
 
     const sorted = [...grouped.values()].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
-    return sorted.map(({ label, stats }) => ({
+    return sorted.slice(-14).map(({ label, stats }) => ({
       weekLabel: label,
       T: stats.T.games >= minGames ? Number(((stats.T.wins / stats.T.games) * 100).toFixed(1)) : null,
       P: stats.P.games >= minGames ? Number(((stats.P.wins / stats.P.games) * 100).toFixed(1)) : null,
@@ -497,23 +828,90 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
     filteredMatches,
     memberById,
     activePlayerQuery,
-    activePlayer2Query,
+    activePlayer2Queries,
     matchedPlayerIds,
     matchedPlayer2Ids,
     minGames,
   ])
 
-  /** 선수1 기준: 주차별 경기 종료 직후 Elo 점수 (해당 주 마지막 경기 기준) — 최근 4주만 */
-  const playerWeekEloTrend = useMemo(() => {
+  /** 메타: 최근 7일 ELO 변동성 (변동폭/최고점 대비 현재 하락폭) */
+  const metaEloVolatilityRows = useMemo(() => {
+    if (usePlayer1Charts) return [] as Array<{
+      name: string
+      games: number
+      currentElo: number
+      peakElo: number
+      troughElo: number
+      range: number
+      drawdown: number
+    }>
+
+    type EloPoint = { playedDate: string; id: string; elo: number }
+    const byMember = new Map<string, EloPoint[]>()
+    const cutoff = startOfDay(subDays(new Date(), 6))
+
+    for (const match of filteredMatches) {
+      const playedAt = parseISO(match.playedDate)
+      if (Number.isNaN(playedAt.getTime()) || playedAt < cutoff) continue
+
+      const p1Before = Number(match.player1EloBefore)
+      const p1Delta = Number(match.player1EloDelta)
+      if (Number.isFinite(p1Before) && Number.isFinite(p1Delta)) {
+        const arr = byMember.get(match.player1Id) ?? []
+        arr.push({ playedDate: match.playedDate, id: match.id, elo: p1Before + p1Delta })
+        byMember.set(match.player1Id, arr)
+      }
+
+      const p2Before = Number(match.player2EloBefore)
+      const p2Delta = Number(match.player2EloDelta)
+      if (Number.isFinite(p2Before) && Number.isFinite(p2Delta)) {
+        const arr = byMember.get(match.player2Id) ?? []
+        arr.push({ playedDate: match.playedDate, id: match.id, elo: p2Before + p2Delta })
+        byMember.set(match.player2Id, arr)
+      }
+    }
+
+    return Array.from(byMember.entries())
+      .map(([memberId, rows]) => {
+        if (rows.length < 2) return null
+        rows.sort((a, b) => a.playedDate.localeCompare(b.playedDate) || a.id.localeCompare(b.id))
+        const values = rows.map((r) => r.elo)
+        const peakElo = Math.max(...values)
+        const troughElo = Math.min(...values)
+        const currentElo = rows[rows.length - 1]?.elo ?? values[values.length - 1]
+        const range = peakElo - troughElo
+        const drawdown = Math.max(0, peakElo - currentElo)
+        const rangeRemainder = Math.max(0, range - drawdown)
+        const member = memberById.get(memberId)
+        return {
+          name: member?.name ?? "알 수 없음",
+          games: rows.length,
+          currentElo,
+          peakElo,
+          troughElo,
+          range,
+          drawdown,
+          rangeRemainder,
+        }
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort((a, b) => b.range - a.range || b.drawdown - a.drawdown || b.games - a.games)
+      .slice(0, 10)
+  }, [usePlayer1Charts, filteredMatches, memberById])
+
+  const buildPlayerDayEloTrend = (anchorIds: Set<string>) => {
     type Row = { sortKey: string; label: string; playedDate: string; id: string; eloScore: number }
     const rows: Row[] = []
+    const cutoff = startOfDay(subDays(new Date(), 13))
 
     for (const match of filteredMatches) {
       if (selectedSeason) {
         if (match.playedDate < selectedSeason.startDate) continue
         if (selectedSeason.endDate !== null && match.playedDate > selectedSeason.endDate) continue
       }
-      const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
+      const playedAt = parseISO(match.playedDate)
+      if (Number.isNaN(playedAt.getTime()) || playedAt < cutoff) continue
+      const anchorId = anchorPlayerIdFromMatch(match, anchorIds)
       if (!anchorId) continue
       const before = anchorId === match.player1Id ? match.player1EloBefore : match.player2EloBefore
       const delta = anchorId === match.player1Id ? match.player1EloDelta : match.player2EloDelta
@@ -522,11 +920,11 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
       const d = Number(delta)
       if (!Number.isFinite(b) || !Number.isFinite(d)) continue
       const eloScore = b + d
-      const wk = weekKeyFromPlayedDate(match.playedDate)
-      if (!wk) continue
+      const day = dayKeyFromPlayedDate(match.playedDate)
+      if (!day) continue
       rows.push({
-        sortKey: wk.sortKey,
-        label: wk.label,
+        sortKey: day.sortKey,
+        label: day.label,
         playedDate: match.playedDate,
         id: match.id,
         eloScore,
@@ -541,15 +939,37 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
     }
 
     const sortedKeys = [...lastInWeek.keys()].sort((a, b) => a.localeCompare(b))
-    const lastFour = sortedKeys.slice(-4)
-    return lastFour.map((key) => {
+    const lastFourteen = sortedKeys.slice(-14)
+    return lastFourteen.map((key) => {
       const v = lastInWeek.get(key)!
       return {
+        dayKey: key,
         weekLabel: v.label,
         eloScore: Number(v.eloScore.toFixed(1)),
       }
     })
-  }, [filteredMatches, matchedPlayerIds, selectedSeason])
+  }
+
+  /** 선수1 기준: 최근 14일 일자별 경기 종료 직후 Elo 점수 (해당 일 마지막 경기 기준) */
+  const playerDayEloTrend = useMemo(() => buildPlayerDayEloTrend(matchedPlayerIds), [filteredMatches, matchedPlayerIds, selectedSeason])
+
+  /** 선수2 기준: 상대전적 모드에서 최근 14일 일자별 Elo */
+  const player2DayEloTrend = useMemo(() => buildPlayerDayEloTrend(matchedPlayer2Ids), [filteredMatches, matchedPlayer2Ids, selectedSeason])
+
+  const isHeadToHeadMode = usePlayer1Charts && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
+  const versusEloTrend = useMemo(() => {
+    if (!isHeadToHeadMode) return playerDayEloTrend.map((r) => ({ weekLabel: r.weekLabel, p1Elo: r.eloScore }))
+    const byDay = new Map<string, { weekLabel: string; p1Elo?: number; p2Elo?: number }>()
+    for (const r of playerDayEloTrend) byDay.set(r.dayKey, { weekLabel: r.weekLabel, p1Elo: r.eloScore })
+    for (const r of player2DayEloTrend) {
+      const prev = byDay.get(r.dayKey) ?? { weekLabel: r.weekLabel }
+      prev.p2Elo = r.eloScore
+      byDay.set(r.dayKey, prev)
+    }
+    return [...byDay.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([, v]) => ({ weekLabel: v.weekLabel, p1Elo: v.p1Elo ?? null, p2Elo: v.p2Elo ?? null }))
+  }, [isHeadToHeadMode, playerDayEloTrend, player2DayEloTrend])
 
   const chartConfig = {
     T: { label: "테란", color: raceColors.T },
@@ -561,19 +981,166 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
     eloScore: { label: "Elo 점수", color: ELO_WEEK_LINE_COLOR },
   } satisfies ChartConfig
 
+  const buildPlayerCardStats = (anchorIds: Set<string>) => {
+    if (anchorIds.size === 0) {
+      return { games: 0, wins: 0, winRate: 0, vsT: 0, vsP: 0, vsZ: 0, member: null as DataCenterMember | null }
+    }
+    const member = members.find((m) => anchorIds.has(m.id)) ?? null
+    let games = 0
+    let wins = 0
+    const vs: Record<Race, { games: number; wins: number }> = {
+      T: { games: 0, wins: 0 },
+      P: { games: 0, wins: 0 },
+      Z: { games: 0, wins: 0 },
+    }
+    for (const match of seasonFilteredMatches) {
+      const anchorId = anchorPlayerIdFromMatch(match, anchorIds)
+      if (!anchorId) continue
+      games += 1
+      const won = match.winnerId === anchorId
+      if (won) wins += 1
+      const opp = anchorId === match.player1Id ? memberById.get(match.player2Id) : memberById.get(match.player1Id)
+      if (!opp) continue
+      vs[opp.race].games += 1
+      if (won) vs[opp.race].wins += 1
+    }
+    const pct = (w: number, g: number) => (g > 0 ? Number(((w / g) * 100).toFixed(1)) : 0)
+    return {
+      member,
+      games,
+      wins,
+      winRate: pct(wins, games),
+      vsT: pct(vs.T.wins, vs.T.games),
+      vsP: pct(vs.P.wins, vs.P.games),
+      vsZ: pct(vs.Z.wins, vs.Z.games),
+    }
+  }
+
+  const player1CardStats = useMemo(() => buildPlayerCardStats(matchedPlayerIds), [matchedPlayerIds, filteredMatches, memberById, members])
+  const player2CardStats = useMemo(() => buildPlayerCardStats(matchedPlayer2Ids), [matchedPlayer2Ids, filteredMatches, memberById, members])
+
+  const headToHeadStats = useMemo(() => {
+    if (matchedPlayerIds.size === 0 || matchedPlayer2Ids.size === 0) return { games: 0, wins: 0, losses: 0, winRate: 0 }
+    let games = 0
+    let wins = 0
+    for (const match of filteredMatches) {
+      const pairMatched =
+        (matchedPlayerIds.has(match.player1Id) && matchedPlayer2Ids.has(match.player2Id)) ||
+        (matchedPlayerIds.has(match.player2Id) && matchedPlayer2Ids.has(match.player1Id))
+      if (!pairMatched) continue
+      games += 1
+      const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
+      if (anchorId && match.winnerId === anchorId) wins += 1
+    }
+    const losses = Math.max(0, games - wins)
+    return {
+      games,
+      wins,
+      losses,
+      winRate: games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0,
+    }
+  }, [matchedPlayerIds, matchedPlayer2Ids, filteredMatches])
+
+  const headToHeadRisk = useMemo(() => {
+    if (headToHeadStats.games === 0) return { label: "판정불가", tone: "bg-muted text-muted-foreground" }
+    if (headToHeadStats.winRate < 25) return { label: "매우높음", tone: "bg-red-500/15 text-red-300 border border-red-500/35" }
+    if (headToHeadStats.winRate < 40) return { label: "높음", tone: "bg-orange-500/15 text-orange-300 border border-orange-500/35" }
+    if (headToHeadStats.winRate < 55) return { label: "보통", tone: "bg-yellow-500/15 text-yellow-300 border border-yellow-500/35" }
+    if (headToHeadStats.winRate < 65) return { label: "낮음", tone: "bg-sky-500/15 text-sky-300 border border-sky-500/35" }
+    return { label: "매우낮음", tone: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/35" }
+  }, [headToHeadStats])
+
+  const nemesis = useMemo(() => {
+    if (!usePlayer1Charts) return null as null | { name: string; race: Race; tier: number | null; games: number; winRate: number }
+    const byOpponent = new Map<string, { games: number; wins: number }>()
+    for (const match of filteredMatches) {
+      const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
+      if (!anchorId) continue
+      const opponentId = anchorId === match.player1Id ? match.player2Id : match.player1Id
+      const won = match.winnerId === anchorId
+      const prev = byOpponent.get(opponentId) ?? { games: 0, wins: 0 }
+      prev.games += 1
+      if (won) prev.wins += 1
+      byOpponent.set(opponentId, prev)
+    }
+
+    const candidates = [...byOpponent.entries()]
+      .map(([oppId, s]) => {
+        const m = memberById.get(oppId)
+        const winRate = s.games > 0 ? Number(((s.wins / s.games) * 100).toFixed(1)) : 0
+        return {
+          id: oppId,
+          name: m?.name ?? "알 수 없음",
+          race: m?.race ?? "T",
+          tier: m?.tier ?? null,
+          games: s.games,
+          winRate,
+        }
+      })
+      .filter((x) => x.games >= 5)
+      .sort((a, b) => a.winRate - b.winRate || b.games - a.games || a.name.localeCompare(b.name, "ko"))
+
+    return candidates[0] ?? null
+  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, memberById])
+
+  const playerRecent20Matches = useMemo(() => {
+    if (!usePlayer1Charts) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
+    const rows = filteredMatches
+      .map((match) => {
+        const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
+        if (!anchorId) return null
+        const mapName = match.mapName?.trim() || "미상"
+        return {
+          id: match.id,
+          playedDate: match.playedDate,
+          mapName,
+          mapShort: mapName.slice(0, 2),
+          isWin: match.winnerId === anchorId,
+        }
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort((a, b) => b.playedDate.localeCompare(a.playedDate) || b.id.localeCompare(a.id))
+      .slice(0, 20)
+    return rows.map(({ id, mapName, mapShort, isWin }) => ({ id, mapName, mapShort, isWin }))
+  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds])
+
+  const playerRecent20Summary = useMemo(() => {
+    const games = playerRecent20Matches.length
+    const wins = playerRecent20Matches.filter((m) => m.isWin).length
+    const losses = Math.max(0, games - wins)
+    const winRate = games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0
+    return { games, wins, losses, winRate }
+  }, [playerRecent20Matches])
+
+  const playerRecent20MapWins = useMemo(() => {
+    const grouped = new Map<string, { mapName: string; games: number; wins: number; losses: number; winRate: number }>()
+    for (const row of playerRecent20Matches) {
+      const prev = grouped.get(row.mapName) ?? { mapName: row.mapName, games: 0, wins: 0, losses: 0, winRate: 0 }
+      prev.games += 1
+      if (row.isWin) prev.wins += 1
+      else prev.losses += 1
+      grouped.set(row.mapName, prev)
+    }
+    return Array.from(grouped.values())
+      .map((x) => ({ ...x, winRate: x.games > 0 ? Number(((x.wins / x.games) * 100).toFixed(1)) : 0 }))
+      .sort((a, b) => b.wins - a.wins || b.games - a.games || a.mapName.localeCompare(b.mapName, "ko"))
+  }, [playerRecent20Matches])
+
   const totalMatchCount = filteredMatches.length
   const totalAllMatches = matches.length
 
   return (
     <main className="min-h-screen bg-background">
+      <SiteHeader
+        isAdmin={headerData.isAdmin}
+        isCreator={headerData.isCreator}
+        isGuest={headerData.isGuest}
+        loggedInUsername={headerData.loggedInUsername}
+        adminUsernames={headerData.adminUsernames}
+      />
       <div className="container mx-auto max-w-6xl px-4 py-8">
         <header className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
             <div>
               <h1 className="flex items-center gap-2 text-3xl font-bold text-foreground">
                 <Database className="h-7 w-7 text-primary" />
@@ -634,99 +1201,82 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>선수2(선택)</Label>
-                  <Select
-                    value={player2Query}
-                    onValueChange={setPlayer2Query}
-                    disabled={!usePlayer1Charts || player2Options.length === 0}
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        placeholder={
-                          !usePlayer1Charts
-                            ? "먼저 선수1을 정확히 입력하세요"
-                            : player2Options.length === 0
-                              ? "해당 시즌 기준 상대 전적 없음"
-                              : "상대 선수 선택"
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">전체 상대</SelectItem>
-                      {player2Options.map((opt) => (
-                        <SelectItem key={opt.name} value={opt.name}>
-                          {opt.name} ({opt.games}경기)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <MultiSelectFilter
+                  label="선수2(단일 선택)"
+                  options={player2Options.map((opt) => ({ value: opt.name, label: `${opt.name} (${opt.games}경기)` }))}
+                  selectedValues={player2Queries}
+                  onChange={(next) => {
+                    const single = next.length === 0 ? [] : [next[next.length - 1]]
+                    setPlayer2Queries(single)
+                    if (single.length > 0) setPlayer2MenuOpen(false)
+                  }}
+                  open={player2MenuOpen}
+                  onOpenChange={setPlayer2MenuOpen}
+                  disabled={!usePlayer1Charts || player2Options.length === 0}
+                  placeholder={
+                    !usePlayer1Charts
+                      ? "먼저 선수1을 정확히 입력하세요"
+                      : player2Options.length === 0
+                        ? "해당 시즌 기준 상대 전적 없음"
+                        : "전체 상대"
+                  }
+                />
               </>
             )}
 
-            <div className="space-y-2">
-              <Label>시즌</Label>
-              <Select value={seasonId} onValueChange={setSeasonId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {seasonOptions.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <MultiSelectFilter
+              label="시즌"
+              options={seasonOptions.map((s) => ({ value: s.id, label: s.label }))}
+              selectedValues={seasonIds}
+              onChange={setSeasonIds}
+              open={seasonMenuOpen}
+              onOpenChange={setSeasonMenuOpen}
+              placeholder="전체 시즌"
+            />
 
-            <div className="space-y-2">
-              <Label>종족</Label>
-              <Select value={race} onValueChange={setRace}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">전체 종족</SelectItem>
-                  <SelectItem value="T">테란</SelectItem>
-                  <SelectItem value="P">프로토스</SelectItem>
-                  <SelectItem value="Z">저그</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <MultiSelectFilter
+              label="종족"
+              options={[
+                { value: "T", label: "테란" },
+                { value: "P", label: "프로토스" },
+                { value: "Z", label: "저그" },
+              ]}
+              selectedValues={races}
+              onChange={(next) => setRaces(next.filter((v): v is Race => v === "T" || v === "P" || v === "Z"))}
+              open={raceMenuOpen}
+              onOpenChange={setRaceMenuOpen}
+              placeholder="전체 종족"
+            />
 
-            <div className="space-y-2">
-              <Label>맵</Label>
-              <Select value={mapName} onValueChange={setMapName}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {mapOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option === "__all__" ? "전체 맵" : option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <MultiSelectFilter
+              label="티어"
+              options={tierOptions}
+              selectedValues={tiers}
+              onChange={setTiers}
+              open={tierMenuOpen}
+              onOpenChange={setTierMenuOpen}
+              placeholder="전체 티어"
+            />
 
-            <div className="space-y-2">
-              <Label>경기 유형</Label>
-              <Select value={matchType} onValueChange={setMatchType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {matchTypeOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option === "__all__" ? "전체 경기 유형" : option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <MultiSelectFilter
+              label="맵"
+              options={mapOptions.map((option) => ({ value: option, label: option }))}
+              selectedValues={mapNames}
+              onChange={setMapNames}
+              open={mapMenuOpen}
+              onOpenChange={setMapMenuOpen}
+              placeholder="전체 맵"
+            />
+
+            <MultiSelectFilter
+              label="경기 유형"
+              options={matchTypeOptions.map((option) => ({ value: option, label: option }))}
+              selectedValues={matchTypes}
+              onChange={setMatchTypes}
+              open={matchTypeMenuOpen}
+              onOpenChange={setMatchTypeMenuOpen}
+              placeholder="전체 경기 유형"
+            />
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -742,8 +1292,290 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
               />
               <p className="text-xs text-muted-foreground">슬라이더 최소값은 0입니다.</p>
             </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>날짜 필터</Label>
+                <span className="text-xs text-muted-foreground">
+                  {recentDays === 0 ? "전체 날짜" : `최근 ${recentDays}일`}
+                </span>
+              </div>
+              <Slider
+                min={0}
+                max={maxRecentDays}
+                step={1}
+                value={[recentDays]}
+                onValueChange={(v) => setRecentDays(v[0] ?? 0)}
+              />
+              <p className="text-xs text-muted-foreground">0이면 전체, 1 이상은 최근 N일 데이터만 반영합니다.</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[0, 1, 3, 7, 14, 30]
+                  .filter((d) => d === 0 || d <= maxRecentDays)
+                  .map((d) => (
+                    <Button
+                      key={d}
+                      type="button"
+                      size="sm"
+                      variant={recentDays === d ? "default" : "outline"}
+                      onClick={() => setRecentDays(d)}
+                      className="h-7 px-2 text-[11px]"
+                    >
+                      {d === 0 ? "전체" : `${d}일`}
+                    </Button>
+                  ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
+
+        {!playerFilterEnabled && (
+          <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            {metaDonutStats.map((item) => {
+              const donutData = [
+                { name: "win", value: Math.max(0, Math.min(100, item.winRate)), fill: raceColors[item.race] },
+                { name: "rest", value: Math.max(0, 100 - item.winRate), fill: "hsl(220 14% 24%)" },
+              ]
+              return (
+                <Card key={item.race}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{raceNames[item.race]}</CardTitle>
+                    <CardDescription>종족별 메타 승률</CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex flex-col items-center">
+                    <div className="relative h-[150px] w-[150px]">
+                      <PieChart width={150} height={150}>
+                        <Pie
+                          data={donutData}
+                          dataKey="value"
+                          startAngle={90}
+                          endAngle={-270}
+                          innerRadius={46}
+                          outerRadius={62}
+                          stroke="hsl(220 14% 32%)"
+                          strokeWidth={1}
+                        >
+                          {donutData.map((d) => (
+                            <Cell key={d.name} fill={d.fill} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <span className="text-xl font-bold" style={{ color: raceColors[item.race] }}>{item.winRate}%</span>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">표본 {item.games.toLocaleString()}경기</p>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </section>
+        )}
+
+        {playerFilterEnabled && (
+          <section className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {[
+              { title: "선수1", data: player1CardStats, icon: <User className="h-4 w-4" />, accent: "from-sky-500/20 to-transparent", orderClass: "xl:order-1" },
+              { title: "선수2", data: player2CardStats, icon: <Swords className="h-4 w-4" />, accent: "from-violet-500/20 to-transparent", orderClass: "xl:order-3" },
+            ].map(({ title, data, icon, accent, orderClass }) => (
+              <Card key={title} className={cn("overflow-hidden", orderClass)}>
+                <div className={cn("h-1 w-full bg-gradient-to-r", accent)} />
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    {icon}
+                    {title}
+                  </CardTitle>
+                  <CardDescription>
+                    {data.member ? (
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium text-foreground">{data.member.name}</span>
+                        <Badge variant="outline" className={cn("text-[11px] font-semibold", raceTagClasses[data.member.race])}>
+                          {raceNames[data.member.race]}
+                        </Badge>
+                        {data.member.tier ? (
+                          <Badge
+                            variant="outline"
+                            className={cn("px-1.5 py-0 text-[11px] font-semibold", tierTagClasses[data.member.tier])}
+                          >
+                            {data.member.tier}티어
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">티어 -</span>
+                        )}
+                        {title === "선수2" && nemesis && (
+                          <Badge
+                            variant="outline"
+                            className="border-rose-500/60 bg-rose-500/15 px-1.5 py-0 text-[11px] font-bold text-rose-400"
+                            title={`선수1 기준 천적 · 승률 ${nemesis.winRate}% (${nemesis.games}G)`}
+                          >
+                            천적
+                          </Badge>
+                        )}
+                      </span>
+                    ) : (
+                      "검색된 선수가 없습니다."
+                    )}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="rounded-md border border-border p-3">
+                    <div className="mb-1 flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">전체 승률</p>
+                      <p className="font-semibold">{data.winRate}%</p>
+                    </div>
+                    <Progress value={data.winRate} className="h-1.5" />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {data.wins.toLocaleString()}승 / {Math.max(0, data.games - data.wins).toLocaleString()}패 · 총 {data.games.toLocaleString()}경기
+                    </p>
+                  </div>
+                  {[
+                    { k: "저그전", v: data.vsZ, c: "bg-red-500" },
+                    { k: "테란전", v: data.vsT, c: "bg-sky-500" },
+                    { k: "토스전", v: data.vsP, c: "bg-amber-400" },
+                  ].map((item) => (
+                    <div key={item.k} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">{item.k} 승률</span>
+                        <span className="font-medium">{item.v}%</span>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div className={cn("h-full rounded-full", item.c)} style={{ width: `${Math.max(0, Math.min(100, item.v))}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            ))}
+
+            <Card className="overflow-hidden xl:order-2">
+              <div className="h-1 w-full bg-gradient-to-r from-rose-500/20 via-orange-500/20 to-transparent" />
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Swords className="h-4 w-4" />
+                  상대전적 (선수1 기준)
+                </CardTitle>
+                <CardDescription>현재 적용된 필터 전체(시즌/유형/맵/날짜/종족) 기준 선수1 vs 선수2 맞대결 요약</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="rounded-md border border-border p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">상대전적 승률</p>
+                    <p className="font-semibold">{headToHeadStats.winRate}%</p>
+                  </div>
+                  <Progress value={headToHeadStats.winRate} className="h-1.5" />
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    {headToHeadStats.wins}승 {headToHeadStats.losses}패 · 총 {headToHeadStats.games}경기
+                  </p>
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                  <span className="text-xs text-muted-foreground">위험도</span>
+                  <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", headToHeadRisk.tone)}>{headToHeadRisk.label}</span>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
+        {playerFilterEnabled && usePlayer1Charts && (
+          <section className="mb-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                    최근 20게임 승/패 ({player1CardStats.member?.name ?? (activePlayerQuery.trim() || "선수1")})
+                </CardTitle>
+                <CardDescription>가장 최근 경기 기준 20판 요약입니다.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <div className="rounded-md border border-border bg-card px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">경기수</p>
+                    <p className="text-lg font-semibold">{playerRecent20Summary.games}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-card px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">승</p>
+                    <p className="text-lg font-semibold text-emerald-400">{playerRecent20Summary.wins}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-card px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">패</p>
+                    <p className="text-lg font-semibold text-rose-400">{playerRecent20Summary.losses}</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-card px-3 py-2">
+                    <p className="text-[11px] text-muted-foreground">승률</p>
+                    <p className="text-lg font-semibold">{playerRecent20Summary.winRate}%</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div>
+                    <p className="mb-2 text-xs text-muted-foreground">최근 20경기 시트 (승=초록 / 패=빨강)</p>
+                    <div className="grid grid-cols-10 gap-1.5">
+                      {Array.from({ length: 20 }, (_, idx) => {
+                        const row = playerRecent20Matches[idx]
+                        if (!row) {
+                          return <div key={`empty-${idx}`} className="h-8 rounded-md border border-border/50 bg-muted/40" />
+                        }
+                        return (
+                          <div
+                            key={row.id}
+                            className={cn(
+                              "flex h-8 items-center justify-center rounded-md border text-[11px] font-semibold",
+                              row.isWin
+                                ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300"
+                                : "border-rose-400/60 bg-rose-500/20 text-rose-300",
+                            )}
+                            title={`${row.mapName} · ${row.isWin ? "승" : "패"}`}
+                          >
+                            {row.mapShort}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    {playerRecent20MapWins.length === 0 ? (
+                      <div className="flex h-[220px] items-center justify-center rounded-md border border-border text-sm text-muted-foreground">
+                        맵별 승수 차트를 그릴 데이터가 없습니다.
+                      </div>
+                    ) : (
+                      <ChartContainer
+                        className="h-[250px] w-full"
+                        config={{
+                          wins: { label: "승수", color: "hsl(142 76% 45%)" },
+                        }}
+                      >
+                        <BarChart data={playerRecent20MapWins} margin={{ left: 8, right: 12, top: 22, bottom: 10 }}>
+                          <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
+                          <XAxis dataKey="mapName" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(0, 2)} />
+                          <YAxis allowDecimals={false} domain={[0, "dataMax + 1"]} />
+                          <Tooltip
+                            cursor={{ fill: "hsl(var(--muted) / 0.2)" }}
+                            content={({ active, payload }) => {
+                              if (!active || !payload || payload.length === 0) return null
+                              const p = payload[0]?.payload as
+                                | { mapName: string; games: number; wins: number; losses: number; winRate: number }
+                                | undefined
+                              if (!p) return null
+                              return (
+                                <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                                  <p className="font-medium text-foreground">{p.mapName}</p>
+                                  <p className="text-muted-foreground">경기수 {p.games} · 승 {p.wins} · 패 {p.losses}</p>
+                                  <p className="text-muted-foreground">승률 {p.winRate}%</p>
+                                </div>
+                              )
+                            }}
+                          />
+                          <Bar dataKey="wins" name="wins" fill="hsl(142 76% 45%)" radius={[6, 6, 0, 0]}>
+                            <LabelList dataKey="wins" position="top" className="fill-muted-foreground text-[10px]" />
+                          </Bar>
+                        </BarChart>
+                      </ChartContainer>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
@@ -783,7 +1615,7 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
                   }}
                 >
                   <ComposedChart data={raceWinRates} margin={{ left: 4, right: 18, top: 20, bottom: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/30" />
+                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
                     <XAxis dataKey="race" tickFormatter={(v) => raceNames[v as Race]} tick={{ fontSize: 11 }} />
                     <YAxis
                       yAxisId="games"
@@ -821,7 +1653,9 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
                       className="cursor-pointer outline-none [&_.recharts-rectangle]:cursor-pointer"
                       onClick={(_data, index) => {
                         const row = typeof index === "number" ? raceWinRates[index] : undefined
-                        if (row?.race === "T" || row?.race === "P" || row?.race === "Z") setRace(row.race)
+                        if (row?.race === "T" || row?.race === "P" || row?.race === "Z") {
+                          setRaces((prev) => (prev.includes(row.race) ? prev : [...prev, row.race]))
+                        }
                       }}
                     >
                       {raceWinRates.map((entry) => (
@@ -856,97 +1690,67 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BarChart3 className="h-4 w-4" />
-                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 맵별 승률 · 경기 수` : "맵별 종족 승률"}
+                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 맵별 상대 종족 승률` : "맵별 종족 승률"}
               </CardTitle>
               <CardDescription>
                 {usePlayer1Charts ? (
                   <>
-                    선수1 기준 맵별 통계입니다. 막대는{" "}
-                    <span className="font-medium text-foreground">경기 수</span>, 보라색 꺾은선은{" "}
-                    <span className="font-medium text-foreground">승률(%)</span>입니다. 맵당 {minGames}판 이상일 때만 표시합니다.
-                    {activePlayer2Query.trim()
+                    선수1 기준 맵별 상대 종족 승률 점도표입니다. 맵당 가로줄 위에 테란/프로토스/저그 점이 승률 위치(0~100%)에 표시됩니다.
+                    {activePlayer2Queries.length > 0
                       ? ` 선수2가 지정된 경우 같은 조건의 상대전만 포함됩니다.`
                       : null}
                   </>
                 ) : (
-                  <>맵마다 종족별 경기 수가 {minGames}판 이상일 때만 해당 종족 승률 막대를 표시합니다.</>
+                  <>메타 기준 맵별 종족 승률 점도표입니다. 맵당 하나의 가로줄 위에 종족별 승률 점을 표시합니다.</>
                 )}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {usePlayer1Charts ? (
-                playerMapWinRates.length === 0 ? (
+                playerMapRaceWinRates.length === 0 ? (
                   <div className="py-16 text-center text-sm text-muted-foreground">
                     최소 경기 수 조건을 만족하는 맵 데이터가 없습니다.
                   </div>
                 ) : (
-                  <ChartContainer
-                    className="h-[320px] w-full pt-2"
-                    config={{
-                      games: { label: "경기 수", color: "hsl(217 91% 55%)" },
-                      winRate: { label: "승률", color: MAP_WINRATE_LINE_COLOR },
-                    }}
-                  >
-                    <ComposedChart data={playerMapWinRates} margin={{ left: 4, right: 18, top: 20, bottom: 8 }}>
-                      <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/30" />
-                      <XAxis dataKey="map" interval={0} angle={-20} height={48} textAnchor="end" tick={{ fontSize: 11 }} />
-                      <YAxis
-                        yAxisId="games"
-                        domain={[0, "auto"]}
-                        width={44}
-                        allowDecimals={false}
-                        tickFormatter={(v) => `${v}`}
-                        label={{ value: "경기 수", angle: -90, position: "insideLeft", offset: 6, style: { fontSize: 10 } }}
+                  <ChartContainer className="h-[340px] w-full pt-2" config={chartConfig}>
+                    <ScatterChart margin={{ left: 16, right: 14, top: 20, bottom: 8 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
+                      <XAxis type="number" dataKey="winRate" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                      <YAxis type="category" dataKey="map" name="맵" width={90} />
+                      {playerMapRows.map((map) => (
+                        <ReferenceLine key={`row-${map}`} y={map} stroke="#94a3b8" strokeOpacity={0.65} strokeDasharray="2 5" />
+                      ))}
+                      <ReferenceLine
+                        x={50}
+                        stroke="#c084fc"
+                        strokeDasharray="3 3"
+                        strokeWidth={2.2}
+                        ifOverflow="extendDomain"
                       />
-                      <YAxis
-                        yAxisId="rate"
-                        orientation="right"
-                        domain={[0, 100]}
-                        width={44}
-                        tickFormatter={(v) => `${v}%`}
-                        label={{ value: "승률", angle: 90, position: "insideRight", offset: 10, style: { fontSize: 10 } }}
+                      <Tooltip
+                        shared={false}
+                        cursor={false}
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null
+                          const p = payload[0]?.payload as { winRate: number; games: number; race: Race } | undefined
+                          if (!p) return null
+                          return (
+                            <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                              <div className="flex items-center justify-between gap-3">
+                                <span>{raceNames[p.race]}</span>
+                                <span className="font-mono">
+                                  {p.winRate}% <span className="text-muted-foreground">(n={p.games})</span>
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        }}
                       />
-                      <Tooltip content={<ChartTooltipContent />} />
-                      <Legend
-                        verticalAlign="top"
-                        height={28}
-                        wrapperStyle={{ fontSize: 11 }}
-                        iconSize={10}
-                        formatter={(value) =>
-                          value === "games" ? "경기 수 (막대)" : value === "winRate" ? "승률 (꺾은선)" : String(value)
-                        }
-                      />
-                      <Bar
-                        yAxisId="games"
-                        dataKey="games"
-                        name="games"
-                        radius={[4, 4, 0, 0]}
-                        maxBarSize={52}
-                        isAnimationActive={false}
-                      >
-                        {playerMapWinRates.map((row) => (
-                          <Cell key={row.map} fill={row.fill} />
-                        ))}
-                        <LabelList
-                          dataKey="games"
-                          position="top"
-                          offset={6}
-                          formatter={(v: number) => `${v}판`}
-                          className="fill-muted-foreground text-[10px]"
-                        />
-                      </Bar>
-                      <Line
-                        yAxisId="rate"
-                        type="monotone"
-                        dataKey="winRate"
-                        name="winRate"
-                        stroke={MAP_WINRATE_LINE_COLOR}
-                        strokeWidth={2.5}
-                        dot={{ r: 4, fill: MAP_WINRATE_LINE_COLOR, stroke: "#0f172a", strokeWidth: 2 }}
-                        activeDot={{ r: 5 }}
-                        isAnimationActive={false}
-                      />
-                    </ComposedChart>
+                      <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
+                      <Scatter data={playerMapDotSeries.T} name="T" fill={raceColors.T} shape={makeRaceDotShape("T")} />
+                      <Scatter data={playerMapDotSeries.P} name="P" fill={raceColors.P} shape={makeRaceDotShape("P")} />
+                      <Scatter data={playerMapDotSeries.Z} name="Z" fill={raceColors.Z} shape={makeRaceDotShape("Z")} />
+                    </ScatterChart>
                   </ChartContainer>
                 )
               ) : metaMapRaceWinRates.length === 0 ? (
@@ -954,71 +1758,329 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
                   최소 경기 수 조건을 만족하는 맵 데이터가 없습니다.
                 </div>
               ) : (
-                <ChartContainer className="h-[300px] w-full" config={chartConfig}>
-                  <BarChart data={metaMapRaceWinRates} margin={{ left: 4, right: 8, top: 8, bottom: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/30" />
-                    <XAxis dataKey="map" interval={0} angle={-20} height={48} textAnchor="end" />
-                    <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} width={42} />
-                    <ChartTooltip
-                      content={
-                        <ChartTooltipContent
-                          formatter={(value, name, item) => {
-                            const p = item.payload as { tGames: number; pGames: number; zGames: number }
-                            const n = name === "T" ? p.tGames : name === "P" ? p.pGames : p.zGames
-                            return (
-                              <div className="flex w-full items-center justify-between gap-4">
-                                <span>{raceNames[name as Race]}</span>
-                                <span className="font-mono">
-                                  {value ?? "-"}% <span className="text-muted-foreground">(n={n})</span>
-                                </span>
-                              </div>
-                            )
-                          }}
-                        />
-                      }
+                <ChartContainer className="h-[340px] w-full" config={chartConfig}>
+                  <ScatterChart margin={{ left: 16, right: 14, top: 20, bottom: 8 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
+                    <XAxis type="number" dataKey="winRate" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+                    <YAxis type="category" dataKey="map" name="맵" width={90} />
+                    {metaMapRows.map((map) => (
+                      <ReferenceLine key={`row-${map}`} y={map} stroke="#94a3b8" strokeOpacity={0.65} strokeDasharray="2 5" />
+                    ))}
+                    <ReferenceLine
+                      x={50}
+                      stroke="#c084fc"
+                      strokeDasharray="3 3"
+                      strokeWidth={2.2}
+                      ifOverflow="extendDomain"
                     />
-                    <Bar dataKey="T" fill={raceColors.T} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="P" fill={raceColors.P} radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="Z" fill={raceColors.Z} radius={[4, 4, 0, 0]} />
-                  </BarChart>
+                    <Tooltip
+                      shared={false}
+                      cursor={false}
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) return null
+                        const p = payload[0]?.payload as { winRate: number; games: number; race: Race } | undefined
+                        if (!p) return null
+                        return (
+                          <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>{raceNames[p.race]}</span>
+                              <span className="font-mono">
+                                {p.winRate}% <span className="text-muted-foreground">(n={p.games})</span>
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
+                    <Scatter data={metaMapDotSeries.T} name="T" fill={raceColors.T} shape={makeRaceDotShape("T")} />
+                    <Scatter data={metaMapDotSeries.P} name="P" fill={raceColors.P} shape={makeRaceDotShape("P")} />
+                    <Scatter data={metaMapDotSeries.Z} name="Z" fill={raceColors.Z} shape={makeRaceDotShape("Z")} />
+                  </ScatterChart>
                 </ChartContainer>
               )}
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-2">
+        </section>
+
+        {!usePlayer1Charts && (
+          <section className="mt-4 grid grid-cols-1 gap-4">
+            <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <BarChart3 className="h-4 w-4" />
+                    ELO 변동성 분석
+                  </CardTitle>
+                  <CardDescription>
+                    최근 7일 동안 ELO 변동폭(최고-최저)이 큰 순서입니다. 막대는 최고점 대비 현재 하락폭을 보여줍니다.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {metaEloVolatilityRows.length === 0 ? (
+                    <div className="py-12 text-center text-sm text-muted-foreground">
+                      최근 7일 ELO 기록이 충분한 유저가 없습니다.
+                    </div>
+                  ) : (
+                    <ChartContainer
+                      className="h-[360px] w-full"
+                      config={{
+                        drawdown: { label: "최고점 대비 현재 하락폭", color: "hsl(20 90% 58%)" },
+                        rangeRemainder: { label: "변동폭 잔여(변동폭-하락폭)", color: "hsl(220 88% 60%)" },
+                      }}
+                    >
+                      <BarChart
+                        data={metaEloVolatilityRows}
+                        layout="vertical"
+                        margin={{ left: 40, right: 18, top: 10, bottom: 8 }}
+                      >
+                        <CartesianGrid horizontal={false} strokeDasharray="2 4" className="stroke-border/60" />
+                        <XAxis
+                          type="number"
+                          tickFormatter={(v) => `${v}`}
+                          label={{ value: "ELO 값", position: "insideBottomRight", offset: -2, style: { fontSize: 10 } }}
+                        />
+                        <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+                        <Legend
+                          verticalAlign="top"
+                          height={28}
+                          wrapperStyle={{ fontSize: 11 }}
+                          iconSize={10}
+                          formatter={(value) =>
+                            value === "rangeRemainder"
+                              ? "변동폭 잔여(변동폭-하락폭)"
+                              : value === "drawdown"
+                                ? "최고점 대비 현재 하락폭"
+                                : String(value)
+                          }
+                        />
+                        <Tooltip
+                          cursor={{ fill: "hsl(var(--muted) / 0.2)" }}
+                          content={({ active, payload }) => {
+                            if (!active || !payload || payload.length === 0) return null
+                            const p = payload[0]?.payload as
+                              | {
+                                  name: string
+                                  games: number
+                                  currentElo: number
+                                  peakElo: number
+                                  troughElo: number
+                                  range: number
+                                  drawdown: number
+                                  rangeRemainder: number
+                                }
+                              | undefined
+                            if (!p) return null
+                            return (
+                              <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                                <p className="font-medium text-foreground">{p.name}</p>
+                                <p className="text-muted-foreground">변동폭: {p.range.toFixed(1)} (최고 {p.peakElo.toFixed(1)} / 최저 {p.troughElo.toFixed(1)})</p>
+                                <p className="text-muted-foreground">현재 하락폭: {p.drawdown.toFixed(1)} (현재 {p.currentElo.toFixed(1)})</p>
+                                <p className="text-muted-foreground">표본: {p.games}경기</p>
+                              </div>
+                            )
+                          }}
+                        />
+                        <Bar
+                          dataKey="rangeRemainder"
+                          name="rangeRemainder"
+                          radius={[0, 6, 6, 0]}
+                          fill="hsl(220 88% 60%)"
+                          fillOpacity={0.85}
+                          barSize={14}
+                          stackId="volatility"
+                        >
+                          <LabelList
+                            dataKey="rangeRemainder"
+                            position="right"
+                            offset={6}
+                            formatter={(v: number) => (v > 0 ? `${v.toFixed(0)}` : "")}
+                            className="fill-blue-200 text-[10px]"
+                          />
+                        </Bar>
+                        <Bar
+                          dataKey="drawdown"
+                          name="drawdown"
+                          radius={[0, 6, 6, 0]}
+                          fill="hsl(20 90% 58%)"
+                          fillOpacity={0.95}
+                          stroke="#111827"
+                          strokeWidth={0.8}
+                          barSize={14}
+                          stackId="volatility"
+                        >
+                          <LabelList
+                            dataKey="drawdown"
+                            position="right"
+                            offset={8}
+                            formatter={(v: number) => (v > 0 ? `${v.toFixed(0)}` : "")}
+                            className="fill-orange-200 text-[10px]"
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ChartContainer>
+                  )}
+                </CardContent>
+            </Card>
+          </section>
+        )}
+
+        <section className={cn("mt-4 grid grid-cols-1 gap-4", usePlayer1Charts && "xl:grid-cols-10")}>
+          {usePlayer1Charts && (
+            <Card className="xl:col-span-3">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <BarChart3 className="h-4 w-4" />
+                  {activePlayerQuery.trim()} · 맵별 승률 레이더
+                </CardTitle>
+                <CardDescription>
+                  {isHeadToHeadMode
+                    ? "선수1 vs 선수2 맵별 승률을 겹쳐 비교합니다."
+                    : "선수1 vs 클랜 평균 맵별 승률을 겹쳐 비교합니다."}{" "}
+                  비교 대상 모두 데이터가 있는 맵만 표시합니다.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {playerMapMasteryData.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground">
+                    비교 가능한 맵 데이터가 없습니다. (데이터가 없는 맵은 자동 제외)
+                  </div>
+                ) : (
+                  <ChartContainer
+                    className="h-[300px] w-full"
+                    config={{
+                      p1WinRate: { label: player1CardStats.member?.name ?? "선수1", color: "hsl(280 90% 65%)" },
+                      compareWinRate: {
+                        label: isHeadToHeadMode
+                          ? (player2CardStats.member?.name ?? "선수2")
+                          : "클랜 평균",
+                        color: isHeadToHeadMode ? "hsl(8 90% 62%)" : "hsl(196 90% 48%)",
+                      },
+                    }}
+                  >
+                    <RadarChart data={playerMapMasteryData} outerRadius="68%">
+                      <defs>
+                        <radialGradient id="radarGradientP1" cx="50%" cy="50%" r="70%">
+                          <stop offset="0%" stopColor="#c026d3" stopOpacity={0.08} />
+                          <stop offset="100%" stopColor="#c026d3" stopOpacity={0.28} />
+                        </radialGradient>
+                        <radialGradient id="radarGradientCmp" cx="50%" cy="50%" r="70%">
+                          <stop
+                            offset="0%"
+                            stopColor={isHeadToHeadMode ? "#ef4444" : "#06b6d4"}
+                            stopOpacity={0.07}
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor={isHeadToHeadMode ? "#ef4444" : "#06b6d4"}
+                            stopOpacity={0.22}
+                          />
+                        </radialGradient>
+                      </defs>
+                      <PolarGrid stroke="hsl(var(--border) / 0.75)" />
+                      <PolarAngleAxis
+                        dataKey="map"
+                        tick={{ fontSize: 9 }}
+                        tickFormatter={(value: string) => (value.length > 6 ? `${value.slice(0, 6)}…` : value)}
+                      />
+                      <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10 }} tickCount={6} />
+                      <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null
+                          const p = payload[0]?.payload as
+                            | {
+                                map: string
+                                p1Wins: number
+                                p1Losses: number
+                                p1WinRate: number
+                                p1Games: number
+                                compareWins: number
+                                compareLosses: number
+                                compareWinRate: number
+                                compareGames: number
+                              }
+                            | undefined
+                          if (!p) return null
+                          const p1Name = player1CardStats.member?.name ?? "선수1"
+                          const compareName = isHeadToHeadMode
+                            ? (player2CardStats.member?.name ?? "선수2")
+                            : "클랜 평균"
+                          return (
+                            <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                              <p className="font-medium text-foreground">{p.map}</p>
+                              <p className="text-muted-foreground">
+                                {p1Name}: {p.p1Wins}승{p.p1Losses}패 ({p.p1WinRate}%)
+                              </p>
+                              <p className="text-muted-foreground">
+                                {compareName}: {p.compareWins}승{p.compareLosses}패 ({p.compareWinRate}%)
+                              </p>
+                            </div>
+                          )
+                        }}
+                      />
+                      <Radar
+                        name={player1CardStats.member?.name ?? "선수1"}
+                        dataKey="p1WinRate"
+                        stroke="#c026d3"
+                        fill="url(#radarGradientP1)"
+                        strokeWidth={2.8}
+                        dot={{ r: 3.5, fill: "#d946ef", stroke: "#000000", strokeWidth: 1.5 }}
+                        isAnimationActive={false}
+                      />
+                      <Radar
+                        name={isHeadToHeadMode ? (player2CardStats.member?.name ?? "선수2") : "클랜 평균"}
+                        dataKey="compareWinRate"
+                        stroke={isHeadToHeadMode ? "#ef4444" : "#06b6d4"}
+                        fill="url(#radarGradientCmp)"
+                        strokeWidth={2.6}
+                        dot={{
+                          r: 3.3,
+                          fill: isHeadToHeadMode ? "#fb7185" : "#22d3ee",
+                          stroke: "#000000",
+                          strokeWidth: 1.4,
+                        }}
+                        isAnimationActive={false}
+                      />
+                    </RadarChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+          )}
+          <Card className={cn(usePlayer1Charts && "xl:col-span-7")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <LineChartIcon className="h-4 w-4" />
-                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 주차별 Elo 점수` : "주차별 종족 승률 추이"}
+                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 일자별 Elo 점수` : "일자별 종족 승률 추이"}
               </CardTitle>
               <CardDescription>
                 {usePlayer1Charts ? (
                   <>
-                    각 주의 <span className="font-medium text-foreground">마지막 경기 직후 Elo</span>(경기 전 점수 + 변동)입니다. 시즌을
-                    고르면 그 시즌 시작일 이후만 쓰고, <span className="font-medium text-foreground">가장 최근 4개 ISO 주차</span>만
+                    각 일자의 <span className="font-medium text-foreground">마지막 경기 직후 Elo</span>(경기 전 점수 + 변동)입니다. 시즌을
+                    고르면 그 시즌 시작일 이후만 쓰고, <span className="font-medium text-foreground">가장 최근 14일</span>만
                     표시합니다. 경기에 Elo 전·후 기록이 없으면 제외됩니다.
-                    {seasonId === "__all__" && " (전체 시즌 선택 시 시작일 제한 없이 최근 4주만 표시합니다.)"}
+                    {seasonIds.length !== 1 && " (다중/전체 시즌 선택 시 시작일 제한 없이 최근 14일만 표시합니다.)"}
+                    {isHeadToHeadMode && " 상대전적 모드에서는 선수1/선수2 두 선을 함께 그립니다."}
                   </>
                 ) : (
                   <>
-                    경기 일자 기준 ISO 주별 추이입니다. 해당 주에서 종족별 경기 수가 {minGames}판 이상일 때만 해당 종족 선을
-                    표시합니다.
+                    최근 14일 일자별 추이입니다. 해당 일에서 종족별 경기 수가 {minGames}판 이상일 때만 해당 종족 선을 표시합니다.
                   </>
                 )}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {(usePlayer1Charts ? playerWeekEloTrend.length === 0 : metaWeekRaceTrend.length === 0) ? (
+              {(usePlayer1Charts ? versusEloTrend.length === 0 : metaDayRaceTrend.length === 0) ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
                   {usePlayer1Charts
-                    ? "이 조건에서 Elo 점수가 기록된 주차 데이터가 없습니다."
-                    : "주차별 추이를 그릴 수 있는 데이터가 없습니다."}
+                    ? "이 조건에서 Elo 점수가 기록된 일자 데이터가 없습니다."
+                    : "일자별 추이를 그릴 수 있는 데이터가 없습니다."}
                 </div>
               ) : usePlayer1Charts ? (
                 <ChartContainer className="h-[320px] w-full" config={eloWeekChartConfig}>
-                  <LineChart data={playerWeekEloTrend} margin={{ left: 8, right: 10, top: 16, bottom: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/30" />
+                  <LineChart data={versusEloTrend} margin={{ left: 8, right: 10, top: 16, bottom: 8 }}>
+                    <CartesianGrid vertical={false} stroke="#94a3b8" strokeOpacity={0.65} strokeDasharray="2 5" />
                     <XAxis dataKey="weekLabel" interval={0} angle={-25} height={52} textAnchor="end" />
                     <YAxis
                       domain={["dataMin - 15", "dataMax + 15"]}
@@ -1026,9 +2088,11 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
                       tickFormatter={(v) => String(v)}
                     />
                     <Tooltip content={<ChartTooltipContent />} formatter={(value) => [`${value}`, "Elo 점수"]} />
+                    <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
                     <Line
                       type="linear"
-                      dataKey="eloScore"
+                      dataKey="p1Elo"
+                      name={player1CardStats.member?.name ?? "선수1"}
                       stroke={ELO_WEEK_LINE_COLOR}
                       strokeWidth={3.5}
                       strokeLinecap="round"
@@ -1037,23 +2101,48 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
                         r: 5,
                         fill: ELO_WEEK_DOT_FILL,
                         stroke: ELO_WEEK_DOT_RING,
-                        strokeWidth: 2,
+                        strokeWidth: 2.8,
                       }}
                       activeDot={{
-                        r: 6,
+                        r: 6.5,
                         fill: ELO_WEEK_DOT_FILL,
-                        stroke: ELO_WEEK_LINE_COLOR,
-                        strokeWidth: 2,
+                        stroke: ELO_WEEK_DOT_RING,
+                        strokeWidth: 3,
                       }}
                       isAnimationActive={false}
                       connectNulls
                     />
+                    {isHeadToHeadMode && (
+                      <Line
+                        type="linear"
+                        dataKey="p2Elo"
+                        name={player2CardStats.member?.name ?? "선수2"}
+                        stroke="#ef4444"
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        dot={{
+                          r: 5,
+                          fill: "#f87171",
+                          stroke: "#000000",
+                          strokeWidth: 2.8,
+                        }}
+                        activeDot={{
+                          r: 6.5,
+                          fill: "#f87171",
+                          stroke: "#000000",
+                          strokeWidth: 3,
+                        }}
+                        isAnimationActive={false}
+                        connectNulls
+                      />
+                    )}
                   </LineChart>
                 </ChartContainer>
               ) : (
                 <ChartContainer className="h-[320px] w-full" config={chartConfig}>
-                  <LineChart data={metaWeekRaceTrend} margin={{ left: 8, right: 10, top: 8, bottom: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/30" />
+                  <LineChart data={metaDayRaceTrend} margin={{ left: 8, right: 10, top: 8, bottom: 8 }}>
+                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
                     <XAxis dataKey="weekLabel" interval={0} angle={-25} height={52} textAnchor="end" />
                     <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} width={42} />
                     <Tooltip
@@ -1097,6 +2186,8 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
           </Card>
         </section>
 
+        
+
         <section className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Card>
             <CardHeader className="pb-2">
@@ -1105,10 +2196,10 @@ export function DataCenterPageClient({ members, matches, seasons }: DataCenterPa
             <CardContent>
               <p className="text-2xl font-bold">{seasonPlayerCount.toLocaleString()}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {seasonId === "__all__"
+                {seasonIds.length === 0
                   ? "전체 로드 경기에 출전한 서로 다른 선수"
-                  : PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[seasonId]
-                    ? `${PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[seasonId]} 경기에 출전한 서로 다른 선수`
+                  : seasonIds.length === 1 && PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[seasonIds[0]]
+                    ? `${PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[seasonIds[0]]} 경기에 출전한 서로 다른 선수`
                     : "이 시즌 경기에 출전한 서로 다른 선수"}
               </p>
             </CardContent>

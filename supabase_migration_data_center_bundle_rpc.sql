@@ -19,7 +19,8 @@ AS $$
           jsonb_build_object(
             'id', m.id,
             'name', m.name,
-            'race', m.race
+            'race', m.race,
+            'tier', m.tier
           )
           ORDER BY m.name ASC
         ),

@@ -16,7 +16,8 @@ export function parseDataCenterMembers(rows: unknown): DataCenterMember[] {
     const id = typeof o.id === "string" ? o.id : null
     const name = typeof o.name === "string" ? o.name : null
     const race = isRace(o.race) ? o.race : null
-    if (id && name && race) out.push({ id, name, race })
+    const tier = o.tier === null || o.tier === undefined ? null : Number(o.tier)
+    if (id && name && race) out.push({ id, name, race, tier: tier !== null && Number.isFinite(tier) ? tier : null })
   }
   return out
 }

@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import {
   Table,
   TableBody,
@@ -22,6 +21,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { SiteHeader } from "@/components/site-header"
+import type { SiteHeaderData } from "@/lib/data/site-header"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,7 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { ArrowLeft, Shield, Plus, Trash2, ScrollText, X, CalendarDays, Pencil, Play, Lock } from "lucide-react"
+import { Shield, Plus, Trash2, ScrollText, X, CalendarDays, Pencil, Play, Lock } from "lucide-react"
 import { addAdminAccountAction, deleteAdminAccountAction } from "@/app/actions/creator"
 import { logoutAdminAction } from "@/app/actions/admin"
 import { startNewSeasonAction, updateSeasonAction, deleteSeasonAction, syncCurrentSeasonStatsAction } from "@/app/actions/seasons"
@@ -59,6 +60,7 @@ interface CreatorPageClientProps {
   logs: LogRow[]
   seasons: Season[]
   isGuest?: boolean
+  headerData: SiteHeaderData
 }
 
 const ACTION_OPTIONS = [
@@ -110,7 +112,7 @@ function actionBadgeClass(action: string) {
   return "bg-secondary text-secondary-foreground"
 }
 
-export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGuest }: CreatorPageClientProps) {
+export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGuest, headerData }: CreatorPageClientProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -277,21 +279,21 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
 
   return (
     <main className="min-h-screen bg-background">
+      <SiteHeader
+        isAdmin={headerData.isAdmin}
+        isCreator={headerData.isCreator}
+        isGuest={headerData.isGuest}
+        loggedInUsername={headerData.loggedInUsername}
+        adminUsernames={headerData.adminUsernames}
+      />
       <div className="container mx-auto px-4 py-8 max-w-5xl">
 
         {/* 헤더 */}
         <header className="mb-10">
           <div className="flex items-center justify-between gap-4 mb-2">
-            <div className="flex items-center gap-4">
-              <Link href="/">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-              </Link>
-              <div className="flex items-center gap-3">
-                <Shield className="h-8 w-8 text-red-500" />
-                <h1 className="text-3xl font-bold text-foreground">제작자 페이지</h1>
-              </div>
+            <div className="flex items-center gap-3">
+              <Shield className="h-8 w-8 text-red-500" />
+              <h1 className="text-3xl font-bold text-foreground">제작자 페이지</h1>
             </div>
             {!isGuest && (
               <Button
@@ -304,7 +306,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
               </Button>
             )}
           </div>
-          <p className="text-muted-foreground ml-14">
+          <p className="text-muted-foreground">
             로그인 중: <span className="text-foreground font-semibold">{currentUsername}</span>
             {isGuest ? (
               <Badge className="ml-2 bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30">손님 (읽기 전용)</Badge>

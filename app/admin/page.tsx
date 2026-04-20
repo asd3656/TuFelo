@@ -2,6 +2,7 @@ import Link from "next/link"
 import { AdminPageClient } from "@/components/admin-page-client"
 import { fetchMembers } from "@/lib/data/members"
 import { getSessionFromCookies } from "@/lib/auth/admin"
+import { fetchSiteHeaderData } from "@/lib/data/site-header"
 import { Button } from "@/components/ui/button"
 
 export default async function AdminPage() {
@@ -22,6 +23,6 @@ export default async function AdminPage() {
     )
   }
 
-  const members = await fetchMembers()
-  return <AdminPageClient initialMembers={members} isGuest={isGuest} />
+  const [members, headerData] = await Promise.all([fetchMembers(), fetchSiteHeaderData()])
+  return <AdminPageClient initialMembers={members} isGuest={isGuest} headerData={headerData} />
 }
