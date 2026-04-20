@@ -426,6 +426,23 @@ export function DashboardPage({
     if (!filters.player1.trim()) return [] as string[]
     return resolveMemberIdsByPlayerQuery(members, filters.player1)
   }, [filters.player1, members])
+  const baselinePlayerDisplayName = useMemo(() => {
+    const query = filters.player1.trim()
+    if (!query) return ""
+
+    const matchedMembers = baselinePlayerIds
+      .map((id) => members.find((member) => member.id === id))
+      .filter((member): member is ClanMember => Boolean(member))
+
+    if (matchedMembers.length === 1) return matchedMembers[0].name
+
+    const q = query.toLowerCase()
+    const exactMember = matchedMembers.find((member) => {
+      const normalizedName = member.name.trim().toLowerCase()
+      return normalizedName === q || member.id.toLowerCase() === q
+    })
+    return exactMember?.name ?? query
+  }, [baselinePlayerIds, filters.player1, members])
 
   useEffect(() => {
     if (filters.player1.trim().length === 0 && filters.player2.trim().length > 0) {
@@ -838,7 +855,7 @@ export function DashboardPage({
               </h2>
               <p className="text-sm text-muted-foreground">
                 {filters.player1
-                  ? `"${filters.player1}" 선수의 경기 기록 (총 ${totalCount}경기)`
+                  ? `"${baselinePlayerDisplayName}" 선수의 경기 기록 (총 ${totalCount}경기)`
                   : totalPages > 1
                     ? `전체 경기 기록 (${totalCount}경기 · ${currentPage}/${totalPages} 페이지)`
                     : `전체 경기 기록 (총 ${totalCount}경기)`}
