@@ -277,6 +277,8 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   const [mapMenuOpen, setMapMenuOpen] = useState(false)
   const [matchTypeMenuOpen, setMatchTypeMenuOpen] = useState(false)
   const [player2MenuOpen, setPlayer2MenuOpen] = useState(false)
+  const [player1AutocompleteOpen, setPlayer1AutocompleteOpen] = useState(false)
+  const [player1AutocompleteActiveIndex, setPlayer1AutocompleteActiveIndex] = useState(-1)
 
   const maxRecentDays = useMemo(() => {
     const parsed = matches
@@ -303,6 +305,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   /** 선수 필터 ON + 선수1 검색에 해당하는 ID가 있을 때만 선수1 기준 차트 */
   const usePlayer1Charts =
     playerFilterEnabled && activePlayerQuery.trim().length > 0 && matchedPlayerIds.size > 0
+  const needsPlayer2Selection = usePlayer1Charts && (activePlayer2Queries.length === 0 || matchedPlayer2Ids.size === 0)
 
   const seasonOptions = useMemo(() => {
     const proLeague = [
@@ -394,6 +397,30 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       .map(([name, games]) => ({ name, games }))
       .sort((a, b) => (b.games - a.games) || a.name.localeCompare(b.name, "ko"))
   }, [playerFilterEnabled, matchedPlayerIds, seasonFilteredMatches, memberById])
+
+  const player1AutocompleteOptions = useMemo(() => {
+    const q = playerQuery.trim().toLowerCase()
+    const namesInSeason = new Set<string>()
+    for (const match of seasonFilteredMatches) {
+      const p1 = memberById.get(match.player1Id)?.name
+      const p2 = memberById.get(match.player2Id)?.name
+      if (p1) namesInSeason.add(p1)
+      if (p2) namesInSeason.add(p2)
+    }
+    const uniqueNames = Array.from(namesInSeason)
+    if (q.length === 0) {
+      return uniqueNames.sort((a, b) => a.localeCompare(b, "ko")).slice(0, 12)
+    }
+    return uniqueNames
+      .filter((name) => name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aStarts = a.toLowerCase().startsWith(q) ? 0 : 1
+        const bStarts = b.toLowerCase().startsWith(q) ? 0 : 1
+        if (aStarts !== bStarts) return aStarts - bStarts
+        return a.localeCompare(b, "ko")
+      })
+      .slice(0, 12)
+  }, [playerQuery, seasonFilteredMatches, memberById])
 
   useEffect(() => {
     const next = new URLSearchParams()
@@ -1194,11 +1221,84 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
               <>
                 <div className="space-y-2">
                   <Label>선수1</Label>
-                  <Input
-                    placeholder="선수 이름 검색..."
-                    value={playerQuery}
-                    onChange={(e) => setPlayerQuery(e.target.value)}
-                  />
+                  <div className="relative">
+                    <Input
+                      placeholder="선수 이름 검색..."
+                      value={playerQuery}
+                      onChange={(e) => {
+                        setPlayerQuery(e.target.value)
+                        setPlayer1AutocompleteOpen(true)
+                        setPlayer1AutocompleteActiveIndex(-1)
+                      }}
+                      onFocus={() => setPlayer1AutocompleteOpen(true)}
+                      onKeyDown={(e) => {
+                        if (player1AutocompleteOptions.length === 0) return
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault()
+                          setPlayer1AutocompleteOpen(true)
+                          setPlayer1AutocompleteActiveIndex((prev) =>
+                            prev < player1AutocompleteOptions.length - 1 ? prev + 1 : 0,
+                          )
+                          return
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault()
+                          setPlayer1AutocompleteOpen(true)
+                          setPlayer1AutocompleteActiveIndex((prev) =>
+                            prev > 0 ? prev - 1 : player1AutocompleteOptions.length - 1,
+                          )
+                          return
+                        }
+                        if (e.key === "Enter" && player1AutocompleteOpen) {
+                          const idx = player1AutocompleteActiveIndex
+                          if (idx >= 0 && idx < player1AutocompleteOptions.length) {
+                            e.preventDefault()
+                            setPlayerQuery(player1AutocompleteOptions[idx])
+                            setPlayer1AutocompleteOpen(false)
+                            setPlayer1AutocompleteActiveIndex(-1)
+                          }
+                          return
+                        }
+                        if (e.key === "Escape") {
+                          setPlayer1AutocompleteOpen(false)
+                          setPlayer1AutocompleteActiveIndex(-1)
+                        }
+                      }}
+                      onBlur={() => {
+                        // 옵션 클릭(onMouseDown) 이후 자연스럽게 닫히도록 약간 지연
+                        setTimeout(() => {
+                          setPlayer1AutocompleteOpen(false)
+                          setPlayer1AutocompleteActiveIndex(-1)
+                        }, 120)
+                      }}
+                    />
+                    {player1AutocompleteOpen && player1AutocompleteOptions.length > 0 && (
+                      <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                        <ul className="max-h-56 overflow-y-auto py-1">
+                          {player1AutocompleteOptions.map((name, idx) => (
+                            <li key={name}>
+                              <button
+                                type="button"
+                                className={cn(
+                                  "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                                  player1AutocompleteActiveIndex === idx && "bg-accent text-accent-foreground",
+                                )}
+                                onMouseEnter={() => setPlayer1AutocompleteActiveIndex(idx)}
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  setPlayerQuery(name)
+                                  setPlayer1AutocompleteOpen(false)
+                                  setPlayer1AutocompleteActiveIndex(-1)
+                                }}
+                              >
+                                <span className="truncate">{name}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <MultiSelectFilter
@@ -1417,31 +1517,42 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
-                  <div className="rounded-md border border-border p-3">
-                    <div className="mb-1 flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">전체 승률</p>
-                      <p className="font-semibold">{data.winRate}%</p>
+                  {title === "선수2" && needsPlayer2Selection ? (
+                    <div
+                      className="rounded-md border border-dashed border-border bg-muted/25 px-3 py-5 text-center text-sm text-muted-foreground"
+                      title="상대 선수(선수2)를 선택하면 전적 요약이 표시됩니다."
+                    >
+                      상대 선수를 입력해주세요.
                     </div>
-                    <Progress value={data.winRate} className="h-1.5" />
-                    <p className="mt-1 text-[11px] text-muted-foreground">
-                      {data.wins.toLocaleString()}승 / {Math.max(0, data.games - data.wins).toLocaleString()}패 · 총 {data.games.toLocaleString()}경기
-                    </p>
-                  </div>
-                  {[
-                    { k: "저그전", v: data.vsZ, c: "bg-red-500" },
-                    { k: "테란전", v: data.vsT, c: "bg-sky-500" },
-                    { k: "토스전", v: data.vsP, c: "bg-amber-400" },
-                  ].map((item) => (
-                    <div key={item.k} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">{item.k} 승률</span>
-                        <span className="font-medium">{item.v}%</span>
+                  ) : (
+                    <>
+                      <div className="rounded-md border border-border p-3">
+                        <div className="mb-1 flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">전체 승률</p>
+                          <p className="font-semibold">{data.winRate}%</p>
+                        </div>
+                        <Progress value={data.winRate} className="h-1.5" />
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          {data.wins.toLocaleString()}승 / {Math.max(0, data.games - data.wins).toLocaleString()}패 · 총 {data.games.toLocaleString()}경기
+                        </p>
                       </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                        <div className={cn("h-full rounded-full", item.c)} style={{ width: `${Math.max(0, Math.min(100, item.v))}%` }} />
-                      </div>
-                    </div>
-                  ))}
+                      {[
+                        { k: "저그전", v: data.vsZ, c: "bg-red-500" },
+                        { k: "테란전", v: data.vsT, c: "bg-sky-500" },
+                        { k: "토스전", v: data.vsP, c: "bg-amber-400" },
+                      ].map((item) => (
+                        <div key={item.k} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">{item.k} 승률</span>
+                            <span className="font-medium">{item.v}%</span>
+                          </div>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                            <div className={cn("h-full rounded-full", item.c)} style={{ width: `${Math.max(0, Math.min(100, item.v))}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -1456,20 +1567,31 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 <CardDescription>현재 적용된 필터 전체(시즌/유형/맵/날짜/종족) 기준 선수1 vs 선수2 맞대결 요약</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="rounded-md border border-border p-3">
-                  <div className="mb-1 flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">상대전적 승률</p>
-                    <p className="font-semibold">{headToHeadStats.winRate}%</p>
+                {needsPlayer2Selection ? (
+                  <div
+                    className="rounded-md border border-dashed border-border bg-muted/25 px-3 py-6 text-center text-sm text-muted-foreground"
+                    title="상대 선수(선수2)를 선택하면 상대전적과 위험도가 표시됩니다."
+                  >
+                    상대 선수를 입력해주세요.
                   </div>
-                  <Progress value={headToHeadStats.winRate} className="h-1.5" />
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {headToHeadStats.wins}승 {headToHeadStats.losses}패 · 총 {headToHeadStats.games}경기
-                  </p>
-                </div>
-                <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                  <span className="text-xs text-muted-foreground">위험도</span>
-                  <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", headToHeadRisk.tone)}>{headToHeadRisk.label}</span>
-                </div>
+                ) : (
+                  <>
+                    <div className="rounded-md border border-border p-3">
+                      <div className="mb-1 flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">상대전적 승률</p>
+                        <p className="font-semibold">{headToHeadStats.winRate}%</p>
+                      </div>
+                      <Progress value={headToHeadStats.winRate} className="h-1.5" />
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {headToHeadStats.wins}승 {headToHeadStats.losses}패 · 총 {headToHeadStats.games}경기
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                      <span className="text-xs text-muted-foreground">위험도</span>
+                      <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", headToHeadRisk.tone)}>{headToHeadRisk.label}</span>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </section>
