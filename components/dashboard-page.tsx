@@ -392,6 +392,11 @@ export function DashboardPage({
 
   const seoulToday = getSeoulDateString()
   const memberOptions = members.map((m) => ({ id: m.id, name: m.name }))
+  const playerAutocompleteOptions = useMemo(
+    () =>
+      Array.from(new Set(members.map((m) => m.name).filter(Boolean))).sort((a, b) => a.localeCompare(b, "ko")),
+    [members],
+  )
   const pageNumbers = getPageNumbers(currentPage, totalPages)
 
   const hasActiveFilters = useMemo(() => {
@@ -421,6 +426,12 @@ export function DashboardPage({
     if (!filters.player1.trim()) return [] as string[]
     return resolveMemberIdsByPlayerQuery(members, filters.player1)
   }, [filters.player1, members])
+
+  useEffect(() => {
+    if (filters.player1.trim().length === 0 && filters.player2.trim().length > 0) {
+      setPlayer2("")
+    }
+  }, [filters.player1, filters.player2, setPlayer2])
 
   // ── 전적 액션 핸들러 ──
 
@@ -504,6 +515,7 @@ export function DashboardPage({
                 placeholder="선수 이름 검색..."
                 value={filters.player1}
                 onChange={setPlayer1}
+                options={playerAutocompleteOptions}
               />
             </div>
             <div className="flex items-center justify-center px-6">
@@ -515,6 +527,8 @@ export function DashboardPage({
                 placeholder="상대 선수 이름 검색..."
                 value={filters.player2}
                 onChange={setPlayer2}
+                options={playerAutocompleteOptions}
+                disabled={filters.player1.trim().length === 0}
               />
             </div>
             <div className="flex-shrink-0">
