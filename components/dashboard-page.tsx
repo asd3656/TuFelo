@@ -1,13 +1,12 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
 import { MatchHistory } from "@/components/match-history"
 import { RegisterMatchDialog } from "@/components/register-match-dialog"
 import { EditMatchDialog } from "@/components/edit-match-dialog"
-import { NoticeSuggestionDialog } from "@/components/notice-suggestion-dialog"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -41,20 +40,10 @@ import {
   Trophy,
   BarChart3,
   Users,
-  Megaphone,
   Loader2,
-  BookOpen,
-  AlertTriangle,
   Lock,
-  FileSpreadsheet,
-  Coffee,
-  X,
-  Vote,
-  Database,
   RotateCcw,
-  type LucideIcon,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
 import { getSeoulDateString } from "@/lib/date-seoul"
 import type { ClanMember, Match, RegisterMatchInput, UpdateMatchInput, Season } from "@/lib/types/tufelo"
 import { registerMatchAction, deleteMatchAction, updateMatchAction } from "@/app/actions/matches"
@@ -99,200 +88,6 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return [1, "...", current - 1, current, current + 1, "...", total]
 }
 
-type DashboardFabItemDef =
-  | {
-      id: string
-      label: string
-      icon: LucideIcon
-      iconRingClass: string
-      kind: "external"
-      href: string
-    }
-  | {
-      id: string
-      label: string
-      icon: LucideIcon
-      iconRingClass: string
-      kind: "manual"
-    }
-  | {
-      id: string
-      label: string
-      icon: LucideIcon
-      iconRingClass: string
-      kind: "notice"
-    }
-  | {
-      id: string
-      label: string
-      icon: LucideIcon
-      iconRingClass: string
-      kind: "comingSoon"
-    }
-
-const DASHBOARD_FAB_ITEMS: DashboardFabItemDef[] = [
-  {
-    id: "cafe",
-    label: "카페",
-    icon: Coffee,
-    iconRingClass: "bg-[#03C75A] hover:bg-[#02b351]",
-    kind: "external",
-    href: "https://cafe.naver.com/taiscateam",
-  },
-  {
-    id: "sheet",
-    label: "전적시트",
-    icon: FileSpreadsheet,
-    iconRingClass: "bg-green-600 hover:bg-green-700",
-    kind: "external",
-    href: "https://docs.google.com/spreadsheets/d/1kKeA8Y8AmO99qS6v4Xsu_95z6kdKnXL8DXLSLXoCUx8/edit?gid=501558484#gid=501558484",
-  },
-  {
-    id: "tfpl",
-    label: "승부예측",
-    icon: Vote,
-    iconRingClass: "bg-violet-600 hover:bg-violet-700",
-    kind: "external",
-    href: "https://tufpl.vercel.app/",
-  },
-  {
-    id: "manual",
-    label: "사용설명서",
-    icon: BookOpen,
-    iconRingClass: "bg-emerald-600 hover:bg-emerald-700",
-    kind: "manual",
-  },
-  {
-    id: "notice",
-    label: "공지 및 건의",
-    icon: Megaphone,
-    iconRingClass: "bg-indigo-600 hover:bg-indigo-700",
-    kind: "notice",
-  },
-]
-
-/** 라벨 문자 수 짧은 순(동일 길이는 한글 정렬). PC 세로: 위→아래 짧은→긴 / 모바일 col-reverse용으로 역순 사용 */
-function compareFabItemsByLabelWidth(a: DashboardFabItemDef, b: DashboardFabItemDef) {
-  const w = a.label.length - b.label.length
-  if (w !== 0) return w
-  return a.label.localeCompare(b.label, "ko")
-}
-
-const DASHBOARD_FAB_ITEMS_SORTED_ASC = [...DASHBOARD_FAB_ITEMS].sort(compareFabItemsByLabelWidth)
-
-const fabCapsuleShellBase =
-  "flex max-w-full cursor-pointer items-center rounded-full border border-border/40 bg-background/65 text-left shadow-md ring-1 ring-black/[0.06] backdrop-blur-md transition-colors hover:bg-background/82 dark:ring-white/[0.08]"
-const fabCapsuleLabelBase =
-  "mr-1 rounded-full border border-border/35 bg-background/50 font-medium text-foreground backdrop-blur-sm whitespace-nowrap"
-
-const fabCapsuleSizes = {
-  default: {
-    shell: "min-h-10 py-1 pl-1",
-    iconWrap: "h-9 w-9",
-    icon: "h-5 w-5",
-    label: "px-3 py-1 text-sm",
-  },
-  /** PC 전용 — 약 2pt(8px) 정도 더 큰 터치/클릭 영역 */
-  comfortable: {
-    shell: "min-h-12 py-1.5 pl-1.5",
-    iconWrap: "h-11 w-11",
-    icon: "h-6 w-6",
-    label: "px-3.5 py-1.5 text-[0.9375rem] leading-snug",
-  },
-} as const
-
-function DashboardFabCapsule({
-  item,
-  className,
-  size = "default",
-  onAfterInteract,
-  onManual,
-  onNotice,
-}: {
-  item: DashboardFabItemDef
-  className?: string
-  size?: keyof typeof fabCapsuleSizes
-  onAfterInteract?: () => void
-  onManual: () => void
-  onNotice: () => void
-}) {
-  const Icon = item.icon
-  const s = fabCapsuleSizes[size]
-  const iconEl = (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-full text-white shadow-sm",
-        s.iconWrap,
-        item.iconRingClass,
-      )}
-    >
-      <Icon className={cn("shrink-0", s.icon)} aria-hidden />
-    </span>
-  )
-  const labelEl = (
-    <span className={cn(fabCapsuleLabelBase, s.label)}>{item.label}</span>
-  )
-  const shellClass = cn(fabCapsuleShellBase, s.shell, className)
-
-  if (item.kind === "external") {
-    return (
-      <a
-        href={item.href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={shellClass}
-        onClick={onAfterInteract}
-      >
-        {iconEl}
-        {labelEl}
-      </a>
-    )
-  }
-  if (item.kind === "manual") {
-    return (
-      <button
-        type="button"
-        className={shellClass}
-        onClick={() => {
-          onAfterInteract?.()
-          onManual()
-        }}
-      >
-        {iconEl}
-        {labelEl}
-      </button>
-    )
-  }
-  if (item.kind === "comingSoon") {
-    return (
-      <button
-        type="button"
-        className={shellClass}
-        onClick={() => {
-          onAfterInteract?.()
-          window.alert("개발중입니다. 커밍쑨 by 범부")
-        }}
-      >
-        {iconEl}
-        {labelEl}
-      </button>
-    )
-  }
-  return (
-    <button
-      type="button"
-      className={shellClass}
-      onClick={() => {
-        onAfterInteract?.()
-        onNotice()
-      }}
-    >
-      {iconEl}
-      {labelEl}
-    </button>
-  )
-}
-
 export function DashboardPage({
   initialMatches,
   initialTotalCount,
@@ -314,42 +109,9 @@ export function DashboardPage({
   const [isDeletePending, startDeleteTransition] = useTransition()
   const [isEditPending, startEditTransition] = useTransition()
   const [editingMatch, setEditingMatch] = useState<Match | null>(null)
-  const [isNoticeOpen, setIsNoticeOpen] = useState(false)
-  const [isManualOpen, setIsManualOpen] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isPageJumpOpen, setIsPageJumpOpen] = useState(false)
   const [pageJumpInput, setPageJumpInput] = useState("")
-  /** 모바일: 기본 접힘(+만) · PC(md↑): 기본 펼침 */
-  const [fabLinksOpenMobile, setFabLinksOpenMobile] = useState(false)
-  const [fabLinksOpenDesktop, setFabLinksOpenDesktop] = useState(true)
-  const [isMdViewport, setIsMdViewport] = useState(false)
-  const [fabCapsuleSize, setFabCapsuleSize] = useState<"default" | "comfortable">("default")
-
-  const fabLinksOpen = isMdViewport ? fabLinksOpenDesktop : fabLinksOpenMobile
-
-  useLayoutEffect(() => {
-    const mq = window.matchMedia("(min-width: 768px)")
-    const sync = () => {
-      const md = mq.matches
-      setIsMdViewport(md)
-      setFabCapsuleSize(md ? "comfortable" : "default")
-    }
-    sync()
-    mq.addEventListener("change", sync)
-    return () => mq.removeEventListener("change", sync)
-  }, [])
-
-  useEffect(() => {
-    if (!fabLinksOpen) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setFabLinksOpenMobile(false)
-        setFabLinksOpenDesktop(false)
-      }
-    }
-    document.addEventListener("keydown", onKey)
-    return () => document.removeEventListener("keydown", onKey)
-  }, [fabLinksOpen])
 
   // 필터 상태 + fetch 로직을 커스텀 훅으로 위임
   const {
@@ -989,66 +751,6 @@ export function DashboardPage({
           knownMatchTypes={knownMatchTypes}
         />
 
-        {/* ── 사용설명서 다이얼로그 ── */}
-        <Dialog open={isManualOpen} onOpenChange={setIsManualOpen}>
-          <DialogContent className="bg-card border-border text-foreground max-w-xl w-full max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
-            <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
-              <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-                <BookOpen className="h-5 w-5 text-emerald-400" />
-                사용설명서
-              </DialogTitle>
-            </DialogHeader>
-            <div className="flex-1 overflow-y-auto min-h-0">
-              <div className="px-6 py-5">
-                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-emerald-400 shrink-0" />
-                    <p className="text-sm font-bold text-emerald-300">사용설명서(26.04.14)</p>
-                  </div>
-                  <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
-                    <li className="flex gap-2">
-                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
-                      <span>            
-                        날짜 수정이 필요한 경우 건의 게시판에 써주세요. 날짜는 <span className="text-foreground font-semibold">시트 H열(경기유형) 작성 시점</span>
-                        기준으로 올라갑니다.
-                      </span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
-                      <span>
-                        ELO 시스템은 스타 래더 시스템과 크게 차이가 없습니다.{" "}
-                        <span className="text-foreground font-semibold">최대 상승폭은 32점</span>입니다.
-                      </span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
-                      <span>
-                        ELO와 승패는 매 시즌 시작과 동시에{" "}
-                        <span className="text-foreground font-semibold">초기화</span>되지만 기록이 남습니다.
-                        시즌은 프로리그의 시작과 동시에 갱신됩니다.
-                      </span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-emerald-400 shrink-0 mt-0.5">•</span>
-                      <span>
-                        ELO 초기값은{" "}
-                        <span className="text-foreground font-semibold">1티어 2250, 2티어 2030, 3티어 1850, 4티어 1650</span>입니다.
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        <NoticeSuggestionDialog
-          open={isNoticeOpen}
-          onOpenChange={setIsNoticeOpen}
-          isAdmin={isAdmin}
-          isCreator={isCreator ?? false}
-        />
-
         <RegisterMatchDialog
           open={isDialogOpen}
           onOpenChange={setIsDialogOpen}
@@ -1061,65 +763,6 @@ export function DashboardPage({
           knownMaps={knownMaps}
           knownMatchTypes={knownMatchTypes}
         />
-
-        {/* 우하단 바로가기: PC 기본 펼침 · 모바일 기본 접힘(+만) · X/배경으로 닫기 */}
-        {fabLinksOpenMobile && !isMdViewport && (
-          <button
-            type="button"
-            aria-label="바로가기 메뉴 닫기"
-            className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px] md:hidden"
-            onClick={() => setFabLinksOpenMobile(false)}
-          />
-        )}
-        <div
-          className="fixed bottom-6 right-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col-reverse items-end gap-3 sm:right-6 md:max-w-[calc(100vw-3rem)] md:right-6"
-          role="group"
-          aria-label="클랜 바로가기"
-        >
-          <Button
-            type="button"
-            size="icon"
-            aria-expanded={fabLinksOpen}
-            aria-controls="dashboard-fab-actions"
-            title={fabLinksOpen ? "닫기" : "바로가기"}
-            className={cn(
-              "h-12 w-12 shrink-0 rounded-full border-0 shadow-lg",
-              "bg-primary hover:bg-primary/90 text-primary-foreground",
-            )}
-            onClick={() =>
-              isMdViewport
-                ? setFabLinksOpenDesktop((o) => !o)
-                : setFabLinksOpenMobile((o) => !o)
-            }
-          >
-            {fabLinksOpen ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
-          </Button>
-
-          <div
-            id="dashboard-fab-actions"
-            className={cn(
-              "flex flex-col-reverse items-end gap-3 transition-all duration-200 ease-out md:gap-2",
-              fabLinksOpen
-                ? "pointer-events-auto max-h-[1000px] translate-y-0 opacity-100"
-                : "pointer-events-none max-h-0 translate-y-3 overflow-hidden opacity-0",
-            )}
-          >
-            {[...DASHBOARD_FAB_ITEMS_SORTED_ASC].reverse().map((item) => (
-              <DashboardFabCapsule
-                key={item.id}
-                item={item}
-                size={fabCapsuleSize}
-                className="shrink-0"
-                onAfterInteract={() => {
-                  setFabLinksOpenMobile(false)
-                  setFabLinksOpenDesktop(false)
-                }}
-                onManual={() => setIsManualOpen(true)}
-                onNotice={() => setIsNoticeOpen(true)}
-              />
-            ))}
-          </div>
-        </div>
       </div>
     </main>
   )
