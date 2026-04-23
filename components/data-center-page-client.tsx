@@ -283,6 +283,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   const [player1AutocompleteOpen, setPlayer1AutocompleteOpen] = useState(false)
   const [player1AutocompleteActiveIndex, setPlayer1AutocompleteActiveIndex] = useState(-1)
   const [mapChartSort, setMapChartSort] = useState<"gamesDesc" | "winRateDesc">("gamesDesc")
+  const [metaAnchorRace, setMetaAnchorRace] = useState<Race>("T")
 
   const maxRecentDays = useMemo(() => {
     const parsed = matches
@@ -596,12 +597,44 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       .filter((item) => item.games >= minGames)
   }, [filteredMatches, matchedPlayerIds, memberById, minGames])
 
-  const raceWinRates = usePlayer1Charts ? playerVsOpponentRaceWinRates : metaRaceWinRates
+  /** 메타: 선택 종족 기준(vs 종족) 승률 */
+  const metaAnchorVsRaceWinRates = useMemo(() => {
+    const grouped: Record<Race, { race: Race; games: number; wins: number; winRate: number }> = {
+      T: { race: "T", games: 0, wins: 0, winRate: 0 },
+      P: { race: "P", games: 0, wins: 0, winRate: 0 },
+      Z: { race: "Z", games: 0, wins: 0, winRate: 0 },
+    }
+    for (const match of filteredMatches) {
+      const p1 = memberById.get(match.player1Id)
+      const p2 = memberById.get(match.player2Id)
+      if (!p1 || !p2) continue
+
+      if (p1.race === metaAnchorRace) {
+        grouped[p2.race].games += 1
+        if (match.winnerId === match.player1Id) grouped[p2.race].wins += 1
+      }
+      if (p2.race === metaAnchorRace) {
+        grouped[p1.race].games += 1
+        if (match.winnerId === match.player2Id) grouped[p1.race].wins += 1
+      }
+    }
+    return raceOrder
+      .filter((race) => race !== metaAnchorRace)
+      .map((race) => {
+        const item = grouped[race]
+        return {
+          ...item,
+          winRate: item.games > 0 ? Number(((item.wins / item.games) * 100).toFixed(1)) : 0,
+        }
+      })
+  }, [filteredMatches, memberById, metaAnchorRace])
+
+  const raceWinRates = usePlayer1Charts ? playerVsOpponentRaceWinRates : metaAnchorVsRaceWinRates
   const raceStackChartData = useMemo(
     () =>
       raceWinRates.map((row) => {
         const losses = Math.max(0, row.games - row.wins)
-        const xLabel = usePlayer1Charts ? `vs ${raceNames[row.race]}` : raceNames[row.race]
+        const xLabel = `vs ${raceNames[row.race]}`
         const winRateLabel = `${row.winRate.toFixed(row.winRate % 1 === 0 ? 0 : 1)}%`
         return {
           ...row,
@@ -610,7 +643,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
           winRateLabel,
         }
       }),
-    [raceWinRates, usePlayer1Charts],
+    [raceWinRates],
   )
   const mapRaceGamesDonutData = useMemo(
     () =>
@@ -1897,10 +1930,27 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Percent className="h-4 w-4" />
-                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 상대 종족별 승패 비율` : "종족별 승률 · 경기 수"}
+                {usePlayer1Charts
+                  ? `${activePlayerQuery.trim()} · 상대 종족별 승패 비율`
+                  : `${raceNames[metaAnchorRace]} 기준 · 상대 종족별 승률 · 경기 수`}
               </CardTitle>
             </CardHeader>
             <CardContent className="flex min-h-0 flex-1 flex-col">
+              {!usePlayer1Charts && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {raceOrder.map((race) => (
+                    <Button
+                      key={race}
+                      type="button"
+                      size="sm"
+                      variant={metaAnchorRace === race ? "default" : "outline"}
+                      onClick={() => setMetaAnchorRace(race)}
+                    >
+                      {raceNames[race]}
+                    </Button>
+                  ))}
+                </div>
+              )}
               {raceWinRates.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
                   {playerFilterEnabled && !usePlayer1Charts
@@ -1934,7 +1984,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                         if (!p) return null
                         return (
                           <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
-                            <p className="font-medium text-foreground">{usePlayer1Charts ? `vs ${raceNames[p.race]}` : raceNames[p.race]}</p>
+                            <p className="font-medium text-foreground">{`vs ${raceNames[p.race]}`}</p>
                             <p className="text-muted-foreground">경기수 {p.games} · 승 {p.wins} · 패 {p.losses}</p>
                             <p className="text-muted-foreground">승률 {p.winRate}%</p>
                           </div>
