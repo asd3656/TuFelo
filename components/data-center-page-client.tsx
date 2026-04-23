@@ -75,6 +75,7 @@ const ELO_WEEK_DOT_RING = "#000000"
 /** 시즌 테이블과 별개로, 프로리그 시즌1·2 경기만 모아 보기 */
 const SEASON_OPTION_PROLEAGUE_S1 = "__proleague_s1__" as const
 const SEASON_OPTION_PROLEAGUE_S2 = "__proleague_s2__" as const
+const SEASON_OPTION_PROLEAGUE_S3_PRESEASON = "__proleague_s3_preseason__" as const
 /** DB·API와 동일 — 실제 저장값은 `TFPL_S1` / `TFPL_S2` (app/api/matches). 비교는 대소문자 무시. */
 const PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION: Record<string, string> = {
   [SEASON_OPTION_PROLEAGUE_S1]: "TFPL_S1",
@@ -88,6 +89,46 @@ function matchPassesSeasonFilter(seasonId: string, match: DataCenterMatch): bool
     return match.matchType.trim().toUpperCase() === mt.toUpperCase()
   }
   return match.seasonId === seasonId
+}
+
+function seasonNameToQueryAlias(name: string): string | null {
+  const normalized = name.toLowerCase().replace(/\s+/g, "")
+  const seasonNumberMatch = normalized.match(/시즌(\d+)/)
+  if (!seasonNumberMatch) return null
+
+  const seasonNumber = seasonNumberMatch[1]
+  const isPreseason = normalized.includes("프리시즌") || normalized.includes("preseason")
+  if (isPreseason) return `__proleague_s${seasonNumber}_preseason__`
+  return `__proleague_s${seasonNumber}__`
+}
+
+function isReservedProleagueAlias(alias: string): boolean {
+  return (
+    PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[alias] !== undefined ||
+    /^__proleague_s\d+__$/.test(alias) ||
+    /^__proleague_s\d+_preseason__$/.test(alias)
+  )
+}
+
+function hasDuplicateSeasonAlias(seasons: Season[], alias: string): boolean {
+  const count = seasons.reduce((acc, season) => acc + (seasonNameToQueryAlias(season.name) === alias ? 1 : 0), 0)
+  return count > 1
+}
+
+function resolveSeasonIdFromQueryValue(seasons: Season[], value: string): string {
+  if (PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[value] !== undefined) return value
+  if (!isReservedProleagueAlias(value)) return value
+  const matched = seasons.find((s) => seasonNameToQueryAlias(s.name) === value)
+  return matched?.id ?? value
+}
+
+function resolveSeasonQueryValueFromId(seasons: Season[], seasonId: string): string {
+  if (PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[seasonId] !== undefined) return seasonId
+  const matched = seasons.find((s) => s.id === seasonId)
+  if (!matched) return seasonId
+  const alias = seasonNameToQueryAlias(matched.name)
+  if (!alias || hasDuplicateSeasonAlias(seasons, alias)) return seasonId
+  return alias
 }
 
 const raceOrder: Race[] = ["T", "P", "Z"]
@@ -261,7 +302,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
 
   const currentSeason = useMemo(() => seasons.find((s) => s.endDate === null) ?? null, [seasons])
   const [seasonIds, setSeasonIds] = useState(() => {
-    const parsed = parseCsvParam("season")
+    const parsed = parseCsvParam("season").map((value) => resolveSeasonIdFromQueryValue(seasons, value))
     if (parsed.length > 0) return parsed
     return currentSeason ? [currentSeason.id] : []
   })
@@ -429,7 +470,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
 
   useEffect(() => {
     const next = new URLSearchParams()
-    if (seasonIds.length > 0) next.set("season", seasonIds.join(","))
+    if (seasonIds.length > 0) next.set("season", seasonIds.map((seasonId) => resolveSeasonQueryValueFromId(seasons, seasonId)).join(","))
     if (mapNames.length > 0) next.set("map", mapNames.join(","))
     if (matchTypes.length > 0) next.set("matchType", matchTypes.join(","))
     if (races.length > 0) next.set("race", races.join(","))
