@@ -18,7 +18,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  ComposedChart,
   LabelList,
   Legend,
   Line,
@@ -72,9 +71,6 @@ import {
 const ELO_WEEK_LINE_COLOR = "#1d4ed8"
 const ELO_WEEK_DOT_FILL = "#2563eb"
 const ELO_WEEK_DOT_RING = "#000000"
-
-/** 이중축 차트 승률 꺾은선 — 테/프/저 막대색과 겹치지 않는 자주·보라 계열 */
-const MAP_WINRATE_LINE_COLOR = "#a855f7"
 
 /** 시즌 테이블과 별개로, 프로리그 시즌1·2 경기만 모아 보기 */
 const SEASON_OPTION_PROLEAGUE_S1 = "__proleague_s1__" as const
@@ -179,7 +175,13 @@ function MultiSelectFilter({
       <Label>{label}</Label>
       <DropdownMenu open={open} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger asChild disabled={disabled}>
-          <Button variant="outline" className={cn("w-full justify-between", disabled && "opacity-60")}>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-between text-foreground hover:text-foreground dark:hover:text-foreground",
+              disabled && "opacity-60",
+            )}
+          >
             <span className="truncate text-sm">{selectedLabel}</span>
             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
@@ -192,6 +194,7 @@ function MultiSelectFilter({
                 key={opt.value}
                 checked={checked}
                 onSelect={(e) => e.preventDefault()}
+                className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
                 onCheckedChange={(v) => {
                   if (v) onChange([...selectedValues, opt.value])
                   else onChange(selectedValues.filter((x) => x !== opt.value))
@@ -207,7 +210,7 @@ function MultiSelectFilter({
               onChange([])
               onOpenChange(false)
             }}
-            className="text-muted-foreground"
+            className="text-muted-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
           >
             선택 초기화
           </DropdownMenuItem>
@@ -279,6 +282,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   const [player2MenuOpen, setPlayer2MenuOpen] = useState(false)
   const [player1AutocompleteOpen, setPlayer1AutocompleteOpen] = useState(false)
   const [player1AutocompleteActiveIndex, setPlayer1AutocompleteActiveIndex] = useState(-1)
+  const [mapChartSort, setMapChartSort] = useState<"gamesDesc" | "winRateDesc">("gamesDesc")
 
   const maxRecentDays = useMemo(() => {
     const parsed = matches
@@ -593,6 +597,40 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   }, [filteredMatches, matchedPlayerIds, memberById, minGames])
 
   const raceWinRates = usePlayer1Charts ? playerVsOpponentRaceWinRates : metaRaceWinRates
+  const raceStackChartData = useMemo(
+    () =>
+      raceWinRates.map((row) => {
+        const losses = Math.max(0, row.games - row.wins)
+        const xLabel = usePlayer1Charts ? `vs ${raceNames[row.race]}` : raceNames[row.race]
+        const winRateLabel = `${row.winRate.toFixed(row.winRate % 1 === 0 ? 0 : 1)}%`
+        return {
+          ...row,
+          losses,
+          xLabel,
+          winRateLabel,
+        }
+      }),
+    [raceWinRates, usePlayer1Charts],
+  )
+  const mapRaceGamesDonutData = useMemo(
+    () =>
+      raceOrder
+        .map((race) => {
+          const row = raceWinRates.find((x) => x.race === race)
+          return {
+            race,
+            label: raceNames[race],
+            games: row?.games ?? 0,
+            fill: raceColors[race],
+          }
+        })
+        .filter((row) => row.games > 0),
+    [raceWinRates],
+  )
+  const mapRaceGamesTotal = useMemo(
+    () => mapRaceGamesDonutData.reduce((acc, row) => acc + row.games, 0),
+    [mapRaceGamesDonutData],
+  )
   const metaDonutStats = useMemo(
     () =>
       raceOrder.map((r) => {
@@ -784,6 +822,15 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       compareGames: row.cp.games,
     }))
   }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, matchedPlayer2Ids, activePlayer2Queries, minGames])
+  const sortedPlayerMapMasteryData = useMemo(() => {
+    const rows = [...playerMapMasteryData]
+    if (mapChartSort === "winRateDesc") {
+      rows.sort((a, b) => b.p1WinRate - a.p1WinRate || b.p1Games - a.p1Games || a.map.localeCompare(b.map, "ko"))
+      return rows
+    }
+    rows.sort((a, b) => b.p1Games - a.p1Games || b.p1WinRate - a.p1WinRate || a.map.localeCompare(b.map, "ko"))
+    return rows
+  }, [playerMapMasteryData, mapChartSort])
   const metaMapDotSeries = useMemo(
     () => ({
       T: metaMapRaceWinRates
@@ -1070,10 +1117,10 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
 
   const headToHeadRisk = useMemo(() => {
     if (headToHeadStats.games === 0) return { label: "판정불가", tone: "bg-muted text-muted-foreground" }
-    if (headToHeadStats.winRate < 25) return { label: "매우높음", tone: "bg-red-500/15 text-red-300 border border-red-500/35" }
-    if (headToHeadStats.winRate < 40) return { label: "높음", tone: "bg-orange-500/15 text-orange-300 border border-orange-500/35" }
-    if (headToHeadStats.winRate < 55) return { label: "보통", tone: "bg-yellow-500/15 text-yellow-300 border border-yellow-500/35" }
-    if (headToHeadStats.winRate < 65) return { label: "낮음", tone: "bg-sky-500/15 text-sky-300 border border-sky-500/35" }
+    if (headToHeadStats.winRate < 30) return { label: "매우높음", tone: "bg-red-500/15 text-red-300 border border-red-500/35" }
+    if (headToHeadStats.winRate < 45) return { label: "높음", tone: "bg-orange-500/15 text-orange-300 border border-orange-500/35" }
+    if (headToHeadStats.winRate < 60) return { label: "보통", tone: "bg-yellow-500/15 text-yellow-300 border border-yellow-500/35" }
+    if (headToHeadStats.winRate < 70) return { label: "낮음", tone: "bg-sky-500/15 text-sky-300 border border-sky-500/35" }
     return { label: "매우낮음", tone: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/35" }
   }, [headToHeadStats])
 
@@ -1105,10 +1152,93 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
         }
       })
       .filter((x) => x.games >= 5)
+      // 위험도 기준: "매우높음" 이상만 천적 (승률 30% 미만)
+      .filter((x) => x.winRate < 30)
       .sort((a, b) => a.winRate - b.winRate || b.games - a.games || a.name.localeCompare(b.name, "ko"))
 
     return candidates[0] ?? null
   }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, memberById])
+  const rivalTopRankById = useMemo(() => {
+    if (!usePlayer1Charts) return new Map<string, number>()
+    const byOpponent = new Map<string, { games: number; wins: number }>()
+    for (const match of filteredMatches) {
+      const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
+      if (!anchorId) continue
+      const opponentId = anchorId === match.player1Id ? match.player2Id : match.player1Id
+      const won = match.winnerId === anchorId
+      const prev = byOpponent.get(opponentId) ?? { games: 0, wins: 0 }
+      prev.games += 1
+      if (won) prev.wins += 1
+      byOpponent.set(opponentId, prev)
+    }
+
+    const top3 = [...byOpponent.entries()]
+      .map(([oppId, stat]) => ({
+        id: oppId,
+        name: memberById.get(oppId)?.name ?? "알 수 없음",
+        games: stat.games,
+        winRate: stat.games > 0 ? Number(((stat.wins / stat.games) * 100).toFixed(1)) : 0,
+      }))
+      // 위험도 "높음~보통" 구간만: 30% 이상 60% 미만
+      .filter((x) => x.winRate >= 30 && x.winRate < 60)
+      .sort((a, b) => b.games - a.games || a.name.localeCompare(b.name, "ko"))
+      .slice(0, 3)
+
+    const rankMap = new Map<string, number>()
+    top3.forEach((row, idx) => rankMap.set(row.id, idx + 1))
+    return rankMap
+  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, memberById])
+  const tierRankBadgeByMemberId = useMemo(() => {
+    if (!usePlayer1Charts) return new Map<string, { label: string; rank: number }>()
+    type EloRow = { elo: number; name: string; id: string }
+    const latestEloByMemberId = new Map<string, number>()
+    for (const match of seasonFilteredMatches) {
+      // seasonFilteredMatches 는 최신 경기 우선 순서를 유지하므로, 멤버별 첫 유효 Elo가 최신값입니다.
+      const p1Before = Number(match.player1EloBefore)
+      const p1Delta = Number(match.player1EloDelta)
+      if (
+        !latestEloByMemberId.has(match.player1Id) &&
+        Number.isFinite(p1Before) &&
+        Number.isFinite(p1Delta)
+      ) {
+        latestEloByMemberId.set(match.player1Id, p1Before + p1Delta)
+      }
+      const p2Before = Number(match.player2EloBefore)
+      const p2Delta = Number(match.player2EloDelta)
+      if (
+        !latestEloByMemberId.has(match.player2Id) &&
+        Number.isFinite(p2Before) &&
+        Number.isFinite(p2Delta)
+      ) {
+        latestEloByMemberId.set(match.player2Id, p2Before + p2Delta)
+      }
+    }
+
+    const byTier = new Map<number, EloRow[]>()
+    for (const member of members) {
+      if (member.tier === null) continue
+      const elo = latestEloByMemberId.get(member.id)
+      if (elo === undefined) continue
+      const arr = byTier.get(member.tier) ?? []
+      arr.push({ id: member.id, name: member.name, elo })
+      byTier.set(member.tier, arr)
+    }
+
+    const badgeById = new Map<string, { label: string; rank: number }>()
+    for (const [tier, tierRows] of byTier.entries()) {
+      tierRows
+        .sort((a, b) => b.elo - a.elo || a.name.localeCompare(b.name, "ko"))
+        .slice(0, 5)
+        .forEach((row, idx) => {
+          const rank = idx + 1
+          badgeById.set(row.id, {
+            rank,
+            label: rank === 1 ? `${tier}티어의 왕` : `${tier}티어 ${rank}등`,
+          })
+        })
+    }
+    return badgeById
+  }, [usePlayer1Charts, seasonFilteredMatches, members])
 
   const playerRecent20Matches = useMemo(() => {
     if (!usePlayer1Charts) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
@@ -1195,7 +1325,13 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
               </CardTitle>
               <CardDescription>페이지 진입 시 한 번 로드한 데이터로 차트를 갱신합니다.</CardDescription>
             </div>
-            <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={resetAllFilters}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 gap-1.5 text-foreground hover:text-foreground dark:hover:text-foreground"
+              onClick={resetAllFilters}
+            >
               <RotateCcw className="h-4 w-4" />
               필터 전체 초기화
             </Button>
@@ -1280,8 +1416,8 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                               <button
                                 type="button"
                                 className={cn(
-                                  "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                                  player1AutocompleteActiveIndex === idx && "bg-accent text-accent-foreground",
+                                  "flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-accent hover:text-foreground dark:hover:text-foreground",
+                                  player1AutocompleteActiveIndex === idx && "bg-accent text-foreground dark:text-foreground",
                                 )}
                                 onMouseEnter={() => setPlayer1AutocompleteActiveIndex(idx)}
                                 onMouseDown={(e) => {
@@ -1439,7 +1575,6 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 <Card key={item.race}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{raceNames[item.race]}</CardTitle>
-                    <CardDescription>종족별 메타 승률</CardDescription>
                   </CardHeader>
                   <CardContent className="flex flex-col items-center">
                     <div className="relative h-[150px] w-[150px]">
@@ -1510,6 +1645,38 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                             천적
                           </Badge>
                         )}
+                        {title === "선수2" && data.member && rivalTopRankById.has(data.member.id) && (
+                          <Badge
+                            variant="outline"
+                            className="border-indigo-500/60 bg-indigo-500/15 px-1.5 py-0 text-[11px] font-bold text-indigo-300"
+                            title={`선수1 기준 호적수 TOP${rivalTopRankById.get(data.member.id)}`}
+                          >
+                            호적수
+                          </Badge>
+                        )}
+                        {data.member && tierRankBadgeByMemberId.has(data.member.id) && (() => {
+                          const tierBadge = tierRankBadgeByMemberId.get(data.member.id)
+                          if (!tierBadge) return null
+                          const rankTone =
+                            tierBadge.rank === 1
+                              ? "border-yellow-500/70 bg-yellow-500/18 text-yellow-300"
+                              : tierBadge.rank === 2
+                                ? "border-slate-400/70 bg-slate-400/18 text-slate-200"
+                                : tierBadge.rank === 3
+                                  ? "border-amber-700/70 bg-amber-700/20 text-amber-300"
+                                  : tierBadge.rank === 4
+                                    ? "border-violet-500/60 bg-violet-500/16 text-violet-300"
+                                    : "border-cyan-500/60 bg-cyan-500/16 text-cyan-300"
+                          return (
+                            <Badge
+                              variant="outline"
+                              className={cn("px-1.5 py-0 text-[11px] font-bold", rankTone)}
+                              title="현재 시즌 필터 기준 티어 내 Elo 랭킹"
+                            >
+                              {tierBadge.label}
+                            </Badge>
+                          )
+                        })()}
                       </span>
                     ) : (
                       "검색된 선수가 없습니다."
@@ -1519,10 +1686,27 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 <CardContent className="space-y-3 text-sm">
                   {title === "선수2" && needsPlayer2Selection ? (
                     <div
-                      className="rounded-md border border-dashed border-border bg-muted/25 px-3 py-5 text-center text-sm text-muted-foreground"
+                      className="rounded-md border border-dashed border-border bg-muted/25 px-3 py-4 text-center text-sm text-muted-foreground"
                       title="상대 선수(선수2)를 선택하면 전적 요약이 표시됩니다."
                     >
-                      상대 선수를 입력해주세요.
+                      <p className="mb-3">상대 선수를 입력해주세요.</p>
+                      <div className="flex flex-wrap justify-center gap-1.5">
+                        {player2Options.slice(0, 5).map((opt) => (
+                          <Button
+                            key={`quick-p2-${opt.name}`}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-foreground hover:text-foreground dark:hover:text-foreground"
+                            onClick={() => {
+                              setPlayer2Queries([opt.name])
+                              setPlayer2MenuOpen(false)
+                            }}
+                          >
+                            {opt.name} ({opt.games})
+                          </Button>
+                        ))}
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -1604,7 +1788,6 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 <CardTitle className="text-base">
                     최근 20게임 승/패 ({player1CardStats.member?.name ?? (activePlayerQuery.trim() || "선수1")})
                 </CardTitle>
-                <CardDescription>가장 최근 경기 기준 20판 요약입니다.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1699,27 +1882,13 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
           </section>
         )}
 
-        <section className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <Card>
+        <section className={cn("grid grid-cols-1 gap-4 lg:grid-cols-2", usePlayer1Charts && "xl:grid-cols-3")}>
+          <Card className={cn(usePlayer1Charts && "xl:col-span-1")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Percent className="h-4 w-4" />
-                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 상대 종족별 승률 · 경기 수` : "종족별 승률 · 경기 수"}
+                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 상대 종족별 승패 비율` : "종족별 승률 · 경기 수"}
               </CardTitle>
-              <CardDescription>
-                {usePlayer1Charts ? (
-                  <>
-                    선수1({activePlayerQuery.trim()}) 기준 상대 종족별 통계입니다. 막대는{" "}
-                    <span className="font-medium text-foreground">경기 수</span>, 보라색 꺾은선은{" "}
-                    <span className="font-medium text-foreground">승률(%)</span>입니다. 막대 클릭 시 종족 필터가 상대 종족 기준으로 맞춰집니다.
-                  </>
-                ) : (
-                  <>
-                    클랜 전체 종족별 통계입니다. 막대는 <span className="font-medium text-foreground">경기 수</span>, 보라색 꺾은선은{" "}
-                    <span className="font-medium text-foreground">승률(%)</span>입니다. 막대를 클릭하면 페이지 종족 필터가 연동됩니다.
-                  </>
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               {raceWinRates.length === 0 ? (
@@ -1730,150 +1899,234 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 </div>
               ) : (
                 <ChartContainer
-                  className="h-[320px] w-full"
+                  className="h-[340px] w-full"
                   config={{
-                    games: { label: "경기 수", color: "hsl(217 91% 55%)" },
-                    winRate: { label: "승률", color: MAP_WINRATE_LINE_COLOR },
+                    wins: { label: "승", color: "hsl(142 76% 45%)" },
+                    losses: { label: "패", color: "hsl(358 90% 67%)" },
                   }}
                 >
-                  <ComposedChart data={raceWinRates} margin={{ left: 4, right: 18, top: 20, bottom: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
-                    <XAxis dataKey="race" tickFormatter={(v) => raceNames[v as Race]} tick={{ fontSize: 11 }} />
+                  <BarChart data={raceStackChartData} margin={{ left: 8, right: 12, top: 18, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="2 4" className="stroke-border/60" />
+                    <XAxis dataKey="xLabel" tick={{ fontSize: 11 }} />
                     <YAxis
-                      yAxisId="games"
-                      domain={[0, "auto"]}
-                      width={44}
                       allowDecimals={false}
+                      domain={[0, "dataMax + 2"]}
                       tickFormatter={(v) => `${v}`}
-                      label={{ value: "경기 수", angle: -90, position: "insideLeft", offset: 6, style: { fontSize: 10 } }}
+                      label={{ value: "경기 수", angle: -90, position: "insideLeft", offset: 2, style: { fontSize: 10 } }}
                     />
-                    <YAxis
-                      yAxisId="rate"
-                      orientation="right"
-                      domain={[0, 100]}
-                      width={44}
-                      tickFormatter={(v) => `${v}%`}
-                      label={{ value: "승률", angle: 90, position: "insideRight", offset: 10, style: { fontSize: 10 } }}
-                    />
-                    <Tooltip content={<ChartTooltipContent />} cursor={{ fill: "hsl(var(--muted) / 0.25)" }} />
-                    <Legend
-                      verticalAlign="top"
-                      height={28}
-                      wrapperStyle={{ fontSize: 11 }}
-                      iconSize={10}
-                      formatter={(value) =>
-                        value === "games" ? "경기 수 (막대)" : value === "winRate" ? "승률 (꺾은선)" : String(value)
-                      }
-                    />
-                    <Bar
-                      yAxisId="games"
-                      dataKey="games"
-                      name="games"
-                      radius={[6, 6, 0, 0]}
-                      maxBarSize={72}
-                      isAnimationActive={false}
-                      className="cursor-pointer outline-none [&_.recharts-rectangle]:cursor-pointer"
-                      onClick={(_data, index) => {
-                        const row = typeof index === "number" ? raceWinRates[index] : undefined
-                        if (row?.race === "T" || row?.race === "P" || row?.race === "Z") {
-                          setRaces((prev) => (prev.includes(row.race) ? prev : [...prev, row.race]))
-                        }
+                    <Tooltip
+                      cursor={{ fill: "hsl(var(--muted) / 0.25)" }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) return null
+                        const p = payload[0]?.payload as
+                          | { race: Race; games: number; wins: number; losses: number; winRate: number }
+                          | undefined
+                        if (!p) return null
+                        return (
+                          <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                            <p className="font-medium text-foreground">{usePlayer1Charts ? `vs ${raceNames[p.race]}` : raceNames[p.race]}</p>
+                            <p className="text-muted-foreground">경기수 {p.games} · 승 {p.wins} · 패 {p.losses}</p>
+                            <p className="text-muted-foreground">승률 {p.winRate}%</p>
+                          </div>
+                        )
                       }}
-                    >
-                      {raceWinRates.map((entry) => (
-                        <Cell key={entry.race} fill={raceColors[entry.race]} />
-                      ))}
-                      <LabelList
-                        dataKey="games"
-                        position="top"
-                        offset={6}
-                        formatter={(v: number) => `${v}판`}
-                        className="fill-muted-foreground text-[10px]"
-                      />
-                    </Bar>
-                    <Line
-                      yAxisId="rate"
-                      type="monotone"
-                      dataKey="winRate"
-                      name="winRate"
-                      stroke={MAP_WINRATE_LINE_COLOR}
-                      strokeWidth={2.5}
-                      dot={{ r: 4, fill: MAP_WINRATE_LINE_COLOR, stroke: "#0f172a", strokeWidth: 2 }}
-                      activeDot={{ r: 5 }}
-                      isAnimationActive={false}
                     />
-                  </ComposedChart>
+                    <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
+                    <Bar
+                      dataKey="wins"
+                      name="승"
+                      fill="hsl(142 76% 45%)"
+                      stackId="raceStack"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={88}
+                    >
+                      <Cell fill="hsl(142 76% 45%)" />
+                      <Cell fill="hsl(142 76% 45%)" />
+                      <Cell fill="hsl(142 76% 45%)" />
+                      <LabelList dataKey="winRateLabel" position="center" className="fill-white text-xs font-bold" />
+                    </Bar>
+                    <Bar
+                      dataKey="losses"
+                      name="패"
+                      fill="hsl(358 90% 67%)"
+                      stackId="raceStack"
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={88}
+                    >
+                      <Cell fill="hsl(358 90% 67%)" />
+                      <Cell fill="hsl(358 90% 67%)" />
+                      <Cell fill="hsl(358 90% 67%)" />
+                    </Bar>
+                  </BarChart>
                 </ChartContainer>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          {usePlayer1Charts && (
+            <Card className="xl:col-span-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <BarChart3 className="h-4 w-4" />
+                  종족별 경기수 분포
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {mapRaceGamesTotal === 0 ? (
+                  <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
+                    종족 데이터 없음
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <div className="relative w-fit">
+                      <PieChart width={190} height={190}>
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload || payload.length === 0) return null
+                            const p = payload[0]?.payload as { label: string; games: number } | undefined
+                            if (!p) return null
+                            return (
+                              <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                                <p className="font-medium text-foreground">{p.label}</p>
+                                <p className="text-muted-foreground">경기수 : {p.games}</p>
+                              </div>
+                            )
+                          }}
+                        />
+                        <Pie
+                          data={mapRaceGamesDonutData}
+                          dataKey="games"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={70}
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          labelLine={false}
+                          label={({ percent, cx, cy, midAngle, innerRadius, outerRadius }) => {
+                            if (
+                              typeof percent !== "number" ||
+                              typeof cx !== "number" ||
+                              typeof cy !== "number" ||
+                              typeof midAngle !== "number" ||
+                              typeof innerRadius !== "number" ||
+                              typeof outerRadius !== "number"
+                            ) {
+                              return null
+                            }
+                            const radius = innerRadius + (outerRadius - innerRadius) * 0.55
+                            const rad = Math.PI / 180
+                            const x = cx + radius * Math.cos(-midAngle * rad)
+                            const y = cy + radius * Math.sin(-midAngle * rad)
+                            return (
+                              <text
+                                x={x}
+                                y={y}
+                                fill="#ffffff"
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                                className="text-[10px] font-semibold"
+                              >
+                                {(percent * 100).toFixed(1)}%
+                              </text>
+                            )
+                          }}
+                        >
+                          {mapRaceGamesDonutData.map((row) => (
+                            <Cell key={`map-race-donut-card-${row.race}`} fill={row.fill} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-xs text-muted-foreground">총 경기</span>
+                        <span className="text-lg font-bold text-foreground">{mapRaceGamesTotal}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center justify-center gap-4 text-sm">
+                      {mapRaceGamesDonutData.map((row) => (
+                        <div key={`map-race-legend-card-${row.race}`} className="flex items-center gap-1.5">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.fill }} aria-hidden />
+                          <span>{row.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className={cn(usePlayer1Charts && "xl:col-span-1")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BarChart3 className="h-4 w-4" />
-                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 맵별 상대 종족 승률` : "맵별 종족 승률"}
+                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 맵별 승률 차트` : "맵별 종족 승률"}
               </CardTitle>
-              <CardDescription>
-                {usePlayer1Charts ? (
-                  <>
-                    선수1 기준 맵별 상대 종족 승률 점도표입니다. 맵당 가로줄 위에 테란/프로토스/저그 점이 승률 위치(0~100%)에 표시됩니다.
-                    {activePlayer2Queries.length > 0
-                      ? ` 선수2가 지정된 경우 같은 조건의 상대전만 포함됩니다.`
-                      : null}
-                  </>
-                ) : (
-                  <>메타 기준 맵별 종족 승률 점도표입니다. 맵당 하나의 가로줄 위에 종족별 승률 점을 표시합니다.</>
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               {usePlayer1Charts ? (
-                playerMapRaceWinRates.length === 0 ? (
+                sortedPlayerMapMasteryData.length === 0 ? (
                   <div className="py-16 text-center text-sm text-muted-foreground">
                     최소 경기 수 조건을 만족하는 맵 데이터가 없습니다.
                   </div>
                 ) : (
-                  <ChartContainer className="h-[340px] w-full pt-2" config={chartConfig}>
-                    <ScatterChart margin={{ left: 16, right: 14, top: 20, bottom: 8 }}>
-                      <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
-                      <XAxis type="number" dataKey="winRate" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                      <YAxis type="category" dataKey="map" name="맵" width={90} />
-                      {playerMapRows.map((map) => (
-                        <ReferenceLine key={`row-${map}`} y={map} stroke="#94a3b8" strokeOpacity={0.65} strokeDasharray="2 5" />
-                      ))}
-                      <ReferenceLine
-                        x={50}
-                        stroke="#c084fc"
-                        strokeDasharray="3 3"
-                        strokeWidth={2.2}
-                        ifOverflow="extendDomain"
-                      />
-                      <Tooltip
-                        shared={false}
-                        cursor={false}
-                        content={({ active, payload }) => {
-                          if (!active || !payload || payload.length === 0) return null
-                          const p = payload[0]?.payload as { winRate: number; games: number; race: Race } | undefined
-                          if (!p) return null
-                          return (
-                            <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
-                              <div className="flex items-center justify-between gap-3">
-                                <span>{raceNames[p.race]}</span>
-                                <span className="font-mono">
-                                  {p.winRate}% <span className="text-muted-foreground">(n={p.games})</span>
-                                </span>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        type="button"
+                        variant={mapChartSort === "gamesDesc" ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-7 px-2 text-xs",
+                          mapChartSort !== "gamesDesc" && "text-foreground hover:text-foreground dark:hover:text-foreground",
+                        )}
+                        onClick={() => setMapChartSort("gamesDesc")}
+                      >
+                        경기수순
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={mapChartSort === "winRateDesc" ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-7 px-2 text-xs",
+                          mapChartSort !== "winRateDesc" && "text-foreground hover:text-foreground dark:hover:text-foreground",
+                        )}
+                        onClick={() => setMapChartSort("winRateDesc")}
+                      >
+                        승률순
+                      </Button>
+                    </div>
+                    <div
+                      className={cn(
+                        "space-y-4",
+                        sortedPlayerMapMasteryData.length > 5 && "max-h-[290px] overflow-y-auto pr-2",
+                      )}
+                    >
+                      {sortedPlayerMapMasteryData.map((row) => {
+                        const winRate = Math.max(0, Math.min(100, row.p1WinRate))
+                        const loseRate = Math.max(0, 100 - winRate)
+                        return (
+                          <div key={row.map} className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="min-w-0 truncate pr-2 text-sm font-semibold text-foreground">{row.map}</p>
+                              <p className="shrink-0 font-mono text-sm font-semibold text-foreground">
+                                {winRate.toFixed(winRate % 1 === 0 ? 0 : 1)}%{" "}
+                                <span className="text-xs text-muted-foreground">({row.p1Games})</span>
+                              </p>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-muted/70">
+                              <div className="flex h-full w-full">
+                                <div className="h-full bg-emerald-500" style={{ width: `${winRate}%` }} aria-hidden />
+                                <div className="h-full bg-rose-500" style={{ width: `${loseRate}%` }} aria-hidden />
                               </div>
                             </div>
-                          )
-                        }}
-                      />
-                      <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
-                      <Scatter data={playerMapDotSeries.T} name="T" fill={raceColors.T} shape={makeRaceDotShape("T")} />
-                      <Scatter data={playerMapDotSeries.P} name="P" fill={raceColors.P} shape={makeRaceDotShape("P")} />
-                      <Scatter data={playerMapDotSeries.Z} name="Z" fill={raceColors.Z} shape={makeRaceDotShape("Z")} />
-                    </ScatterChart>
-                  </ChartContainer>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               ) : metaMapRaceWinRates.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
@@ -1900,14 +2153,15 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                       cursor={false}
                       content={({ active, payload }) => {
                         if (!active || !payload || payload.length === 0) return null
-                        const p = payload[0]?.payload as { winRate: number; games: number; race: Race } | undefined
+                        const p = payload[0]?.payload as { map: string; winRate: number; games: number; race: Race } | undefined
                         if (!p) return null
                         return (
                           <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                            <div className="mb-1 font-medium">{p.map}</div>
                             <div className="flex items-center justify-between gap-3">
                               <span>{raceNames[p.race]}</span>
                               <span className="font-mono">
-                                {p.winRate}% <span className="text-muted-foreground">(n={p.games})</span>
+                                {p.winRate}% <span className="text-muted-foreground">(경기수 : {p.games})</span>
                               </span>
                             </div>
                           </div>
@@ -1934,9 +2188,6 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                     <BarChart3 className="h-4 w-4" />
                     ELO 변동성 분석
                   </CardTitle>
-                  <CardDescription>
-                    최근 7일 동안 ELO 변동폭(최고-최저)이 큰 순서입니다. 막대는 최고점 대비 현재 하락폭을 보여줍니다.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {metaEloVolatilityRows.length === 0 ? (
@@ -2055,12 +2306,6 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                   <BarChart3 className="h-4 w-4" />
                   {activePlayerQuery.trim()} · 맵별 승률 레이더
                 </CardTitle>
-                <CardDescription>
-                  {isHeadToHeadMode
-                    ? "선수1 vs 선수2 맵별 승률을 겹쳐 비교합니다."
-                    : "선수1 vs 클랜 평균 맵별 승률을 겹쳐 비교합니다."}{" "}
-                  비교 대상 모두 데이터가 있는 맵만 표시합니다.
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 {playerMapMasteryData.length === 0 ? (
@@ -2176,21 +2421,6 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 <LineChartIcon className="h-4 w-4" />
                 {usePlayer1Charts ? `${activePlayerQuery.trim()} · 일자별 Elo 점수` : "일자별 종족 승률 추이"}
               </CardTitle>
-              <CardDescription>
-                {usePlayer1Charts ? (
-                  <>
-                    각 일자의 <span className="font-medium text-foreground">마지막 경기 직후 Elo</span>(경기 전 점수 + 변동)입니다. 시즌을
-                    고르면 그 시즌 시작일 이후만 쓰고, <span className="font-medium text-foreground">가장 최근 14일</span>만
-                    표시합니다. 경기에 Elo 전·후 기록이 없으면 제외됩니다.
-                    {seasonIds.length !== 1 && " (다중/전체 시즌 선택 시 시작일 제한 없이 최근 14일만 표시합니다.)"}
-                    {isHeadToHeadMode && " 상대전적 모드에서는 선수1/선수2 두 선을 함께 그립니다."}
-                  </>
-                ) : (
-                  <>
-                    최근 14일 일자별 추이입니다. 해당 일에서 종족별 경기 수가 {minGames}판 이상일 때만 해당 종족 선을 표시합니다.
-                  </>
-                )}
-              </CardDescription>
             </CardHeader>
             <CardContent>
               {(usePlayer1Charts ? versusEloTrend.length === 0 : metaDayRaceTrend.length === 0) ? (

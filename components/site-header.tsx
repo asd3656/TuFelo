@@ -38,7 +38,7 @@ function navButtonClass(active: boolean, palette: "violet" | "sky" | "red" | "em
           : "bg-emerald-600 text-white border-emerald-600"
 
   return cn(
-    "h-9 border border-border bg-background px-3 text-sm text-foreground shadow-sm transition-colors",
+    "h-8 border border-border px-2.5 text-xs bg-background text-foreground shadow-sm transition-colors sm:h-9 sm:px-3 sm:text-sm",
     active ? activeClass : paletteClass,
   )
 }
@@ -68,7 +68,7 @@ export function SiteHeader({
     <>
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="container mx-auto max-w-6xl px-4 py-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <Link href="/" className="inline-flex w-fit items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 <Trophy className="h-7 w-7 text-primary" />
@@ -81,7 +81,8 @@ export function SiteHeader({
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-1.5 overflow-x-auto pb-1 sm:gap-2">
+            <div className="w-full overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden sm:w-auto">
+              <div className="flex min-w-max items-center justify-start gap-1 pr-1 sm:justify-end sm:gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -100,10 +101,10 @@ export function SiteHeader({
                         : "다크 모드 (클릭: 시스템 설정)"
                 }
               >
-                {!mounted ? <Monitor className="h-4 w-4" />
-                  : theme === "light" ? <Sun className="h-4 w-4" />
-                    : theme === "dark" ? <Moon className="h-4 w-4" />
-                      : <Monitor className="h-4 w-4" />}
+                {!mounted ? <Monitor className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  : theme === "light" ? <Sun className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    : theme === "dark" ? <Moon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      : <Monitor className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
               </Button>
 
               {(isCreator || isGuest) && (
@@ -116,7 +117,7 @@ export function SiteHeader({
 
               <Button
                 type="button"
-                className="h-9 shrink-0 border border-border bg-background px-3 text-sm font-semibold text-foreground shadow-sm transition-colors hover:border-amber-600 hover:bg-amber-600 hover:text-white dark:hover:text-white"
+                className="h-8 shrink-0 border border-border bg-background px-2.5 text-xs font-semibold text-foreground shadow-sm transition-colors hover:border-amber-600 hover:bg-amber-600 hover:text-white dark:hover:text-white sm:h-9 sm:px-3 sm:text-sm"
                 onClick={() => setAdminLoginOpen(true)}
               >
                 {loggedInUsername ? "계정 관리" : "관리자 로그인"}
@@ -127,7 +128,7 @@ export function SiteHeader({
                   <Button
                     className={cn("font-semibold shrink-0", navButtonClass(isAdminPage, "emerald"))}
                   >
-                    <Users className="h-4 w-4 mr-2" />
+                    <Users className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
                     클랜원 명단
                   </Button>
                 </Link>
@@ -135,17 +136,18 @@ export function SiteHeader({
 
               <Link href="/ranking">
                 <Button className={cn("font-semibold shadow-sm border shrink-0", navButtonClass(isRanking, "violet"))}>
-                  <BarChart3 className="h-4 w-4 mr-2" />
+                  <BarChart3 className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
                   ELO 랭킹
                 </Button>
               </Link>
 
               <Link href="/data-center">
                 <Button className={cn("font-semibold shadow-sm border shrink-0", navButtonClass(isDataCenter, "sky"))}>
-                  <Database className="h-4 w-4 mr-2" />
+                  <Database className="mr-1.5 h-3.5 w-3.5 sm:mr-2 sm:h-4 sm:w-4" />
                   데이터센터
                 </Button>
               </Link>
+              </div>
             </div>
           </div>
         </div>
