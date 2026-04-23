@@ -1786,7 +1786,12 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                    최근 20게임 승/패 ({player1CardStats.member?.name ?? (activePlayerQuery.trim() || "선수1")})
+                  최근 20게임 승/패 (
+                  {player1CardStats.member?.name ?? (activePlayerQuery.trim() || "선수1")}
+                  {isHeadToHeadMode
+                    ? ` vs ${player2CardStats.member?.name ?? activePlayer2Queries[0] ?? "선수2"}`
+                    : ""}
+                  )
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -1882,15 +1887,20 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
           </section>
         )}
 
-        <section className={cn("grid grid-cols-1 gap-4 lg:grid-cols-2", usePlayer1Charts && "xl:grid-cols-3")}>
-          <Card className={cn(usePlayer1Charts && "xl:col-span-1")}>
+        <section
+          className={cn(
+            "grid grid-cols-1 gap-4 lg:grid-cols-2 items-stretch",
+            usePlayer1Charts && "xl:grid-cols-3",
+          )}
+        >
+          <Card className={cn("flex h-full flex-col", usePlayer1Charts && "xl:col-span-1")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Percent className="h-4 w-4" />
                 {usePlayer1Charts ? `${activePlayerQuery.trim()} · 상대 종족별 승패 비율` : "종족별 승률 · 경기 수"}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex min-h-0 flex-1 flex-col">
               {raceWinRates.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
                   {playerFilterEnabled && !usePlayer1Charts
@@ -1899,7 +1909,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 </div>
               ) : (
                 <ChartContainer
-                  className="h-[340px] w-full"
+                  className={cn("w-full", usePlayer1Charts ? "h-[260px]" : "h-[340px]")}
                   config={{
                     wins: { label: "승", color: "hsl(142 76% 45%)" },
                     losses: { label: "패", color: "hsl(358 90% 67%)" },
@@ -1964,14 +1974,14 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
           </Card>
 
           {usePlayer1Charts && (
-            <Card className="xl:col-span-1">
+            <Card className="flex h-full flex-col xl:col-span-1">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <BarChart3 className="h-4 w-4" />
                   종족별 경기수 분포
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-1 flex-col justify-center">
                 {mapRaceGamesTotal === 0 ? (
                   <div className="flex h-[220px] items-center justify-center text-sm text-muted-foreground">
                     종족 데이터 없음
@@ -2057,7 +2067,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             </Card>
           )}
 
-          <Card className={cn(usePlayer1Charts && "xl:col-span-1")}>
+          <Card className={cn("flex h-full flex-col", usePlayer1Charts && "xl:col-span-1")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BarChart3 className="h-4 w-4" />
@@ -2101,7 +2111,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                     <div
                       className={cn(
                         "space-y-4",
-                        sortedPlayerMapMasteryData.length > 5 && "max-h-[290px] overflow-y-auto pr-2",
+                        sortedPlayerMapMasteryData.length > 4 && "max-h-[235px] overflow-y-auto pr-2",
                       )}
                     >
                       {sortedPlayerMapMasteryData.map((row) => {
