@@ -1191,11 +1191,30 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
 
   const headToHeadRisk = useMemo(() => {
     if (headToHeadStats.games === 0) return { label: "판정불가", tone: "bg-muted text-muted-foreground" }
-    if (headToHeadStats.winRate < 30) return { label: "매우높음", tone: "bg-red-500/15 text-red-300 border border-red-500/35" }
-    if (headToHeadStats.winRate < 45) return { label: "높음", tone: "bg-orange-500/15 text-orange-300 border border-orange-500/35" }
-    if (headToHeadStats.winRate < 60) return { label: "보통", tone: "bg-yellow-500/15 text-yellow-300 border border-yellow-500/35" }
-    if (headToHeadStats.winRate < 70) return { label: "낮음", tone: "bg-sky-500/15 text-sky-300 border border-sky-500/35" }
-    return { label: "매우낮음", tone: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/35" }
+    if (headToHeadStats.winRate < 30)
+      return {
+        label: "매우높음",
+        tone: "border border-red-300 bg-red-100 text-red-700 dark:border-red-500/35 dark:bg-red-500/15 dark:text-red-300",
+      }
+    if (headToHeadStats.winRate < 45)
+      return {
+        label: "높음",
+        tone: "border border-orange-300 bg-orange-100 text-orange-700 dark:border-orange-500/35 dark:bg-orange-500/15 dark:text-orange-300",
+      }
+    if (headToHeadStats.winRate < 60)
+      return {
+        label: "보통",
+        tone: "border border-yellow-300 bg-yellow-100 text-yellow-700 dark:border-yellow-500/35 dark:bg-yellow-500/15 dark:text-yellow-300",
+      }
+    if (headToHeadStats.winRate < 70)
+      return {
+        label: "낮음",
+        tone: "border border-sky-300 bg-sky-100 text-sky-700 dark:border-sky-500/35 dark:bg-sky-500/15 dark:text-sky-300",
+      }
+    return {
+      label: "매우낮음",
+      tone: "border border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/35 dark:bg-emerald-500/15 dark:text-emerald-300",
+    }
   }, [headToHeadStats])
 
   const nemesis = useMemo(() => {
@@ -1713,7 +1732,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                         {title === "선수2" && nemesis && (
                           <Badge
                             variant="outline"
-                            className="border-rose-500/60 bg-rose-500/15 px-1.5 py-0 text-[11px] font-bold text-rose-400"
+                            className="border-rose-300 bg-rose-100 px-1.5 py-0 text-[11px] font-bold text-rose-700 dark:border-rose-500/60 dark:bg-rose-500/15 dark:text-rose-400"
                             title={`선수1 기준 천적 · 승률 ${nemesis.winRate}% (${nemesis.games}G)`}
                           >
                             천적
@@ -1722,7 +1741,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                         {title === "선수2" && data.member && rivalTopRankById.has(data.member.id) && (
                           <Badge
                             variant="outline"
-                            className="border-indigo-500/60 bg-indigo-500/15 px-1.5 py-0 text-[11px] font-bold text-indigo-300"
+                            className="border-indigo-300 bg-indigo-100 px-1.5 py-0 text-[11px] font-bold text-indigo-700 dark:border-indigo-500/60 dark:bg-indigo-500/15 dark:text-indigo-300"
                             title={`선수1 기준 호적수 TOP${rivalTopRankById.get(data.member.id)}`}
                           >
                             호적수
@@ -1733,14 +1752,14 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                           if (!tierBadge) return null
                           const rankTone =
                             tierBadge.rank === 1
-                              ? "border-yellow-500/70 bg-yellow-500/18 text-yellow-300"
+                              ? "border-yellow-300 bg-yellow-100 text-yellow-700 dark:border-yellow-500/70 dark:bg-yellow-500/18 dark:text-yellow-300"
                               : tierBadge.rank === 2
-                                ? "border-slate-400/70 bg-slate-400/18 text-slate-200"
+                                ? "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-400/70 dark:bg-slate-400/18 dark:text-slate-200"
                                 : tierBadge.rank === 3
-                                  ? "border-amber-700/70 bg-amber-700/20 text-amber-300"
+                                  ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-700/70 dark:bg-amber-700/20 dark:text-amber-300"
                                   : tierBadge.rank === 4
-                                    ? "border-violet-500/60 bg-violet-500/16 text-violet-300"
-                                    : "border-cyan-500/60 bg-cyan-500/16 text-cyan-300"
+                                    ? "border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-500/60 dark:bg-violet-500/16 dark:text-violet-300"
+                                    : "border-cyan-300 bg-cyan-100 text-cyan-700 dark:border-cyan-500/60 dark:bg-cyan-500/16 dark:text-cyan-300"
                           return (
                             <Badge
                               variant="outline"
@@ -1903,8 +1922,8 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                             className={cn(
                               "flex h-8 items-center justify-center rounded-md border text-[11px] font-semibold",
                               row.isWin
-                                ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300"
-                                : "border-rose-400/60 bg-rose-500/20 text-rose-300",
+                                ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-400/60 dark:bg-emerald-500/20 dark:text-emerald-300"
+                                : "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-400/60 dark:bg-rose-500/20 dark:text-rose-300",
                             )}
                             title={`${row.mapName} · ${row.isWin ? "승" : "패"}`}
                           >
