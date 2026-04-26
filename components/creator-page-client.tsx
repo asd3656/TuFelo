@@ -134,6 +134,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
 
   // ── 시즌 관리 상태 ──
   const [seasonErr, setSeasonErr] = useState<string | null>(null)
+  const [seasonNotice, setSeasonNotice] = useState<string | null>(null)
   // 새 시즌 시작 폼
   const [newSeasonName, setNewSeasonName] = useState("")
   const [newSeasonStart, setNewSeasonStart] = useState("")
@@ -209,6 +210,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
   function handleSyncCurrentSeasonStats() {
     if (syncingSeasonStats) return
     setSeasonErr(null)
+    setSeasonNotice(null)
     setSyncingSeasonStats(true)
     startTransition(async () => {
       try {
@@ -224,6 +226,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
           window.alert(res.error)
           return
         }
+        setSeasonNotice("현재 시즌 전적 재동기화가 완료되었습니다.")
         window.alert("현재 시즌 전적 재동기화가 완료되었습니다.")
         router.refresh()
       } catch (e) {
@@ -374,6 +377,11 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
               </Button>
             </div>
           </div>
+          {seasonNotice && (
+            <div className="px-6 py-2 border-b border-border bg-emerald-500/10 text-emerald-300 text-sm">
+              {seasonNotice}
+            </div>
+          )}
 
           {/* 새 시즌 시작 폼 */}
           {showNewSeasonForm && (
