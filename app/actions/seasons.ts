@@ -18,8 +18,8 @@ function revalidateSeasonPaths() {
 
 /** Many match IDs in one `.in("id", ids)` can exceed PostgREST URL limits (400 Bad Request). */
 const MATCH_ID_IN_CHUNK_SIZE = 120
-const MATCH_UPDATE_UPSERT_CHUNK_SIZE = 300
-const MEMBER_UPDATE_UPSERT_CHUNK_SIZE = 300
+const MATCH_UPDATE_PARALLEL_CHUNK_SIZE = 40
+const MEMBER_UPDATE_PARALLEL_CHUNK_SIZE = 80
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -173,20 +173,28 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     })
   }
 
-  // 경기별 ELO 값 업데이트 (건별 update -> 배치 upsert)
+  // 경기별 ELO 값 업데이트 (건별 update를 청크 병렬 처리)
   if (matchUpdates.length > 0) {
-    for (const chunk of chunkArray(matchUpdates, MATCH_UPDATE_UPSERT_CHUNK_SIZE)) {
-      const payload = chunk.map((u) => ({
-        id: u.id,
-        player1_elo_before: u.p1_elo_before,
-        player2_elo_before: u.p2_elo_before,
-        player1_elo_delta: u.p1_elo_delta,
-        player2_elo_delta: u.p2_elo_delta,
-      }))
-      const { error: matchUpdateErr } = await supabase
-        .from("matches")
-        .upsert(payload, { onConflict: "id" })
-      if (matchUpdateErr) throw new Error(`경기 ELO 일괄 업데이트 실패: ${matchUpdateErr.message}`)
+    for (const chunk of chunkArray(matchUpdates, MATCH_UPDATE_PARALLEL_CHUNK_SIZE)) {
+      const results = await Promise.all(
+        chunk.map((u) =>
+          supabase
+            .from("matches")
+            .update({
+              player1_elo_before: u.p1_elo_before,
+              player2_elo_before: u.p2_elo_before,
+              player1_elo_delta: u.p1_elo_delta,
+              player2_elo_delta: u.p2_elo_delta,
+            })
+            .eq("id", u.id),
+        ),
+      )
+      for (const [idx, r] of results.entries()) {
+        if (r.error) {
+          const failedId = chunk[idx]?.id ?? "unknown"
+          throw new Error(`경기 ELO 업데이트 실패(${failedId}): ${r.error.message}`)
+        }
+      }
     }
   }
 
@@ -221,11 +229,26 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     .filter((v): v is NonNullable<typeof v> => v !== null)
 
   if (memberUpdateData.length > 0) {
-    for (const chunk of chunkArray(memberUpdateData, MEMBER_UPDATE_UPSERT_CHUNK_SIZE)) {
-      const { error: memberUpdErr } = await supabase
-        .from("members")
-        .upsert(chunk, { onConflict: "id" })
-      if (memberUpdErr) throw new Error(`멤버 스탯 일괄 업데이트 실패: ${memberUpdErr.message}`)
+    for (const chunk of chunkArray(memberUpdateData, MEMBER_UPDATE_PARALLEL_CHUNK_SIZE)) {
+      const results = await Promise.all(
+        chunk.map((row) =>
+          supabase
+            .from("members")
+            .update({
+              elo: row.elo,
+              wins: row.wins,
+              losses: row.losses,
+              streak: row.streak,
+            })
+            .eq("id", row.id),
+        ),
+      )
+      for (const [idx, r] of results.entries()) {
+        if (r.error) {
+          const failedId = chunk[idx]?.id ?? "unknown"
+          throw new Error(`멤버 스탯 업데이트 실패(${failedId}): ${r.error.message}`)
+        }
+      }
     }
   }
 }
