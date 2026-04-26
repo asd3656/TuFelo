@@ -112,6 +112,14 @@ function actionBadgeClass(action: string) {
   return "bg-secondary text-secondary-foreground"
 }
 
+function parseElapsedMs(detail: string | null): number | null {
+  if (!detail) return null
+  const m = detail.match(/(?:^|,\s*)elapsed_ms=(\d+)(?:,|$)/)
+  if (!m) return null
+  const parsed = Number(m[1])
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGuest, headerData }: CreatorPageClientProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -138,6 +146,7 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
   const [editEnd, setEditEnd] = useState("")
   // 시즌 삭제 확인
   const [deleteSeasonTarget, setDeleteSeasonTarget] = useState<Season | null>(null)
+  const [syncingSeasonStats, setSyncingSeasonStats] = useState(false)
 
   const activeSeason = seasons.find((s) => s.endDate === null) ?? null
 
@@ -198,10 +207,18 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
   }
 
   function handleSyncCurrentSeasonStats() {
+    if (syncingSeasonStats) return
     setSeasonErr(null)
+    setSyncingSeasonStats(true)
     startTransition(async () => {
       try {
-        const res = await syncCurrentSeasonStatsAction()
+        const timeoutMs = 60_000
+        const res = await Promise.race([
+          syncCurrentSeasonStatsAction(),
+          new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error("요청 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.")), timeoutMs)
+          }),
+        ])
         if (!res.ok) {
           setSeasonErr(res.error)
           window.alert(res.error)
@@ -213,6 +230,8 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
         const message = `재동기화 요청 실패: ${String(e)}`
         setSeasonErr(message)
         window.alert(message)
+      } finally {
+        setSyncingSeasonStats(false)
       }
     })
   }
@@ -337,11 +356,11 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                   variant="outline"
                   className="border-border text-foreground hover:bg-secondary"
                   onClick={handleSyncCurrentSeasonStats}
-                  disabled={isGuest || pending}
+                  disabled={isGuest || pending || syncingSeasonStats}
                   title={isGuest ? "관리자 권한이 필요합니다" : "현재 시즌 전적 재동기화"}
                 >
                   {isGuest ? <Lock className="h-4 w-4 mr-1" /> : <ScrollText className="h-4 w-4 mr-1" />}
-                  전적 재동기화
+                  {syncingSeasonStats ? "재동기화 중..." : "전적 재동기화"}
                 </Button>
               )}
               <Button
@@ -743,7 +762,19 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                         </span>
                       </TableCell>
                       <TableCell className="text-sm text-foreground">{log.target ?? "-"}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{log.detail ?? "-"}</TableCell>
+                      <TableCell
+                        className={`text-xs ${
+                          (() => {
+                            const elapsedMs = parseElapsedMs(log.detail)
+                            if (elapsedMs === null) return "text-muted-foreground"
+                            if (elapsedMs >= 20000) return "text-destructive font-semibold"
+                            if (elapsedMs >= 10000) return "text-amber-400 font-medium"
+                            return "text-emerald-400"
+                          })()
+                        }`}
+                      >
+                        {log.detail ?? "-"}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

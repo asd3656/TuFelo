@@ -18,6 +18,8 @@ function revalidateSeasonPaths() {
 
 /** Many match IDs in one `.in("id", ids)` can exceed PostgREST URL limits (400 Bad Request). */
 const MATCH_ID_IN_CHUNK_SIZE = 120
+const MATCH_UPDATE_UPSERT_CHUNK_SIZE = 300
+const MEMBER_UPDATE_UPSERT_CHUNK_SIZE = 300
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = []
@@ -171,19 +173,20 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     })
   }
 
-  // 경기별 ELO 값 업데이트
+  // 경기별 ELO 값 업데이트 (건별 update -> 배치 upsert)
   if (matchUpdates.length > 0) {
-    for (const u of matchUpdates) {
+    for (const chunk of chunkArray(matchUpdates, MATCH_UPDATE_UPSERT_CHUNK_SIZE)) {
+      const payload = chunk.map((u) => ({
+        id: u.id,
+        player1_elo_before: u.p1_elo_before,
+        player2_elo_before: u.p2_elo_before,
+        player1_elo_delta: u.p1_elo_delta,
+        player2_elo_delta: u.p2_elo_delta,
+      }))
       const { error: matchUpdateErr } = await supabase
         .from("matches")
-        .update({
-          player1_elo_before: u.p1_elo_before,
-          player2_elo_before: u.p2_elo_before,
-          player1_elo_delta: u.p1_elo_delta,
-          player2_elo_delta: u.p2_elo_delta,
-        })
-        .eq("id", u.id)
-      if (matchUpdateErr) throw new Error(`경기 ELO 업데이트 실패(${u.id}): ${matchUpdateErr.message}`)
+        .upsert(payload, { onConflict: "id" })
+      if (matchUpdateErr) throw new Error(`경기 ELO 일괄 업데이트 실패: ${matchUpdateErr.message}`)
     }
   }
 
@@ -218,17 +221,11 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     .filter((v): v is NonNullable<typeof v> => v !== null)
 
   if (memberUpdateData.length > 0) {
-    for (const row of memberUpdateData) {
+    for (const chunk of chunkArray(memberUpdateData, MEMBER_UPDATE_UPSERT_CHUNK_SIZE)) {
       const { error: memberUpdErr } = await supabase
         .from("members")
-        .update({
-          elo: row.elo,
-          wins: row.wins,
-          losses: row.losses,
-          streak: row.streak,
-        })
-        .eq("id", row.id)
-      if (memberUpdErr) throw new Error(`멤버 스탯 업데이트 실패(${row.id}): ${memberUpdErr.message}`)
+        .upsert(chunk, { onConflict: "id" })
+      if (memberUpdErr) throw new Error(`멤버 스탯 일괄 업데이트 실패: ${memberUpdErr.message}`)
     }
   }
 }
@@ -389,17 +386,26 @@ export async function syncCurrentSeasonStatsAction(): Promise<ActionResult> {
     return { ok: false, error: "진행 중인 시즌이 없습니다." }
   }
 
+  const startedAt = Date.now()
   try {
     await recalculateCurrentSeasonElo(supabase, activeSeason.id as string, activeSeason.start_date as string)
   } catch (e) {
+    const elapsedMs = Date.now() - startedAt
+    await insertAdminLog(
+      session.username,
+      "시즌 전적 재동기화 실패",
+      activeSeason.name as string,
+      `start_date=${activeSeason.start_date as string}, elapsed_ms=${elapsedMs}, error=${String(e)}`,
+    )
     return { ok: false, error: `재동기화 실패: ${String(e)}` }
   }
 
+  const elapsedMs = Date.now() - startedAt
   await insertAdminLog(
     session.username,
     "시즌 전적 재동기화",
     activeSeason.name as string,
-    `start_date=${activeSeason.start_date as string}`,
+    `start_date=${activeSeason.start_date as string}, elapsed_ms=${elapsedMs}`,
   )
 
   revalidateSeasonPaths()
