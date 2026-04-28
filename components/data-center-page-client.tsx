@@ -349,10 +349,12 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     [members, activePlayer2Queries],
   )
 
-  /** 선수 필터 ON + 선수1 검색에 해당하는 ID가 있을 때만 선수1 기준 차트 */
-  const usePlayer1Charts =
-    playerFilterEnabled && activePlayerQuery.trim().length > 0 && matchedPlayerIds.size > 0
-  const needsPlayer2Selection = usePlayer1Charts && (activePlayer2Queries.length === 0 || matchedPlayer2Ids.size === 0)
+  /** 상대선수 모드 토글만 켜도 차트 UI를 선수 기준 모드로 전환 */
+  const usePlayer1Charts = playerFilterEnabled
+  const hasResolvedPlayer1 = activePlayerQuery.trim().length > 0 && matchedPlayerIds.size > 0
+  const playerChartLabel = hasResolvedPlayer1 ? activePlayerQuery.trim() : "선수1"
+  const isPlayerModePendingInput = playerFilterEnabled && !hasResolvedPlayer1
+  const needsPlayer2Selection = hasResolvedPlayer1 && (activePlayer2Queries.length === 0 || matchedPlayer2Ids.size === 0)
 
   const seasonOptions = useMemo(() => {
     const proLeague = [
@@ -545,14 +547,36 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       if (races.length > 0) {
         const p1Race = memberById.get(match.player1Id)?.race
         const p2Race = memberById.get(match.player2Id)?.race
-        if ((!p1Race || !races.includes(p1Race)) && (!p2Race || !races.includes(p2Race))) return false
+        // 상대전적 모드(선수1 입력)에서는 종족 필터를 "선수1의 상대 종족" 기준으로 해석합니다.
+        if (hasPlayer1Filter && matchedPlayerIds.size > 0) {
+          const opponentRaces: Race[] = []
+          if (matchedPlayerIds.has(match.player1Id) && p2Race) opponentRaces.push(p2Race)
+          if (matchedPlayerIds.has(match.player2Id) && p1Race) opponentRaces.push(p1Race)
+          if (opponentRaces.length === 0) return false
+          if (!opponentRaces.some((race) => races.includes(race))) return false
+        } else {
+          if ((!p1Race || !races.includes(p1Race)) && (!p2Race || !races.includes(p2Race))) return false
+        }
       }
       if (tiers.length > 0) {
         const p1Tier = memberById.get(match.player1Id)?.tier
         const p2Tier = memberById.get(match.player2Id)?.tier
-        const hasP1 = p1Tier !== null && p1Tier !== undefined && tiers.includes(String(p1Tier))
-        const hasP2 = p2Tier !== null && p2Tier !== undefined && tiers.includes(String(p2Tier))
-        if (!hasP1 && !hasP2) return false
+        // 상대전적 모드(선수1 입력)에서는 티어 필터도 "선수1의 상대 티어" 기준으로 해석합니다.
+        if (hasPlayer1Filter && matchedPlayerIds.size > 0) {
+          const opponentTiers: string[] = []
+          if (matchedPlayerIds.has(match.player1Id) && p2Tier !== null && p2Tier !== undefined) {
+            opponentTiers.push(String(p2Tier))
+          }
+          if (matchedPlayerIds.has(match.player2Id) && p1Tier !== null && p1Tier !== undefined) {
+            opponentTiers.push(String(p1Tier))
+          }
+          if (opponentTiers.length === 0) return false
+          if (!opponentTiers.some((tier) => tiers.includes(tier))) return false
+        } else {
+          const hasP1 = p1Tier !== null && p1Tier !== undefined && tiers.includes(String(p1Tier))
+          const hasP2 = p2Tier !== null && p2Tier !== undefined && tiers.includes(String(p2Tier))
+          if (!hasP1 && !hasP2) return false
+        }
       }
       return true
     })
@@ -1434,7 +1458,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             <div className="space-y-2">
               <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                 <Label htmlFor="player-filter-toggle" className="cursor-pointer">
-                  선수 필터 사용
+                  상대전적 모드 전환
                 </Label>
                 <Switch
                   id="player-filter-toggle"
@@ -1443,7 +1467,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                기본값은 전체 차트입니다. 켜면 선수 기준 차트로 전환됩니다.
+                켜면 선수/상대 기준 차트 모드로 전환됩니다.
               </p>
             </div>
 
@@ -1542,9 +1566,9 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                   }}
                   open={player2MenuOpen}
                   onOpenChange={setPlayer2MenuOpen}
-                  disabled={!usePlayer1Charts || player2Options.length === 0}
+                  disabled={!hasResolvedPlayer1 || player2Options.length === 0}
                   placeholder={
-                    !usePlayer1Charts
+                    !hasResolvedPlayer1
                       ? "먼저 선수1을 정확히 입력하세요"
                       : player2Options.length === 0
                         ? "해당 시즌 기준 상대 전적 없음"
@@ -1565,7 +1589,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             />
 
             <MultiSelectFilter
-              label="종족"
+              label={playerFilterEnabled ? "상대 종족" : "종족"}
               options={[
                 { value: "T", label: "테란" },
                 { value: "P", label: "프로토스" },
@@ -1575,17 +1599,17 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
               onChange={(next) => setRaces(next.filter((v): v is Race => v === "T" || v === "P" || v === "Z"))}
               open={raceMenuOpen}
               onOpenChange={setRaceMenuOpen}
-              placeholder="전체 종족"
+              placeholder={playerFilterEnabled ? "전체 상대 종족" : "전체 종족"}
             />
 
             <MultiSelectFilter
-              label="티어"
+              label={playerFilterEnabled ? "상대 티어" : "티어"}
               options={tierOptions}
               selectedValues={tiers}
               onChange={setTiers}
               open={tierMenuOpen}
               onOpenChange={setTierMenuOpen}
-              placeholder="전체 티어"
+              placeholder={playerFilterEnabled ? "전체 상대 티어" : "전체 티어"}
             />
 
             <MultiSelectFilter
@@ -1897,7 +1921,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
           </section>
         )}
 
-        {playerFilterEnabled && usePlayer1Charts && (
+        {playerFilterEnabled && hasResolvedPlayer1 && (
           <section className="mb-6">
             <Card>
               <CardHeader>
@@ -2003,18 +2027,30 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
           </section>
         )}
 
-        <section
-          className={cn(
-            "grid grid-cols-1 gap-4 lg:grid-cols-2 items-stretch",
-            usePlayer1Charts && "xl:grid-cols-3",
+        <section>
+          {isPlayerModePendingInput && (
+            <div className="mb-2 flex items-center justify-start">
+              <Badge
+                variant="outline"
+                className="border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-500/60 dark:bg-amber-500/16 dark:text-amber-300"
+              >
+                선수1 입력 대기
+              </Badge>
+            </div>
           )}
-        >
+          <div
+            className={cn(
+              "grid grid-cols-1 gap-4 lg:grid-cols-2 items-stretch",
+              usePlayer1Charts && "xl:grid-cols-3",
+              isPlayerModePendingInput && "opacity-60",
+            )}
+          >
           <Card className={cn("flex h-full flex-col", usePlayer1Charts && "xl:col-span-1")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Percent className="h-4 w-4" />
                 {usePlayer1Charts
-                  ? `${activePlayerQuery.trim()} · 상대 종족별 승패 비율`
+                  ? `${playerChartLabel} · 상대 종족별 승패 비율`
                   : `${raceNames[metaAnchorRace]} 기준 · 상대 종족별 승률 · 경기 수`}
               </CardTitle>
             </CardHeader>
@@ -2036,7 +2072,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
               )}
               {raceWinRates.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
-                  {playerFilterEnabled && !usePlayer1Charts
+                  {playerFilterEnabled && !hasResolvedPlayer1
                     ? "선수1 이름을 검색하면 선수 기준 차트로 바뀝니다."
                     : "최소 경기 수 조건을 만족하는 종족 데이터가 없습니다."}
                 </div>
@@ -2204,14 +2240,16 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BarChart3 className="h-4 w-4" />
-                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 맵별 승률 차트` : "맵별 종족 승률"}
+                {usePlayer1Charts ? `${playerChartLabel} · 맵별 승률 차트` : "맵별 종족 승률"}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {usePlayer1Charts ? (
                 sortedPlayerMapMasteryData.length === 0 ? (
                   <div className="py-16 text-center text-sm text-muted-foreground">
-                    최소 경기 수 조건을 만족하는 맵 데이터가 없습니다.
+                    {hasResolvedPlayer1
+                      ? "최소 경기 수 조건을 만족하는 맵 데이터가 없습니다."
+                      : "선수1 이름을 검색하면 맵별 승률이 표시됩니다."}
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -2321,6 +2359,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             </CardContent>
           </Card>
 
+          </div>
         </section>
 
         {!usePlayer1Charts && (
@@ -2441,13 +2480,24 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
           </section>
         )}
 
-        <section className={cn("mt-4 grid grid-cols-1 gap-4", usePlayer1Charts && "xl:grid-cols-10")}>
+        <section className="mt-4">
+          {isPlayerModePendingInput && (
+            <div className="mb-2 flex items-center justify-start">
+              <Badge
+                variant="outline"
+                className="border-amber-300 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-500/60 dark:bg-amber-500/16 dark:text-amber-300"
+              >
+                선수1 입력 대기
+              </Badge>
+            </div>
+          )}
+          <div className={cn("grid grid-cols-1 gap-4", usePlayer1Charts && "xl:grid-cols-10", isPlayerModePendingInput && "opacity-60")}>
           {usePlayer1Charts && (
             <Card className="xl:col-span-3">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <BarChart3 className="h-4 w-4" />
-                  {activePlayerQuery.trim()} · 맵별 승률 레이더
+                  {playerChartLabel} · 맵별 승률 레이더
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -2562,14 +2612,16 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <LineChartIcon className="h-4 w-4" />
-                {usePlayer1Charts ? `${activePlayerQuery.trim()} · 일자별 Elo 점수` : "일자별 종족 승률 추이"}
+                {usePlayer1Charts ? `${playerChartLabel} · 일자별 Elo 점수` : "일자별 종족 승률 추이"}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {(usePlayer1Charts ? versusEloTrend.length === 0 : metaDayRaceTrend.length === 0) ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
                   {usePlayer1Charts
-                    ? "이 조건에서 Elo 점수가 기록된 일자 데이터가 없습니다."
+                    ? hasResolvedPlayer1
+                      ? "이 조건에서 Elo 점수가 기록된 일자 데이터가 없습니다."
+                      : "선수1 이름을 검색하면 Elo 추이가 표시됩니다."
                     : "일자별 추이를 그릴 수 있는 데이터가 없습니다."}
                 </div>
               ) : usePlayer1Charts ? (
@@ -2679,6 +2731,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
               )}
             </CardContent>
           </Card>
+          </div>
         </section>
 
         
