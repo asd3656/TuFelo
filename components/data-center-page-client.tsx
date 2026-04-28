@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   BarChart3,
   ChevronDown,
+  Crown,
   Database,
   Filter,
   LineChart as LineChartIcon,
@@ -1705,7 +1706,24 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
               { title: "선수1", data: player1CardStats, icon: <User className="h-4 w-4" />, accent: "from-sky-500/20 to-transparent", orderClass: "xl:order-1" },
               { title: "선수2", data: player2CardStats, icon: <Swords className="h-4 w-4" />, accent: "from-violet-500/20 to-transparent", orderClass: "xl:order-3" },
             ].map(({ title, data, icon, accent, orderClass }) => (
-              <Card key={title} className={cn("overflow-hidden", orderClass)}>
+              <Card
+                key={title}
+                className={cn(
+                  "relative overflow-hidden",
+                  data.member && tierRankBadgeByMemberId.get(data.member.id)?.rank === 1 && "border-yellow-400/85 shadow-[0_0_18px_rgba(250,204,21,0.32)]",
+                  orderClass,
+                )}
+              >
+                {data.member && tierRankBadgeByMemberId.get(data.member.id)?.rank === 1 && (
+                  <>
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute right-[-34px] top-2 rotate-[24deg] border-y border-yellow-700/40 bg-gradient-to-r from-yellow-300/95 to-yellow-200/95 px-8 py-0.5 text-[10px] font-extrabold tracking-wide text-yellow-950 shadow-[0_0_10px_rgba(250,204,21,0.35)]"
+                    >
+                      TIER CHAMPION
+                    </span>
+                  </>
+                )}
                 <div className={cn("h-1 w-full bg-gradient-to-r", accent)} />
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -1715,7 +1733,12 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                   <CardDescription>
                     {data.member ? (
                       <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-medium text-foreground">{data.member.name}</span>
+                        <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                          {tierRankBadgeByMemberId.get(data.member.id)?.rank === 1 && (
+                            <Crown className="h-3.5 w-3.5 text-yellow-500 animate-pulse" aria-hidden />
+                          )}
+                          {data.member.name}
+                        </span>
                         <Badge variant="outline" className={cn("text-[11px] font-semibold", raceTagClasses[data.member.race])}>
                           {raceNames[data.member.race]}
                         </Badge>
@@ -1754,12 +1777,12 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                             tierBadge.rank === 1
                               ? "border-yellow-300 bg-yellow-100 text-yellow-700 dark:border-yellow-500/70 dark:bg-yellow-500/18 dark:text-yellow-300"
                               : tierBadge.rank === 2
-                                ? "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-400/70 dark:bg-slate-400/18 dark:text-slate-200"
+                                ? "border-red-300 bg-red-100 text-red-700 dark:border-red-500/70 dark:bg-red-500/18 dark:text-red-300"
                                 : tierBadge.rank === 3
-                                  ? "border-amber-300 bg-amber-100 text-amber-700 dark:border-amber-700/70 dark:bg-amber-700/20 dark:text-amber-300"
+                                  ? "border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-500/70 dark:bg-violet-500/18 dark:text-violet-300"
                                   : tierBadge.rank === 4
-                                    ? "border-violet-300 bg-violet-100 text-violet-700 dark:border-violet-500/60 dark:bg-violet-500/16 dark:text-violet-300"
-                                    : "border-cyan-300 bg-cyan-100 text-cyan-700 dark:border-cyan-500/60 dark:bg-cyan-500/16 dark:text-cyan-300"
+                                    ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-500/70 dark:bg-emerald-500/18 dark:text-emerald-300"
+                                    : "border-sky-300 bg-sky-100 text-sky-700 dark:border-sky-500/70 dark:bg-sky-500/18 dark:text-sky-300"
                           return (
                             <Badge
                               variant="outline"

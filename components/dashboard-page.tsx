@@ -9,6 +9,7 @@ import { RegisterMatchDialog } from "@/components/register-match-dialog"
 import { EditMatchDialog } from "@/components/edit-match-dialog"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -68,6 +69,54 @@ interface DashboardPageProps {
   adminUsernames?: string[]
   seasons?: Season[]
   currentSeason?: Season | null
+}
+
+interface WeeklyBestEntry {
+  memberId: string
+  nickname: string
+  race: "T" | "P" | "Z"
+  tier: 1 | 2 | 3 | 4
+  elo: number
+  tierEloRank: number
+  weeklyDelta: number
+}
+
+const raceColors: Record<"T" | "P" | "Z", string> = {
+  T: "bg-blue-100 dark:bg-blue-600/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
+  P: "bg-amber-100 dark:bg-amber-600/20 text-amber-700 dark:text-amber-400 border-amber-400/60 dark:border-amber-500/30",
+  Z: "bg-red-100 dark:bg-red-600/20 text-red-700 dark:text-red-400 border-red-400/60 dark:border-red-500/30",
+}
+
+const raceNames: Record<"T" | "P" | "Z", string> = {
+  T: "Terran",
+  P: "Protoss",
+  Z: "Zerg",
+}
+
+const tierColors: Record<1 | 2 | 3 | 4, string> = {
+  1: "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-400/60 dark:border-yellow-500/30",
+  2: "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400 border-purple-400/60 dark:border-purple-500/30",
+  3: "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-400/60 dark:border-blue-500/30",
+  4: "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-400/60 dark:border-green-500/30",
+}
+
+function weeklyRankCardClass(rank: number): string {
+  if (rank === 1) {
+    return "weekly-best-card relative overflow-hidden border-2 border-yellow-400/90 shadow-[0_0_28px_rgba(250,204,21,0.48)]"
+  }
+  if (rank === 2) {
+    return "weekly-best-card-rank2 relative overflow-hidden border-2 border-red-500/90 shadow-[0_0_12px_rgba(239,68,68,0.24)] hover:shadow-[0_0_16px_rgba(239,68,68,0.3)] transition-shadow"
+  }
+  if (rank === 3) {
+    return "weekly-best-card-rank3 relative overflow-hidden border-2 border-violet-500/90 shadow-[0_0_12px_rgba(139,92,246,0.24)] hover:shadow-[0_0_16px_rgba(139,92,246,0.3)] transition-shadow"
+  }
+  if (rank === 4) {
+    return "border-2 border-emerald-500/85 shadow-[0_0_12px_rgba(16,185,129,0.22)] hover:shadow-[0_0_16px_rgba(16,185,129,0.3)] transition-shadow"
+  }
+  if (rank === 5) {
+    return "border-2 border-sky-500/85 shadow-[0_0_12px_rgba(14,165,233,0.22)] hover:shadow-[0_0_16px_rgba(14,165,233,0.3)] transition-shadow"
+  }
+  return "border border-border"
 }
 
 /** 시즌 필터 가상 ID (`/api/matches` 의 `seasonId` 와 동일) */
@@ -137,6 +186,9 @@ export function DashboardPage({
   const [matchTypeFilterOpen, setMatchTypeFilterOpen] = useState(false)
   const [seasonFilterOpen, setSeasonFilterOpen] = useState(false)
   const [tierFilterOpen, setTierFilterOpen] = useState(false)
+  const [weeklyBest, setWeeklyBest] = useState<WeeklyBestEntry[]>([])
+  const [weeklyRange, setWeeklyRange] = useState<{ weekStart: string; weekEnd: string } | null>(null)
+  const [isWeeklyLoading, setIsWeeklyLoading] = useState(false)
 
   const matchHistorySectionRef = useRef<HTMLElement | null>(null)
 
@@ -215,6 +267,35 @@ export function DashboardPage({
       setPlayer2("")
     }
   }, [filters.player1, filters.player2, setPlayer2])
+
+  useEffect(() => {
+    let isAlive = true
+    const loadWeeklyBest = async () => {
+      setIsWeeklyLoading(true)
+      try {
+        const res = await fetch("/api/weekly-best", { cache: "no-store" })
+        if (!res.ok) throw new Error("weekly best fetch failed")
+        const data = await res.json()
+        if (!isAlive) return
+        setWeeklyBest((data.ranking ?? []) as WeeklyBestEntry[])
+        setWeeklyRange({
+          weekStart: String(data.weekStart ?? ""),
+          weekEnd: String(data.weekEnd ?? ""),
+        })
+      } catch (e) {
+        console.error("주간 베스트 로드 실패:", e)
+        if (!isAlive) return
+        setWeeklyBest([])
+        setWeeklyRange(null)
+      } finally {
+        if (isAlive) setIsWeeklyLoading(false)
+      }
+    }
+    loadWeeklyBest()
+    return () => {
+      isAlive = false
+    }
+  }, [initialMatches])
 
   // ── 전적 액션 핸들러 ──
 
@@ -592,6 +673,206 @@ export function DashboardPage({
             </div>
           </div>
         </section>
+        <section className="bg-card rounded-lg border border-border p-4 mb-8">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-yellow-500" />
+              <h3 className="text-sm font-semibold text-foreground">위클리 베스트 (ELO 상승 TOP 5)</h3>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {weeklyRange ? `${weeklyRange.weekStart} ~ ${weeklyRange.weekEnd}` : "최근 월~일 기준"}
+            </span>
+          </div>
+          {isWeeklyLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              주간 랭킹 계산 중...
+            </div>
+          ) : weeklyBest.length === 0 ? (
+            <p className="text-sm text-muted-foreground">최근 주간 데이터가 없어 표시할 랭킹이 없습니다.</p>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+              {weeklyBest.map((entry, index) => {
+                const rank = index + 1
+                const deltaText = entry.weeklyDelta > 0 ? `+${entry.weeklyDelta}` : String(entry.weeklyDelta)
+                return (
+                  <div key={entry.memberId} className={`rounded-lg bg-card p-3 ${weeklyRankCardClass(rank)}`}>
+                    {rank === 1 && (
+                      <>
+                        <span className="weekly-best-aura" aria-hidden />
+                        <span className="weekly-best-sweep" aria-hidden />
+                        <span className="weekly-best-badge" aria-hidden>
+                          WEEKLY CHAMPION
+                        </span>
+                      </>
+                    )}
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-base font-extrabold text-foreground">#{rank}</span>
+                      <span
+                        className={`text-sm font-bold ${
+                          entry.weeklyDelta > 0
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {deltaText}
+                      </span>
+                    </div>
+                    <p className="truncate text-sm font-semibold text-foreground">{entry.nickname}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className={raceColors[entry.race]}>
+                        {raceNames[entry.race]}
+                      </Badge>
+                      <Badge variant="outline" className={`text-xs font-semibold px-1.5 py-0 ${tierColors[entry.tier]}`}>
+                        {entry.tier}티어
+                      </Badge>
+                    </div>
+                    <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                      <p>주간 상승: <span className="font-semibold text-foreground">{deltaText}</span></p>
+                      <p>티어 내 ELO 랭킹: <span className="font-semibold text-foreground">{entry.tierEloRank}위</span></p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+        <style jsx>{`
+          .weekly-best-card {
+            animation: wb-card-float 2.8s ease-in-out infinite;
+          }
+
+          .weekly-best-aura {
+            position: absolute;
+            inset: -28%;
+            border-radius: 9999px;
+            background: radial-gradient(circle, rgba(250, 204, 21, 0.28) 0%, rgba(250, 204, 21, 0) 62%);
+            filter: blur(2px);
+            animation: wb-aura-pulse 2.2s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+          }
+
+          .weekly-best-sweep {
+            position: absolute;
+            top: -90%;
+            left: -45%;
+            width: 70%;
+            height: 280%;
+            background: linear-gradient(
+              120deg,
+              rgba(255, 255, 255, 0) 0%,
+              rgba(255, 255, 255, 0.4) 50%,
+              rgba(255, 255, 255, 0) 100%
+            );
+            transform: rotate(12deg);
+            animation: wb-sweep 2.8s linear infinite;
+            pointer-events: none;
+            z-index: 1;
+          }
+
+          .weekly-best-badge {
+            position: absolute;
+            top: 8px;
+            right: -34px;
+            transform: rotate(26deg);
+            padding: 2px 34px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            color: rgb(17 24 39);
+            background: linear-gradient(90deg, rgba(250, 204, 21, 0.95), rgba(253, 224, 71, 0.95));
+            border-top: 1px solid rgba(255, 255, 255, 0.6);
+            border-bottom: 1px solid rgba(161, 98, 7, 0.4);
+            box-shadow: 0 0 12px rgba(250, 204, 21, 0.4);
+            pointer-events: none;
+            z-index: 2;
+          }
+
+          .weekly-best-card-rank2::after,
+          .weekly-best-card-rank3::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.45;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 46%);
+          }
+
+          .weekly-best-card-rank2 {
+            animation: wb-rank2-breathe 3.2s ease-in-out infinite;
+          }
+
+          .weekly-best-card-rank3 {
+            animation: wb-rank3-breathe 3.4s ease-in-out infinite;
+          }
+
+          @keyframes wb-card-float {
+            0%,
+            100% {
+              transform: translateY(0px) scale(1);
+            }
+            50% {
+              transform: translateY(-2px) scale(1.006);
+            }
+          }
+
+          @keyframes wb-aura-pulse {
+            0%,
+            100% {
+              opacity: 0.58;
+              transform: scale(0.98);
+            }
+            50% {
+              opacity: 0.95;
+              transform: scale(1.04);
+            }
+          }
+
+          @keyframes wb-sweep {
+            0% {
+              transform: translateX(-120%) rotate(12deg);
+            }
+            100% {
+              transform: translateX(230%) rotate(12deg);
+            }
+          }
+
+          @keyframes wb-rank2-breathe {
+            0%,
+            100% {
+              box-shadow: 0 0 10px rgba(239, 68, 68, 0.2);
+            }
+            50% {
+              box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
+            }
+          }
+
+          @keyframes wb-rank3-breathe {
+            0%,
+            100% {
+              box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+            }
+            50% {
+              box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+            }
+          }
+
+          @media (prefers-reduced-motion: reduce) {
+            .weekly-best-card,
+            .weekly-best-card-rank2,
+            .weekly-best-card-rank3 {
+              animation: none !important;
+              transition: none !important;
+            }
+
+            .weekly-best-aura,
+            .weekly-best-sweep {
+              display: none !important;
+              animation: none !important;
+            }
+          }
+        `}</style>
 
         {/* ── 선수1 검색 시 승/패 요약 카드 ── */}
         {filters.player1 && (
