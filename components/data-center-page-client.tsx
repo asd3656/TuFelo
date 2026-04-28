@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   BarChart3,
@@ -185,6 +185,42 @@ interface PerspectiveRow {
   seasonKey: string
 }
 
+type SummaryRaceWinRateRow = { race: Race; games: number; wins: number; winRate: number }
+type SummaryMapRaceWinRateRow = {
+  map: string
+  total: number
+  T: number | null
+  P: number | null
+  Z: number | null
+  tGames: number
+  pGames: number
+  zGames: number
+}
+type SummaryResponse = {
+  raceWinRates?: SummaryRaceWinRateRow[]
+  mapRaceWinRates?: SummaryMapRaceWinRateRow[]
+  playerVsPlayerMapWinRates?: Array<{ map: string; games: number; wins: number; winRate: number }>
+  totalMatchCount?: number
+}
+
+type DetailResponse = {
+  recent20Matches?: Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
+  recent20Summary?: { games: number; wins: number; losses: number; winRate: number }
+  recent20MapWins?: Array<{ mapName: string; games: number; wins: number; losses: number; winRate: number }>
+  versusEloTrend?: Array<{ weekLabel: string; p1Elo: number | null; p2Elo?: number | null }>
+  metaDayRaceTrend?: Array<{ weekLabel: string; T: number | null; P: number | null; Z: number | null }>
+  metaEloVolatilityRows?: Array<{
+    name: string
+    games: number
+    currentElo: number
+    peakElo: number
+    troughElo: number
+    range: number
+    drawdown: number
+    rangeRemainder: number
+  }>
+}
+
 type MultiOption = { value: string; label: string }
 
 function MultiSelectFilter({
@@ -291,6 +327,7 @@ function dayKeyFromPlayedDate(playedDate: string): { sortKey: string; label: str
 }
 
 export function DataCenterPageClient({ members, matches, seasons, headerData }: DataCenterPageClientProps) {
+  const API_DEBOUNCE_MS = 300
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -326,6 +363,10 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   const [player1AutocompleteActiveIndex, setPlayer1AutocompleteActiveIndex] = useState(-1)
   const [mapChartSort, setMapChartSort] = useState<"gamesDesc" | "winRateDesc">("gamesDesc")
   const [metaAnchorRace, setMetaAnchorRace] = useState<Race>("T")
+  const [serverSummary, setServerSummary] = useState<SummaryResponse | null>(null)
+  const [serverDetail, setServerDetail] = useState<DetailResponse | null>(null)
+  const summaryCacheRef = useRef<Map<string, SummaryResponse>>(new Map())
+  const detailCacheRef = useRef<Map<string, DetailResponse>>(new Map())
 
   const maxRecentDays = useMemo(() => {
     const parsed = matches
@@ -520,6 +561,32 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     })
   }, [playerFilterEnabled, player2Options])
 
+  const dataCenterQueryString = useMemo(() => {
+    const params = new URLSearchParams()
+    if (seasonIds.length > 0) params.set("season", seasonIds.join(","))
+    if (mapNames.length > 0) params.set("map", mapNames.join(","))
+    if (matchTypes.length > 0) params.set("matchType", matchTypes.join(","))
+    if (races.length > 0) params.set("race", races.join(","))
+    if (tiers.length > 0) params.set("tier", tiers.join(","))
+    if (playerFilterEnabled) params.set("players", "on")
+    if (playerQuery.trim()) params.set("player", playerQuery.trim())
+    if (player2Queries.length > 0) params.set("player2", player2Queries[0] ?? "")
+    if (minGames > 0) params.set("minGames", String(minGames))
+    if (recentDays > 0) params.set("recentDays", String(recentDays))
+    return params.toString()
+  }, [
+    seasonIds,
+    mapNames,
+    matchTypes,
+    races,
+    tiers,
+    playerFilterEnabled,
+    playerQuery,
+    player2Queries,
+    minGames,
+    recentDays,
+  ])
+
   const filteredMatches = useMemo(() => {
     return matches.filter((match) => {
       if (seasonIds.length > 0 && !seasonIds.some((id) => matchPassesSeasonFilter(id, match))) return false
@@ -594,6 +661,74 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     recentDays,
     memberById,
   ])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const cacheKey = dataCenterQueryString
+    const cached = detailCacheRef.current.get(cacheKey)
+    if (cached) {
+      setServerDetail(cached)
+      return () => controller.abort()
+    }
+    const loadDetail = async () => {
+      try {
+        const res = await fetch(`/api/data-center/detail?${cacheKey}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        })
+        if (!res.ok) throw new Error(`detail fetch failed: ${res.status}`)
+        const data = (await res.json()) as DetailResponse
+        if (!controller.signal.aborted) {
+          detailCacheRef.current.set(cacheKey, data)
+          setServerDetail(data)
+        }
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          console.error("데이터센터 상세 집계 로드 실패:", e)
+          setServerDetail(null)
+        }
+      }
+    }
+    const timer = setTimeout(loadDetail, API_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [API_DEBOUNCE_MS, dataCenterQueryString])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    const cacheKey = dataCenterQueryString
+    const cached = summaryCacheRef.current.get(cacheKey)
+    if (cached) {
+      setServerSummary(cached)
+      return () => controller.abort()
+    }
+    const loadSummary = async () => {
+      try {
+        const res = await fetch(`/api/data-center/summary?${cacheKey}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        })
+        if (!res.ok) throw new Error(`summary fetch failed: ${res.status}`)
+        const data = (await res.json()) as SummaryResponse
+        if (!controller.signal.aborted) {
+          summaryCacheRef.current.set(cacheKey, data)
+          setServerSummary(data)
+        }
+      } catch (e) {
+        if (!controller.signal.aborted) {
+          console.error("데이터센터 집계 로드 실패:", e)
+          setServerSummary(null)
+        }
+      }
+    }
+    const timer = setTimeout(loadSummary, API_DEBOUNCE_MS)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [API_DEBOUNCE_MS, dataCenterQueryString])
 
   const perspectiveRows = useMemo(() => {
     const rows: PerspectiveRow[] = []
@@ -695,7 +830,9 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       })
   }, [filteredMatches, memberById, metaAnchorRace])
 
-  const raceWinRates = usePlayer1Charts ? playerVsOpponentRaceWinRates : metaAnchorVsRaceWinRates
+  const localRaceWinRates = usePlayer1Charts ? playerVsOpponentRaceWinRates : metaAnchorVsRaceWinRates
+  const raceWinRates = (serverSummary?.raceWinRates as typeof localRaceWinRates | undefined) ?? localRaceWinRates
+  const serverPvpMapWinRates = serverSummary?.playerVsPlayerMapWinRates ?? []
   const raceStackChartData = useMemo(
     () =>
       raceWinRates.map((row) => {
@@ -743,7 +880,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     [metaRaceWinRates],
   )
 
-  const metaMapRaceWinRates = useMemo(() => {
+  const localMetaMapRaceWinRates = useMemo(() => {
     const mapRace = new Map<string, Record<Race, { games: number; wins: number }>>()
     for (const row of perspectiveRows) {
       const mapEntry = mapRace.get(row.mapName) ?? {
@@ -777,6 +914,8 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       .sort((a, b) => b.total - a.total)
       .slice(0, 12)
   }, [perspectiveRows, minGames])
+  const metaMapRaceWinRates =
+    (serverSummary?.mapRaceWinRates as typeof localMetaMapRaceWinRates | undefined) ?? localMetaMapRaceWinRates
 
   /** 선수1 기준: 맵별 상대 종족(T/P/Z) 승률 */
   const playerMapRaceWinRates = useMemo(() => {
@@ -887,6 +1026,23 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     }
 
     const hasHeadToHead = hasResolvedPlayer1 && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
+    if (hasHeadToHead && serverPvpMapWinRates.length > 0) {
+      return [...serverPvpMapWinRates]
+        .sort((a, b) => b.games - a.games || a.map.localeCompare(b.map, "ko"))
+        .slice(0, 10)
+        .map((row) => ({
+          map: row.map,
+          p1Wins: row.wins,
+          p1Losses: Math.max(0, row.games - row.wins),
+          p1WinRate: row.winRate,
+          p1Games: row.games,
+          compareWins: Math.max(0, row.games - row.wins),
+          compareLosses: row.wins,
+          compareWinRate: Number((100 - row.winRate).toFixed(1)),
+          compareGames: row.games,
+        }))
+    }
+
     const p1Perf = buildMapPerf(matchedPlayerIds)
     const p2Perf = hasHeadToHead ? buildMapPerf(matchedPlayer2Ids) : null
     const clanPerf = hasHeadToHead ? null : buildMapPerf(null)
@@ -920,7 +1076,15 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       compareWinRate: row.cp.winRate,
       compareGames: row.cp.games,
     }))
-  }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds, matchedPlayer2Ids, activePlayer2Queries, minGames])
+  }, [
+    hasResolvedPlayer1,
+    filteredMatches,
+    matchedPlayerIds,
+    matchedPlayer2Ids,
+    activePlayer2Queries,
+    minGames,
+    serverPvpMapWinRates,
+  ])
   const sortedPlayerMapMasteryData = useMemo(() => {
     const rows = [...playerMapMasteryData]
     if (mapChartSort === "winRateDesc") {
@@ -947,7 +1111,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   const metaMapRows = useMemo(() => metaMapRaceWinRates.map((row) => row.map), [metaMapRaceWinRates])
 
   /** 메타: 최근 14일 일자별 클랜 풀 종족 승률 추이 */
-  const metaDayRaceTrend = useMemo(() => {
+  const localMetaDayRaceTrend = useMemo(() => {
     const grouped = new Map<string, { sortKey: string; label: string; stats: Record<Race, { games: number; wins: number }> }>()
     const cutoff = startOfDay(subDays(new Date(), 13))
 
@@ -1008,7 +1172,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   ])
 
   /** 메타: 최근 7일 ELO 변동성 (변동폭/최고점 대비 현재 하락폭) */
-  const metaEloVolatilityRows = useMemo(() => {
+  const localMetaEloVolatilityRows = useMemo(() => {
     if (usePlayer1Charts) return [] as Array<{
       name: string
       games: number
@@ -1130,7 +1294,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   const player2DayEloTrend = useMemo(() => buildPlayerDayEloTrend(matchedPlayer2Ids), [filteredMatches, matchedPlayer2Ids, selectedSeason])
 
   const isHeadToHeadMode = hasResolvedPlayer1 && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
-  const versusEloTrend = useMemo(() => {
+  const localVersusEloTrend = useMemo(() => {
     if (!isHeadToHeadMode) return playerDayEloTrend.map((r) => ({ weekLabel: r.weekLabel, p1Elo: r.eloScore }))
     const byDay = new Map<string, { weekLabel: string; p1Elo?: number; p2Elo?: number }>()
     for (const r of playerDayEloTrend) byDay.set(r.dayKey, { weekLabel: r.weekLabel, p1Elo: r.eloScore })
@@ -1193,6 +1357,17 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   const player2CardStats = useMemo(() => buildPlayerCardStats(matchedPlayer2Ids), [matchedPlayer2Ids, filteredMatches, memberById, members])
 
   const headToHeadStats = useMemo(() => {
+    if (hasResolvedPlayer1 && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0 && serverPvpMapWinRates.length > 0) {
+      const games = serverPvpMapWinRates.reduce((acc, row) => acc + row.games, 0)
+      const wins = serverPvpMapWinRates.reduce((acc, row) => acc + row.wins, 0)
+      const losses = Math.max(0, games - wins)
+      return {
+        games,
+        wins,
+        losses,
+        winRate: games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0,
+      }
+    }
     if (matchedPlayerIds.size === 0 || matchedPlayer2Ids.size === 0) return { games: 0, wins: 0, losses: 0, winRate: 0 }
     let games = 0
     let wins = 0
@@ -1212,7 +1387,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       losses,
       winRate: games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0,
     }
-  }, [matchedPlayerIds, matchedPlayer2Ids, filteredMatches])
+  }, [hasResolvedPlayer1, activePlayer2Queries, matchedPlayerIds, matchedPlayer2Ids, filteredMatches, serverPvpMapWinRates])
 
   const headToHeadRisk = useMemo(() => {
     if (headToHeadStats.games === 0) return { label: "판정불가", tone: "bg-muted text-muted-foreground" }
@@ -1358,7 +1533,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     return badgeById
   }, [hasResolvedPlayer1, seasonFilteredMatches, members])
 
-  const playerRecent20Matches = useMemo(() => {
+  const localPlayerRecent20Matches = useMemo(() => {
     if (!hasResolvedPlayer1) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
     const rows = filteredMatches
       .map((match) => {
@@ -1379,17 +1554,17 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     return rows.map(({ id, mapName, mapShort, isWin }) => ({ id, mapName, mapShort, isWin }))
   }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds])
 
-  const playerRecent20Summary = useMemo(() => {
-    const games = playerRecent20Matches.length
-    const wins = playerRecent20Matches.filter((m) => m.isWin).length
+  const localPlayerRecent20Summary = useMemo(() => {
+    const games = localPlayerRecent20Matches.length
+    const wins = localPlayerRecent20Matches.filter((m) => m.isWin).length
     const losses = Math.max(0, games - wins)
     const winRate = games > 0 ? Number(((wins / games) * 100).toFixed(1)) : 0
     return { games, wins, losses, winRate }
-  }, [playerRecent20Matches])
+  }, [localPlayerRecent20Matches])
 
-  const playerRecent20MapWins = useMemo(() => {
+  const localPlayerRecent20MapWins = useMemo(() => {
     const grouped = new Map<string, { mapName: string; games: number; wins: number; losses: number; winRate: number }>()
-    for (const row of playerRecent20Matches) {
+    for (const row of localPlayerRecent20Matches) {
       const prev = grouped.get(row.mapName) ?? { mapName: row.mapName, games: 0, wins: 0, losses: 0, winRate: 0 }
       prev.games += 1
       if (row.isWin) prev.wins += 1
@@ -1399,9 +1574,16 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     return Array.from(grouped.values())
       .map((x) => ({ ...x, winRate: x.games > 0 ? Number(((x.wins / x.games) * 100).toFixed(1)) : 0 }))
       .sort((a, b) => b.wins - a.wins || b.games - a.games || a.mapName.localeCompare(b.mapName, "ko"))
-  }, [playerRecent20Matches])
+  }, [localPlayerRecent20Matches])
 
-  const totalMatchCount = filteredMatches.length
+  const metaDayRaceTrend = serverDetail?.metaDayRaceTrend ?? localMetaDayRaceTrend
+  const metaEloVolatilityRows = serverDetail?.metaEloVolatilityRows ?? localMetaEloVolatilityRows
+  const versusEloTrend = serverDetail?.versusEloTrend ?? localVersusEloTrend
+  const playerRecent20Matches = serverDetail?.recent20Matches ?? localPlayerRecent20Matches
+  const playerRecent20Summary = serverDetail?.recent20Summary ?? localPlayerRecent20Summary
+  const playerRecent20MapWins = serverDetail?.recent20MapWins ?? localPlayerRecent20MapWins
+
+  const totalMatchCount = serverSummary?.totalMatchCount ?? filteredMatches.length
   const totalAllMatches = matches.length
 
   return (
