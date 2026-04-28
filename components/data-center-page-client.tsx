@@ -872,7 +872,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       return result
     }
 
-    if (!usePlayer1Charts) {
+    if (!hasResolvedPlayer1) {
       return [] as Array<{
         map: string
         p1Wins: number
@@ -886,7 +886,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       }>
     }
 
-    const hasHeadToHead = usePlayer1Charts && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
+    const hasHeadToHead = hasResolvedPlayer1 && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
     const p1Perf = buildMapPerf(matchedPlayerIds)
     const p2Perf = hasHeadToHead ? buildMapPerf(matchedPlayer2Ids) : null
     const clanPerf = hasHeadToHead ? null : buildMapPerf(null)
@@ -920,7 +920,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       compareWinRate: row.cp.winRate,
       compareGames: row.cp.games,
     }))
-  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, matchedPlayer2Ids, activePlayer2Queries, minGames])
+  }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds, matchedPlayer2Ids, activePlayer2Queries, minGames])
   const sortedPlayerMapMasteryData = useMemo(() => {
     const rows = [...playerMapMasteryData]
     if (mapChartSort === "winRateDesc") {
@@ -1129,7 +1129,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   /** 선수2 기준: 상대전적 모드에서 최근 14일 일자별 Elo */
   const player2DayEloTrend = useMemo(() => buildPlayerDayEloTrend(matchedPlayer2Ids), [filteredMatches, matchedPlayer2Ids, selectedSeason])
 
-  const isHeadToHeadMode = usePlayer1Charts && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
+  const isHeadToHeadMode = hasResolvedPlayer1 && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
   const versusEloTrend = useMemo(() => {
     if (!isHeadToHeadMode) return playerDayEloTrend.map((r) => ({ weekLabel: r.weekLabel, p1Elo: r.eloScore }))
     const byDay = new Map<string, { weekLabel: string; p1Elo?: number; p2Elo?: number }>()
@@ -1243,7 +1243,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   }, [headToHeadStats])
 
   const nemesis = useMemo(() => {
-    if (!usePlayer1Charts) return null as null | { name: string; race: Race; tier: number | null; games: number; winRate: number }
+    if (!hasResolvedPlayer1) return null as null | { name: string; race: Race; tier: number | null; games: number; winRate: number }
     const byOpponent = new Map<string, { games: number; wins: number }>()
     for (const match of filteredMatches) {
       const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
@@ -1275,9 +1275,9 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       .sort((a, b) => a.winRate - b.winRate || b.games - a.games || a.name.localeCompare(b.name, "ko"))
 
     return candidates[0] ?? null
-  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, memberById])
+  }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds, memberById])
   const rivalTopRankById = useMemo(() => {
-    if (!usePlayer1Charts) return new Map<string, number>()
+    if (!hasResolvedPlayer1) return new Map<string, number>()
     const byOpponent = new Map<string, { games: number; wins: number }>()
     for (const match of filteredMatches) {
       const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
@@ -1305,9 +1305,9 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     const rankMap = new Map<string, number>()
     top3.forEach((row, idx) => rankMap.set(row.id, idx + 1))
     return rankMap
-  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds, memberById])
+  }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds, memberById])
   const tierRankBadgeByMemberId = useMemo(() => {
-    if (!usePlayer1Charts) return new Map<string, { label: string; rank: number }>()
+    if (!hasResolvedPlayer1) return new Map<string, { label: string; rank: number }>()
     type EloRow = { elo: number; name: string; id: string }
     const latestEloByMemberId = new Map<string, number>()
     for (const match of seasonFilteredMatches) {
@@ -1356,10 +1356,10 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
         })
     }
     return badgeById
-  }, [usePlayer1Charts, seasonFilteredMatches, members])
+  }, [hasResolvedPlayer1, seasonFilteredMatches, members])
 
   const playerRecent20Matches = useMemo(() => {
-    if (!usePlayer1Charts) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
+    if (!hasResolvedPlayer1) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
     const rows = filteredMatches
       .map((match) => {
         const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
@@ -1377,7 +1377,7 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
       .sort((a, b) => b.playedDate.localeCompare(a.playedDate) || b.id.localeCompare(a.id))
       .slice(0, 20)
     return rows.map(({ id, mapName, mapShort, isWin }) => ({ id, mapName, mapShort, isWin }))
-  }, [usePlayer1Charts, filteredMatches, matchedPlayerIds])
+  }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds])
 
   const playerRecent20Summary = useMemo(() => {
     const games = playerRecent20Matches.length

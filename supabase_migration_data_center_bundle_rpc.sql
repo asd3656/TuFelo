@@ -6,7 +6,7 @@
 -- "새 테이블 생성" 으로 오인해 RLS 경고 모달을 띄우는 문제를 피함.
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION public.get_data_center_page_data(p_match_limit integer DEFAULT 15000)
+CREATE OR REPLACE FUNCTION public.get_data_center_page_data(p_match_limit integer DEFAULT 5000)
 RETURNS jsonb
 LANGUAGE sql
 SECURITY DEFINER
@@ -51,10 +51,23 @@ AS $$
         '[]'::jsonb
       )
       FROM (
-        SELECT *
+        SELECT
+          id,
+          player1_id,
+          player2_id,
+          winner_id,
+          map_name,
+          match_type,
+          played_date,
+          season_id,
+          player1_elo_before,
+          player2_elo_before,
+          player1_elo_delta,
+          player2_elo_delta,
+          created_at
         FROM public.matches
         ORDER BY played_date DESC NULLS LAST, created_at DESC
-        LIMIT GREATEST(1, LEAST(COALESCE(p_match_limit, 15000), 50000))
+        LIMIT GREATEST(1, LEAST(COALESCE(p_match_limit, 5000), 50000))
       ) mt
     ),
     'seasons', (

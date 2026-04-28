@@ -35,8 +35,8 @@ export interface DataCenterInitialData {
   seasons: Season[]
 }
 
-/** RPC `get_data_center_page_data` 와 동일 상한 (마이그레이션 LEAST 상한 50000) */
-const DATA_CENTER_MATCH_LIMIT = 15000
+/** 초기 로드 응답량 최적화: 데이터센터 첫 진입 시 불러올 최대 경기 수 */
+const DATA_CENTER_MATCH_LIMIT = 5000
 
 /**
  * 데이터센터 초기 로드.

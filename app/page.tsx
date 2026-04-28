@@ -1,16 +1,17 @@
 import { DashboardPage } from "@/components/dashboard-page"
 import { fetchInitialDashboardData } from "@/lib/data/matches"
-import { fetchActiveMembers } from "@/lib/data/members"
+import { fetchMembers } from "@/lib/data/members"
 import { fetchSeasons } from "@/lib/data/seasons"
 import { fetchSiteHeaderData } from "@/lib/data/site-header"
 
 export default async function HomePage() {
-  const [dashboardData, members, headerData, seasons] = await Promise.all([
-    fetchInitialDashboardData(),
-    fetchActiveMembers(),
+  const [members, headerData, seasons] = await Promise.all([
+    fetchMembers(),
     fetchSiteHeaderData(),
     fetchSeasons(),
   ])
+  const activeMembers = members.filter((m) => m.isActive)
+  const dashboardData = await fetchInitialDashboardData(members)
 
   const currentSeason = seasons.find((s) => s.endDate === null) ?? null
 
@@ -21,7 +22,7 @@ export default async function HomePage() {
       initialTotalPages={dashboardData.totalPages}
       knownMaps={dashboardData.knownMaps}
       knownMatchTypes={dashboardData.knownMatchTypes}
-      members={members}
+      members={activeMembers}
       isAdmin={headerData.isAdmin}
       isCreator={headerData.isCreator}
       isGuest={headerData.isGuest}

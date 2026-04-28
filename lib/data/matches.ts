@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
-import type { Match, Race, Tier, MemberForRanking, MatchForRanking, Season, SeasonRankingEntry } from "@/lib/types/tufelo"
+import type { Match, Race, Tier, MemberForRanking, MatchForRanking, Season, SeasonRankingEntry, ClanMember } from "@/lib/types/tufelo"
 import { fetchSeasons, fetchAllSeasonRankings } from "@/lib/data/seasons"
 
 /** Supabase matches 테이블의 원시 행 타입 */
@@ -82,11 +82,26 @@ export async function fetchInitialDashboardData(): Promise<{
   totalPages: number
   knownMaps: string[]
   knownMatchTypes: string[]
+}>
+export async function fetchInitialDashboardData(memberLookupSource: Pick<ClanMember, "id" | "name" | "race" | "tier">[]): Promise<{
+  matches: Match[]
+  totalCount: number
+  totalPages: number
+  knownMaps: string[]
+  knownMatchTypes: string[]
+}>
+export async function fetchInitialDashboardData(
+  memberLookupSource?: Pick<ClanMember, "id" | "name" | "race" | "tier">[],
+): Promise<{
+  matches: Match[]
+  totalCount: number
+  totalPages: number
+  knownMaps: string[]
+  knownMatchTypes: string[]
 }> {
   const supabase = await createClient()
 
-  const [memRes, firstPageRes, metaRows] = await Promise.all([
-    supabase.from("members").select("id, name, race, tier"),
+  const [firstPageRes, metaRows, memRes] = await Promise.all([
     supabase
       .from("matches")
       .select(
@@ -97,15 +112,19 @@ export async function fetchInitialDashboardData(): Promise<{
       .order("created_at", { ascending: false })
       .range(0, DASHBOARD_PAGE_SIZE - 1),
     fetchDistinctMatchMeta(supabase),
+    memberLookupSource
+      ? Promise.resolve(null)
+      : supabase.from("members").select("id, name, race, tier"),
   ])
 
-  if (memRes.error) throw new Error(memRes.error.message)
+  const memberRows = memberLookupSource ?? ((memRes?.data ?? []) as Array<{ id: string; name: string; race: Race; tier: Tier }>)
+  if (!memberLookupSource && memRes?.error) throw new Error(memRes.error.message)
   if (firstPageRes.error) throw new Error(firstPageRes.error.message)
 
   const byId = new Map(
-    (memRes.data ?? []).map((m) => [
+    memberRows.map((m) => [
       m.id,
-      { name: m.name as string, race: m.race as Race, tier: m.tier as Tier },
+      { name: m.name, race: m.race, tier: m.tier },
     ]),
   )
 
