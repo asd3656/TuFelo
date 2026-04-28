@@ -6,7 +6,7 @@
 -- "새 테이블 생성" 으로 오인해 RLS 경고 모달을 띄우는 문제를 피함.
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION public.get_data_center_page_data(p_match_limit integer DEFAULT 5000)
+CREATE OR REPLACE FUNCTION public.get_data_center_page_data(p_match_limit integer DEFAULT 200000)
 RETURNS jsonb
 LANGUAGE sql
 SECURITY DEFINER
@@ -67,7 +67,7 @@ AS $$
           created_at
         FROM public.matches
         ORDER BY played_date DESC NULLS LAST, created_at DESC
-        LIMIT GREATEST(1, LEAST(COALESCE(p_match_limit, 5000), 50000))
+        LIMIT GREATEST(1, LEAST(COALESCE(p_match_limit, 200000), 1000000))
       ) mt
     ),
     'seasons', (

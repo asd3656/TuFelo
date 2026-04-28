@@ -35,8 +35,8 @@ export interface DataCenterInitialData {
   seasons: Season[]
 }
 
-/** 초기 로드 응답량 최적화: 데이터센터 첫 진입 시 불러올 최대 경기 수 */
-const DATA_CENTER_MATCH_LIMIT = 5000
+/** 누락 방지 우선: 데이터센터 첫 진입 시 가능한 한 전체 경기를 로드 */
+const DATA_CENTER_MATCH_LIMIT = 200000
 
 /**
  * 데이터센터 초기 로드.
