@@ -831,7 +831,8 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
   }, [filteredMatches, memberById, metaAnchorRace])
 
   const localRaceWinRates = usePlayer1Charts ? playerVsOpponentRaceWinRates : metaAnchorVsRaceWinRates
-  const raceWinRates = (serverSummary?.raceWinRates as typeof localRaceWinRates | undefined) ?? localRaceWinRates
+  /** 서버 raceWinRates 는 종족별 풀 관점 집계라 메타 토글(기준 종족 vs 상대 종족)·선수 상대종족 차트와 의미가 다름 — 항상 클라이언트 집계 사용 */
+  const raceWinRates = localRaceWinRates
   const serverPvpMapWinRates = serverSummary?.playerVsPlayerMapWinRates ?? []
   const raceStackChartData = useMemo(
     () =>
