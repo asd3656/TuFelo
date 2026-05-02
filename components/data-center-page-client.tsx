@@ -116,11 +116,28 @@ function hasDuplicateSeasonAlias(seasons: Season[], alias: string): boolean {
   return count > 1
 }
 
+/** URL 공유 시 시즌 토큰(프로리그 옵션·예약 alias) 대소문자 무시 */
+function normalizeSeasonUrlToken(value: string): string {
+  const v = value.trim()
+  const plKey = Object.keys(PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION).find(
+    (k) => k.toLowerCase() === v.toLowerCase(),
+  )
+  if (plKey) return plKey
+
+  const vl = v.toLowerCase()
+  const stdSeason = vl.match(/^__proleague_s(\d+)__$/)
+  if (stdSeason) return `__proleague_s${stdSeason[1]}__`
+  const preSeason = vl.match(/^__proleague_s(\d+)_preseason__$/)
+  if (preSeason) return `__proleague_s${preSeason[1]}_preseason__`
+  return v
+}
+
 function resolveSeasonIdFromQueryValue(seasons: Season[], value: string): string {
-  if (PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[value] !== undefined) return value
-  if (!isReservedProleagueAlias(value)) return value
-  const matched = seasons.find((s) => seasonNameToQueryAlias(s.name) === value)
-  return matched?.id ?? value
+  const normalized = normalizeSeasonUrlToken(value)
+  if (PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[normalized] !== undefined) return normalized
+  if (!isReservedProleagueAlias(normalized)) return normalized
+  const matched = seasons.find((s) => seasonNameToQueryAlias(s.name) === normalized)
+  return matched?.id ?? normalized
 }
 
 function resolveSeasonQueryValueFromId(seasons: Season[], seasonId: string): string {
@@ -310,6 +327,37 @@ function parseRecentDays(search: string | null): number {
   return Math.max(0, Math.round(parsed))
 }
 
+/** URL의 맵·매치타입 문자열을 실제 경기 데이터에 있는 대표 표기로 맞춤(대소문자 무시) */
+function canonicalizeMatchFieldTokens(
+  field: "mapName" | "matchType",
+  rawTokens: string[],
+  matches: DataCenterMatch[],
+): string[] {
+  const lowerToCanonical = new Map<string, string>()
+  for (const m of matches) {
+    const val = field === "mapName" ? m.mapName : m.matchType
+    if (!val) continue
+    const key = val.toLowerCase()
+    if (!lowerToCanonical.has(key)) lowerToCanonical.set(key, val)
+  }
+  return rawTokens
+    .map((t) => {
+      const trimmed = t.trim()
+      return lowerToCanonical.get(trimmed.toLowerCase()) ?? trimmed
+    })
+    .filter(Boolean)
+}
+
+/** URL 선수 검색어가 한 명으로 확정되면 DB 표기 이름으로 통일(공유 URL 대소문자 정규화) */
+function canonicalizePlayerQueryFromUrl(
+  members: { id: string; name: string }[],
+  raw: string,
+): string {
+  const ids = resolveMemberIdsByPlayerQuery(members, raw)
+  if (ids.length !== 1) return raw
+  return members.find((m) => m.id === ids[0])?.name ?? raw
+}
+
 /** 선수1(anchorIds)이 출전한 포지션의 member id — 선수1 필터 전용 집계에 사용 */
 function anchorPlayerIdFromMatch(match: DataCenterMatch, anchorIds: Set<string>): string | null {
   if (anchorIds.has(match.player1Id)) return match.player1Id
@@ -344,13 +392,29 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
     if (parsed.length > 0) return parsed
     return currentSeason ? [currentSeason.id] : []
   })
-  const [mapNames, setMapNames] = useState(() => parseCsvParam("map"))
-  const [matchTypes, setMatchTypes] = useState(() => parseCsvParam("matchType"))
-  const [races, setRaces] = useState<Race[]>(() => parseCsvParam("race").filter((v): v is Race => v === "T" || v === "P" || v === "Z"))
+  const [mapNames, setMapNames] = useState(() =>
+    canonicalizeMatchFieldTokens("mapName", parseCsvParam("map"), matches),
+  )
+  const [matchTypes, setMatchTypes] = useState(() =>
+    canonicalizeMatchFieldTokens("matchType", parseCsvParam("matchType"), matches),
+  )
+  const [races, setRaces] = useState<Race[]>(() =>
+    parseCsvParam("race")
+      .map((v) => v.trim().toUpperCase())
+      .filter((v): v is Race => v === "T" || v === "P" || v === "Z"),
+  )
   const [tiers, setTiers] = useState(() => parseCsvParam("tier"))
-  const [playerFilterEnabled, setPlayerFilterEnabled] = useState(searchParams.get("players") === "on")
-  const [playerQuery, setPlayerQuery] = useState(searchParams.get("player") ?? "")
-  const [player2Queries, setPlayer2Queries] = useState(() => parseCsvParam("player2").slice(0, 1))
+  const [playerFilterEnabled, setPlayerFilterEnabled] = useState(
+    searchParams.get("players")?.toLowerCase() === "on",
+  )
+  const [playerQuery, setPlayerQuery] = useState(() =>
+    canonicalizePlayerQueryFromUrl(members, searchParams.get("player") ?? ""),
+  )
+  const [player2Queries, setPlayer2Queries] = useState(() =>
+    parseCsvParam("player2")
+      .slice(0, 1)
+      .map((q) => canonicalizePlayerQueryFromUrl(members, q)),
+  )
   const [minGames, setMinGames] = useState(parseMinGames(searchParams.get("minGames")))
   const [recentDays, setRecentDays] = useState(parseRecentDays(searchParams.get("recentDays")))
   const [seasonMenuOpen, setSeasonMenuOpen] = useState(false)
