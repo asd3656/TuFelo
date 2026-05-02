@@ -1,39 +1,31 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import type { Match } from "@/lib/types/tufelo"
+import {
+  DEFAULT_MATCH_FILTERS,
+  type MatchFilterState,
+} from "@/lib/match-filter-state"
+import {
+  buildDashboardMatchSearchParams,
+  dashboardUrlQueryEquals,
+  isDefaultMatchFilters,
+  parseDashboardMatchUrl,
+} from "@/lib/dashboard-match-url"
 
-export interface MatchFilterState {
-  player1: string
-  player2: string
-  dateFrom: string
-  dateTo: string
-  map: string
-  matchTypes: string[]
-  seasonIds: string[]
-  /** DB 행 기준 선수1(player1_id)의 현재 티어 목록 — 비어있으면 미적용 */
-  player1Tiers: string[]
-}
-
-const DEFAULT_FILTERS: MatchFilterState = {
-  player1: "",
-  player2: "",
-  dateFrom: "",
-  dateTo: "",
-  map: "",
-  matchTypes: [],
-  seasonIds: [],
-  player1Tiers: [],
-}
+export type { MatchFilterState } from "@/lib/match-filter-state"
 
 interface UseMatchFilterOptions {
   initialMatches: Match[]
   initialTotalCount: number
   initialTotalPages: number
+  members: Pick<{ id: string; name: string }, "id" | "name">[]
 }
 
 /**
  * 대시보드 전적 목록의 필터 상태와 /api/matches fetch 로직을 캡슐화한 훅.
+ * - URL과 동기화(공유 링크) — 쿼리 키는 `lib/dashboard-match-url` 참고
  * - debounce: 텍스트 입력 (선수명, 맵) 350ms 지연
  * - immediate: 날짜/드롭다운 변경 시 즉시 fetch
  * - AbortController로 중복 요청 취소
@@ -42,9 +34,25 @@ export function useMatchFilter({
   initialMatches,
   initialTotalCount,
   initialTotalPages,
+  members,
 }: UseMatchFilterOptions) {
-  const [filters, setFilters] = useState<MatchFilterState>(DEFAULT_FILTERS)
-  const [currentPage, setCurrentPage] = useState(1)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [filters, setFilters] = useState<MatchFilterState>(() =>
+    parseDashboardMatchUrl(
+      new URLSearchParams(searchParams.toString()),
+      members,
+    ).filters,
+  )
+  const [currentPage, setCurrentPage] = useState(() =>
+    parseDashboardMatchUrl(
+      new URLSearchParams(searchParams.toString()),
+      members,
+    ).page,
+  )
+
   const [matches, setMatches] = useState<Match[]>(initialMatches)
   const [totalCount, setTotalCount] = useState(initialTotalCount)
   const [totalPages, setTotalPages] = useState(initialTotalPages)
@@ -52,14 +60,11 @@ export function useMatchFilter({
   const [losses, setLosses] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
 
-  // debounce 타이머와 abort controller를 ref로 관리
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
-  // 최신 필터값을 ref에 동기화 (debounce 콜백에서 항상 최신값 참조)
   const filtersRef = useRef(filters)
   filtersRef.current = filters
 
-  // 첫 렌더 여부 추적 (SSR 초기 데이터 활용)
   const isMountedRef = useRef(false)
 
   const doFetch = useCallback(async (page: number, f: MatchFilterState) => {
@@ -110,19 +115,41 @@ export function useMatchFilter({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMatches])
 
-  /** 텍스트 입력용 debounce fetch */
-  const triggerDebouncedFetch = useCallback((override: Partial<MatchFilterState>) => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-    debounceTimerRef.current = setTimeout(() => {
-      doFetch(1, { ...filtersRef.current, ...override })
-    }, 350)
-  }, [doFetch])
+  /** URL에 필터·페이지가 있으면 SSR 초기 목록과 불일치 → 클라이언트에서 즉시 맞춤 */
+  useEffect(() => {
+    const urlHadFilters =
+      !isDefaultMatchFilters(filters) || currentPage > 1
+    if (urlHadFilters) {
+      doFetch(currentPage, filters)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 시 URL 스냅샷만
+  }, [])
 
-  /** 드롭다운·날짜 변경 시 즉시 fetch */
-  const triggerImmediateFetch = useCallback((override: Partial<MatchFilterState>) => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-    doFetch(1, { ...filtersRef.current, ...override })
-  }, [doFetch])
+  /** 필터·페이지 ↔ 주소창 쿼리 동기화 (데이터센터와 유사, 공유 링크용) */
+  useEffect(() => {
+    const built = buildDashboardMatchSearchParams(filters, currentPage)
+    if (dashboardUrlQueryEquals(built, searchParams)) return
+    const q = built.toString()
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false })
+  }, [filters, currentPage, pathname, router, searchParams])
+
+  const triggerDebouncedFetch = useCallback(
+    (override: Partial<MatchFilterState>) => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+      debounceTimerRef.current = setTimeout(() => {
+        doFetch(1, { ...filtersRef.current, ...override })
+      }, 350)
+    },
+    [doFetch],
+  )
+
+  const triggerImmediateFetch = useCallback(
+    (override: Partial<MatchFilterState>) => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+      doFetch(1, { ...filtersRef.current, ...override })
+    },
+    [doFetch],
+  )
 
   function handlePageChange(page: number, totalPgs: number) {
     if (page < 1 || page > totalPgs || page === currentPage) return
@@ -169,14 +196,13 @@ export function useMatchFilter({
     triggerImmediateFetch({ player1Tiers: vals })
   }
 
-  /** 모든 필터를 기본값으로 되돌리고 1페이지부터 다시 조회합니다. */
   const resetFilters = useCallback(() => {
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
       debounceTimerRef.current = null
     }
-    setFilters(DEFAULT_FILTERS)
-    doFetch(1, DEFAULT_FILTERS)
+    setFilters(DEFAULT_MATCH_FILTERS)
+    doFetch(1, DEFAULT_MATCH_FILTERS)
   }, [doFetch])
 
   return {

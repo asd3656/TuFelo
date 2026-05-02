@@ -39,6 +39,7 @@ import {
 } from "@/lib/ranking-utils"
 import { RankIcon, ChangeDisplay, StreakDisplay } from "@/components/ranking-shared"
 import { SiteHeader } from "@/components/site-header"
+import Link from "next/link"
 
 interface RankingPageClientProps {
   members: MemberForRanking[]
@@ -335,9 +336,15 @@ export function RankingPageClient({
                         <div className="flex justify-center"><RankIcon rank={player.rank} /></div>
                       </TableCell>
                       <TableCell>
-                        <span className={`font-semibold ${player.rank === 1 ? "text-orange-600 dark:text-orange-400" : "text-foreground"}`}>
+                        <Link
+                          href={`/?player=${encodeURIComponent(player.name)}#match-history`}
+                          className={`font-semibold hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
+                            player.rank === 1 ? "text-orange-600 dark:text-orange-400" : "text-foreground"
+                          }`}
+                          title="전적 기록에서 이 선수로 검색"
+                        >
                           {player.name}
-                        </span>
+                        </Link>
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="outline" className={`text-xs font-semibold px-1.5 py-0 ${tierColors[player.tier]}`}>

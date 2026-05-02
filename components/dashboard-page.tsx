@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
 import { MatchHistory } from "@/components/match-history"
@@ -153,6 +153,7 @@ export function DashboardPage({
   currentSeason = null,
 }: DashboardPageProps) {
   const router = useRouter()
+  const urlSearchParams = useSearchParams()
 
   const [isPending, startTransition] = useTransition()
   const [isDeletePending, startDeleteTransition] = useTransition()
@@ -182,7 +183,12 @@ export function DashboardPage({
     setSeasonIds,
     setPlayer1Tiers,
     resetFilters,
-  } = useMatchFilter({ initialMatches, initialTotalCount, initialTotalPages })
+  } = useMatchFilter({
+    initialMatches,
+    initialTotalCount,
+    initialTotalPages,
+    members,
+  })
   const [matchTypeFilterOpen, setMatchTypeFilterOpen] = useState(false)
   const [seasonFilterOpen, setSeasonFilterOpen] = useState(false)
   const [tierFilterOpen, setTierFilterOpen] = useState(false)
@@ -191,6 +197,7 @@ export function DashboardPage({
   const [isWeeklyLoading, setIsWeeklyLoading] = useState(false)
 
   const matchHistorySectionRef = useRef<HTMLElement | null>(null)
+  const scrolledForPlayerQueryRef = useRef(false)
 
   const scrollMatchHistoryIntoView = useCallback(() => {
     requestAnimationFrame(() => {
@@ -267,6 +274,15 @@ export function DashboardPage({
       setPlayer2("")
     }
   }, [filters.player1, filters.player2, setPlayer2])
+
+  /** 공유·랭킹 링크 등 선수(기준) 쿼리가 붙어 들어올 때 전적 섹션으로 한 번 스크롤 */
+  useEffect(() => {
+    const q =
+      (urlSearchParams.get("player") ?? urlSearchParams.get("player1") ?? "").trim()
+    if (!q || scrolledForPlayerQueryRef.current) return
+    scrolledForPlayerQueryRef.current = true
+    scrollMatchHistoryIntoView()
+  }, [urlSearchParams, scrollMatchHistoryIntoView])
 
   useEffect(() => {
     let isAlive = true
