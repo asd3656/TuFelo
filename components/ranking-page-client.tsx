@@ -40,6 +40,7 @@ import {
 import { RankIcon, ChangeDisplay, StreakDisplay } from "@/components/ranking-shared"
 import { SiteHeader } from "@/components/site-header"
 import Link from "next/link"
+import { cn } from "@/lib/utils"
 
 interface RankingPageClientProps {
   members: MemberForRanking[]
@@ -305,7 +306,7 @@ export function RankingPageClient({
         {/* 랭킹 테이블 */}
         <section className="bg-card rounded-lg border border-border overflow-hidden">
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="border-collapse">
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="text-muted-foreground font-semibold w-16 text-center">순위</TableHead>
@@ -327,19 +328,50 @@ export function RankingPageClient({
                 {filteredPlayers.map((player) => {
                   const total = player.wins + player.losses
                   const winRate = total > 0 ? ((player.wins / total) * 100).toFixed(1) : "0.0"
+                  const isTierFirst = player.rank === 1
                   return (
                     <TableRow
                       key={player.id}
-                      className={`border-border hover:bg-secondary/50 transition-colors ${player.rank <= 3 ? "bg-secondary/30" : ""}`}
+                      className={cn(
+                        "border-border transition-colors",
+                        !isTierFirst && player.rank <= 3 && "bg-secondary/30 hover:bg-secondary/40",
+                        !isTierFirst && player.rank > 3 && "hover:bg-secondary/50",
+                        isTierFirst &&
+                          /* 셀마다 inset 그림자 넣으면 열 사이에 세로선처럼 보임 → 바깥 테두리만 (상하 + 첫열 좌 + 마지막 열 우) */
+                          "[&>td]:border-yellow-400/90 [&>td]:border-solid [&>td]:border-y-2 [&>td]:border-x-0 [&>td]:bg-gradient-to-b [&>td]:from-yellow-500/14 [&>td]:via-amber-500/10 [&>td]:to-yellow-600/5 dark:[&>td]:from-yellow-500/12 dark:[&>td]:via-amber-500/8 dark:[&>td]:to-yellow-900/15 [&>td:first-child]:border-l-2 [&>td:last-child]:border-r-2 hover:[&>td]:from-yellow-500/20 hover:[&>td]:via-amber-500/14",
+                        isTierFirst && "shadow-[0_0_22px_rgba(250,204,21,0.28)] dark:shadow-[0_0_20px_rgba(250,204,21,0.18)]",
+                      )}
                     >
-                      <TableCell className="text-center">
-                        <div className="flex justify-center"><RankIcon rank={player.rank} /></div>
+                      {/* tr 직계 자식은 td만 허용 — 오버레이는 첫 번째 셀 내부에만 (표 레이아웃 깨짐 방지) */}
+                      <TableCell
+                        className={cn(
+                          "text-center relative overflow-visible",
+                          isTierFirst && "isolate",
+                        )}
+                      >
+                        {isTierFirst && (
+                          <>
+                            <span
+                              className="ranking-row-champ-aura pointer-events-none absolute top-0 bottom-0 left-0 z-0 min-h-full w-[max(100vw,1200px)] max-w-none"
+                              aria-hidden
+                            />
+                            {!isPastSeason && (
+                              <span
+                                className="ranking-row-champ-sweep pointer-events-none absolute top-0 bottom-0 left-0 z-0 min-h-full w-[max(100vw,1200px)] max-w-none"
+                                aria-hidden
+                              />
+                            )}
+                          </>
+                        )}
+                        <div className="relative z-10 flex justify-center">
+                          <RankIcon rank={player.rank} />
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Link
                           href={`/?player=${encodeURIComponent(player.name)}#match-history`}
                           className={`font-semibold hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
-                            player.rank === 1 ? "text-orange-600 dark:text-orange-400" : "text-foreground"
+                            isTierFirst ? "text-orange-600 dark:text-orange-400" : "text-foreground"
                           }`}
                           title="전적 기록에서 이 선수로 검색"
                         >
@@ -405,6 +437,51 @@ export function RankingPageClient({
             </div>
           )}
         </section>
+
+        <style jsx>{`
+          .ranking-row-champ-aura {
+            background: radial-gradient(
+              ellipse 80% 60% at 15% 40%,
+              rgba(250, 204, 21, 0.14) 0%,
+              rgba(250, 204, 21, 0) 55%
+            );
+            animation: rtc-aura 2.4s ease-in-out infinite;
+          }
+          .ranking-row-champ-sweep {
+            background: linear-gradient(
+              105deg,
+              rgba(255, 255, 255, 0) 0%,
+              rgba(255, 255, 255, 0.18) 45%,
+              rgba(255, 255, 255, 0) 90%
+            );
+            animation: rtc-sweep 3s linear infinite;
+            opacity: 0.45;
+          }
+          @keyframes rtc-aura {
+            0%,
+            100% {
+              opacity: 0.65;
+            }
+            50% {
+              opacity: 1;
+            }
+          }
+          @keyframes rtc-sweep {
+            0% {
+              transform: translateX(-40%);
+            }
+            100% {
+              transform: translateX(140%);
+            }
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .ranking-row-champ-aura,
+            .ranking-row-champ-sweep {
+              animation: none !important;
+              display: none;
+            }
+          }
+        `}</style>
       </div>
     </main>
   )
