@@ -49,6 +49,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
@@ -61,6 +69,7 @@ import type { SiteHeaderData } from "@/lib/data/site-header"
 import type { DataCenterMatch, DataCenterMember } from "@/lib/data/data-center"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { SiteHeader } from "@/components/site-header"
+import { useIsMobile } from "@/hooks/use-mobile"
 import {
   format,
   parseISO,
@@ -259,58 +268,107 @@ function MultiSelectFilter({
   placeholder: string
   disabled?: boolean
 }) {
+  const isMobile = useIsMobile()
   const selectedLabel =
     selectedValues.length === 0
       ? placeholder
       : selectedValues.length === 1
         ? (options.find((o) => o.value === selectedValues[0])?.label ?? selectedValues[0])
         : `${selectedValues.length}개 선택`
+
+  const triggerButton = (
+    <Button
+      type="button"
+      variant="outline"
+      className={cn(
+        "w-full justify-between text-foreground hover:text-foreground dark:hover:text-foreground",
+        disabled && "opacity-60",
+      )}
+      disabled={disabled}
+    >
+      <span className="truncate text-sm">{selectedLabel}</span>
+      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+    </Button>
+  )
+
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
-      <DropdownMenu open={open} onOpenChange={onOpenChange}>
-        <DropdownMenuTrigger asChild disabled={disabled}>
-          <Button
-            variant="outline"
-            className={cn(
-              "w-full justify-between text-foreground hover:text-foreground dark:hover:text-foreground",
-              disabled && "opacity-60",
-            )}
-          >
-            <span className="truncate text-sm">{selectedLabel}</span>
-            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56">
-          {options.map((opt) => {
-            const checked = selectedValues.includes(opt.value)
-            return (
-              <DropdownMenuCheckboxItem
-                key={opt.value}
-                checked={checked}
-                onSelect={(e) => e.preventDefault()}
-                className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
-                onCheckedChange={(v) => {
-                  if (v) onChange([...selectedValues, opt.value])
-                  else onChange(selectedValues.filter((x) => x !== opt.value))
+      {isMobile ? (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+          <SheetTrigger asChild>{triggerButton}</SheetTrigger>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-xl">
+            <SheetHeader className="text-left">
+              <SheetTitle>{label}</SheetTitle>
+            </SheetHeader>
+            <div className="grid gap-1 px-1 pb-6">
+              {options.map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-left hover:bg-accent/60"
+                >
+                  <Checkbox
+                    checked={selectedValues.includes(opt.value)}
+                    onCheckedChange={(c) => {
+                      const v = c === true
+                      if (v) onChange([...selectedValues, opt.value])
+                      else onChange(selectedValues.filter((x) => x !== opt.value))
+                    }}
+                    className="shrink-0"
+                  />
+                  <span className="text-sm text-foreground">{opt.label}</span>
+                </label>
+              ))}
+              <Button
+                type="button"
+                variant="ghost"
+                className="mt-2 w-full justify-center text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  onChange([])
+                  onOpenChange(false)
                 }}
               >
-                {opt.label}
-              </DropdownMenuCheckboxItem>
-            )
-          })}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              onChange([])
-              onOpenChange(false)
-            }}
-            className="text-muted-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
-          >
-            선택 초기화
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+                선택 초기화
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <DropdownMenu open={open} onOpenChange={onOpenChange}>
+          <DropdownMenuTrigger asChild disabled={disabled}>
+            {triggerButton}
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-56">
+            {options.map((opt) => {
+              const checked = selectedValues.includes(opt.value)
+              return (
+                <DropdownMenuCheckboxItem
+                  key={opt.value}
+                  checked={checked}
+                  onSelect={(e) => e.preventDefault()}
+                  className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
+                  onCheckedChange={(v) => {
+                    if (v) onChange([...selectedValues, opt.value])
+                    else onChange(selectedValues.filter((x) => x !== opt.value))
+                  }}
+                >
+                  {opt.label}
+                </DropdownMenuCheckboxItem>
+              )
+            })}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                onChange([])
+                onOpenChange(false)
+              }}
+              className="text-muted-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
+            >
+              선택 초기화
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 }
