@@ -265,10 +265,19 @@ export function GlobalFloatingShortcuts({ isAdmin, isCreator }: { isAdmin: boole
           size="icon"
           aria-expanded={fabLinksOpen}
           aria-controls="global-fab-actions"
-          title={fabLinksOpen ? "닫기" : "바로가기"}
+          title={
+            fabLinksOpen
+              ? "닫기"
+              : pulseNoticeCapsule
+                ? "바로가기 — 새 공지가 있을 수 있습니다"
+                : "바로가기"
+          }
           className={cn(
-            "h-11 w-11 md:h-12 md:w-12 shrink-0 rounded-full border-0 shadow-lg",
+            "h-11 w-11 md:h-12 md:w-12 shrink-0 rounded-full shadow-lg",
             "bg-primary hover:bg-primary/90 text-primary-foreground",
+            pulseNoticeCapsule
+              ? "fab-notice-capsule-highlight relative z-[1] border-2 border-indigo-600/60 dark:border-indigo-400/55"
+              : "border-0",
           )}
           onClick={() => (isMdViewport ? setFabLinksOpenDesktop((o) => !o) : setFabLinksOpenMobile((o) => !o))}
         >

@@ -125,7 +125,7 @@
   }
 }
 
-/* 플로팅 공지 캡슐: 최근 수정·미열람 시 강조 (밝은 배경 / 다크 각각) */
+/* 플로팅 공지: 메인 + 버튼·공지 캡슐 — 최근 수정·미열람 시 (global-floating-shortcuts) */
 @keyframes fab-notice-pulse-light {
   0%,
   100% {
