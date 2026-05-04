@@ -204,7 +204,6 @@ export function DashboardPage({
   const [weeklyBest, setWeeklyBest] = useState<WeeklyBestEntry[]>([])
   const [weeklyRange, setWeeklyRange] = useState<{ weekStart: string; weekEnd: string } | null>(null)
   const [isWeeklyLoading, setIsWeeklyLoading] = useState(false)
-  const [showIntroFireworks, setShowIntroFireworks] = useState(false)
 
   const matchHistorySectionRef = useRef<HTMLElement | null>(null)
   const scrolledForPlayerQueryRef = useRef(false)
@@ -234,25 +233,6 @@ export function DashboardPage({
     if (totalCount === 0) return 0
     return (wins / totalCount) * 100
   }, [totalCount, wins])
-  const introFireworksParticles = useMemo(
-    () =>
-      Array.from({ length: 26 }, (_, i) => ({
-        id: i,
-        left: 4 + ((i * 37) % 92),
-        top: 8 + ((i * 29) % 60),
-        delay: (i % 9) * 0.08,
-        duration: 1.3 + (i % 5) * 0.2,
-        color:
-          i % 4 === 0
-            ? "#f59e0b"
-            : i % 4 === 1
-              ? "#facc15"
-              : i % 4 === 2
-                ? "#a855f7"
-                : "#ec4899",
-      })),
-    [],
-  )
 
   const hasActiveFilters = useMemo(() => {
     const f = filters
@@ -342,18 +322,6 @@ export function DashboardPage({
     }
   }, [initialMatches])
 
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    const hasSeen = window.sessionStorage.getItem("tufelo_dashboard_intro_fireworks_v1")
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    if (hasSeen || reduceMotion) return
-
-    setShowIntroFireworks(true)
-    window.sessionStorage.setItem("tufelo_dashboard_intro_fireworks_v1", "1")
-    const timer = window.setTimeout(() => setShowIntroFireworks(false), 2300)
-    return () => window.clearTimeout(timer)
-  }, [])
-
   // ── 전적 액션 핸들러 ──
 
   function handleRegister(input: RegisterMatchInput, keepOpen?: boolean) {
@@ -417,23 +385,6 @@ export function DashboardPage({
 
   return (
     <main className="min-h-screen bg-background">
-      {showIntroFireworks && (
-        <div className="pointer-events-none fixed inset-0 z-[90] overflow-hidden" aria-hidden>
-          {introFireworksParticles.map((particle) => (
-            <span
-              key={particle.id}
-              className="intro-firework-particle"
-              style={{
-                left: `${particle.left}%`,
-                top: `${particle.top}%`,
-                backgroundColor: particle.color,
-                animationDelay: `${particle.delay}s`,
-                animationDuration: `${particle.duration}s`,
-              }}
-            />
-          ))}
-        </div>
-      )}
       <SiteHeader
         isAdmin={isAdmin}
         isCreator={isCreator}
@@ -1165,33 +1116,6 @@ export function DashboardPage({
             }
           }
 
-          .intro-firework-particle {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            border-radius: 2px;
-            opacity: 0;
-            transform: translate(-50%, -50%) scale(0.35);
-            box-shadow: 0 0 10px rgba(250, 204, 21, 0.45);
-            animation-name: intro-firework-burst;
-            animation-timing-function: ease-out;
-            animation-fill-mode: forwards;
-          }
-
-          @keyframes intro-firework-burst {
-            0% {
-              opacity: 0;
-              transform: translate(-50%, -50%) scale(0.35);
-            }
-            10% {
-              opacity: 1;
-            }
-            100% {
-              opacity: 0;
-              transform: translate(-50%, calc(-50% + 95px)) rotate(180deg) scale(0.9);
-            }
-          }
-
           @media (prefers-reduced-motion: reduce) {
             .weekly-best-card,
             .weekly-best-card-rank2,
@@ -1202,11 +1126,6 @@ export function DashboardPage({
 
             .weekly-best-aura,
             .weekly-best-sweep {
-              display: none !important;
-              animation: none !important;
-            }
-
-            .intro-firework-particle {
               display: none !important;
               animation: none !important;
             }
