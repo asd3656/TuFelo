@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { callRpcWithRecentDaysFallback } from "@/lib/supabase/rpc-recent-days-fallback"
 
 export const dynamic = "force-dynamic"
 
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     const recentDays = Number(searchParams.get("recentDays") ?? "0")
 
     const supabase = await createClient()
-    const { data, error } = await supabase.rpc("get_data_center_season_trend_v2", {
+    const rpcArgs = {
       p_map_names: mapNames.length > 0 ? mapNames : null,
       p_match_types: matchTypes.length > 0 ? matchTypes : null,
       p_races: races.length > 0 ? races : null,
@@ -40,7 +41,13 @@ export async function GET(req: NextRequest) {
       p_player2_query: player2Query || null,
       p_min_games: Number.isFinite(minGames) ? minGames : 0,
       p_recent_days: Number.isFinite(recentDays) ? recentDays : 0,
-    })
+    }
+
+    const { data, error } = await callRpcWithRecentDaysFallback(
+      supabase,
+      "get_data_center_season_trend_v2",
+      rpcArgs,
+    )
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(Array.isArray(data) ? data : [])
