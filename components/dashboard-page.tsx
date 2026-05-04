@@ -894,6 +894,43 @@ export function DashboardPage({
             </div>
           </div>
         </section>
+
+        <section className="mb-8">
+          <div className="relative overflow-hidden rounded-2xl border border-fuchsia-300/60 bg-gradient-to-r from-fuchsia-500/20 via-violet-500/25 to-amber-400/20 p-[1px] shadow-[0_0_40px_rgba(217,70,239,0.25)]">
+            <div className="relative overflow-hidden rounded-[calc(1rem-1px)] bg-card/90 px-5 py-6 backdrop-blur-sm sm:px-7">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -right-16 -top-20 h-44 w-44 rounded-full bg-fuchsia-400/35 blur-3xl"
+              />
+              <div
+                aria-hidden
+                className="pointer-events-none absolute -bottom-20 -left-12 h-44 w-44 rounded-full bg-amber-300/35 blur-3xl"
+              />
+              <div className="relative z-10 grid items-center gap-4 lg:grid-cols-[1fr_auto]">
+                <div className="flex flex-col gap-3 text-center sm:text-left">
+                  <p className="inline-flex w-fit items-center gap-2 rounded-full border border-yellow-300/70 bg-yellow-200/40 px-3 py-1 text-[11px] font-bold tracking-[0.18em] text-yellow-900 dark:border-yellow-400/60 dark:bg-yellow-400/15 dark:text-yellow-200">
+                    <Trophy className="h-3.5 w-3.5 animate-pulse" />
+                    CHAMPION CELEBRATION
+                  </p>
+                  <div>
+                    <h2 className="bg-gradient-to-r from-fuchsia-500 via-violet-500 to-amber-500 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent sm:text-3xl">
+                      Radopa
+                    </h2>
+                    <p className="mt-1 text-sm font-medium text-muted-foreground">
+                      클랜의 자부심, 하믹 엘리그 정상 등극!
+                    </p>
+                  </div>
+                </div>
+                <div className="mx-auto w-full max-w-[220px] rounded-xl border border-yellow-300/60 bg-gradient-to-br from-yellow-100/70 via-amber-100/70 to-orange-100/70 px-4 py-3 text-center shadow-[0_0_18px_rgba(245,158,11,0.18)] dark:border-yellow-500/40 dark:from-yellow-500/15 dark:via-amber-500/10 dark:to-orange-500/10 lg:mx-0">
+                  <p className="text-[11px] font-bold tracking-[0.14em] text-yellow-800 dark:text-yellow-300">HAMIC AEL-LEAGUE</p>
+                  <p className="mt-1 text-lg font-extrabold text-foreground">CHAMPION</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">RADOPA</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section className="bg-card rounded-lg border border-border p-4 mb-8">
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
