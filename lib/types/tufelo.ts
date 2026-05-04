@@ -47,6 +47,8 @@ export interface ClanMember {
   losses: number
   streak: number
   isActive: boolean
+  /** 관리자 명단에서만 로드·표시. 게스트·일반 페이지에는 포함되지 않음 */
+  adminMemo?: string | null
 }
 
 export interface RegisterMatchInput {

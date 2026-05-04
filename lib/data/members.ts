@@ -11,10 +11,11 @@ type MemberRow = {
   losses: number
   streak: number
   is_active: boolean
+  admin_memo?: string | null
 }
 
-function toClanMember(row: MemberRow): ClanMember {
-  return {
+function toClanMember(row: MemberRow, includeAdminMemo: boolean): ClanMember {
+  const base: ClanMember = {
     id: row.id,
     name: row.name,
     race: row.race as Race,
@@ -25,9 +26,13 @@ function toClanMember(row: MemberRow): ClanMember {
     streak: row.streak,
     isActive: row.is_active,
   }
+  if (includeAdminMemo) {
+    base.adminMemo = row.admin_memo ?? null
+  }
+  return base
 }
 
-/** 관리자 명단용: 활성 + 비활성 전체 반환 */
+/** 관리자 명단용: 활성 + 비활성 전체 반환 (관리자 메모 미포함) */
 export async function fetchMembers(): Promise<ClanMember[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
@@ -37,7 +42,20 @@ export async function fetchMembers(): Promise<ClanMember[]> {
     .order("name")
 
   if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => toClanMember(r as MemberRow))
+  return (data ?? []).map((r) => toClanMember(r as MemberRow, false))
+}
+
+/** 관리자(비게스트) 명단용: admin_memo 포함 — 게스트 세션에서는 호출하지 말 것 */
+export async function fetchMembersWithAdminMemo(): Promise<ClanMember[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("members")
+    .select("id, name, race, tier, elo, wins, losses, streak, is_active, admin_memo")
+    .order("is_active", { ascending: false })
+    .order("name")
+
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((r) => toClanMember(r as MemberRow, true))
 }
 
 /** 전적 등록 선수 목록용: 활성 멤버만 반환 */
@@ -50,5 +68,5 @@ export async function fetchActiveMembers(): Promise<ClanMember[]> {
     .order("name")
 
   if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => toClanMember(r as MemberRow))
+  return (data ?? []).map((r) => toClanMember(r as MemberRow, false))
 }

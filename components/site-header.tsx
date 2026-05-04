@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { BarChart3, Database, Monitor, Moon, Sun, Trophy, Users } from "lucide-react"
-import { useTheme } from "next-themes"
+import { useTheme } from "@teispace/next-themes"
 
 import { AdminLoginDialog } from "@/components/admin-login-dialog"
 import { Button } from "@/components/ui/button"

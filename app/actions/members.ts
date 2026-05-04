@@ -14,6 +14,8 @@ function revalidateMemberPaths() {
   revalidatePath("/ranking")
 }
 
+const ADMIN_MEMO_MAX_LEN = 2000
+
 export async function addMemberAction(input: {
   name: string
   race: Race
@@ -185,6 +187,32 @@ export async function permanentDeleteMemberAction(id: string): Promise<ActionRes
   if (memberDeleteErr) return { ok: false, error: memberDeleteErr.message }
 
   await insertAdminLog(session.username, "클랜원 완전삭제", memberName)
+  revalidateMemberPaths()
+  return { ok: true }
+}
+
+/** 관리자 전용 내부 메모 (게스트 불가) */
+export async function updateMemberAdminMemoAction(input: {
+  id: string
+  memo: string
+}): Promise<ActionResult> {
+  const session = await getSessionFromCookies()
+  if (!session || session.role === "guest") {
+    return { ok: false, error: "권한이 없습니다." }
+  }
+
+  const memo = input.memo.length > ADMIN_MEMO_MAX_LEN
+    ? input.memo.slice(0, ADMIN_MEMO_MAX_LEN)
+    : input.memo
+
+  const supabase = createServiceClient()
+  const { data: row } = await supabase.from("members").select("name").eq("id", input.id).single()
+
+  const { error } = await supabase.from("members").update({ admin_memo: memo || null }).eq("id", input.id)
+
+  if (error) return { ok: false, error: error.message }
+
+  await insertAdminLog(session.username, "클랜원 메모 저장", row?.name ?? input.id)
   revalidateMemberPaths()
   return { ok: true }
 }

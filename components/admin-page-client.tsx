@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -37,7 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Search, Users, Plus, Pencil, Trash2, RotateCcw, Lock } from "lucide-react"
+import { Search, Users, Plus, Pencil, Trash2, RotateCcw, Lock, StickyNote } from "lucide-react"
 import type { ClanMember, Race, Tier, ActionResult } from "@/lib/types/tufelo"
 import type { SiteHeaderData } from "@/lib/data/site-header"
 import { SiteHeader } from "@/components/site-header"
@@ -47,6 +48,7 @@ import {
   permanentDeleteMemberAction,
   reactivateMemberAction,
   updateMemberAction,
+  updateMemberAdminMemoAction,
 } from "@/app/actions/members"
 
 type CliqueTier = Tier
@@ -90,6 +92,9 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isPermanentDeleteDialogOpen, setIsPermanentDeleteDialogOpen] = useState(false)
   const [isNoticeOpen, setIsNoticeOpen] = useState(false)
+  const [isMemoDialogOpen, setIsMemoDialogOpen] = useState(false)
+  const [memoMember, setMemoMember] = useState<ClanMember | null>(null)
+  const [memoDraft, setMemoDraft] = useState("")
   const [selectedMember, setSelectedMember] = useState<ClanMember | null>(null)
   const [formData, setFormData] = useState<{ name: string; race: Race; tier: CliqueTier }>({
     name: "",
@@ -185,6 +190,23 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
   const openDeleteDialog = (member: ClanMember) => {
     setSelectedMember(member)
     setIsDeleteDialogOpen(true)
+  }
+
+  const openMemoDialog = (member: ClanMember) => {
+    setMemoMember(member)
+    setMemoDraft(member.adminMemo ?? "")
+    setIsMemoDialogOpen(true)
+  }
+
+  const handleSaveMemo = () => {
+    if (!memoMember) return
+    runAction(
+      () => updateMemberAdminMemoAction({ id: memoMember.id, memo: memoDraft }),
+      () => {
+        setIsMemoDialogOpen(false)
+        setMemoMember(null)
+      },
+    )
   }
 
   // 상단 통계는 항상 전체 활성 회원 기준 (필터 영향 없음)
@@ -341,6 +363,11 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                   <TableHead className="text-muted-foreground font-semibold">선수명</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">종족</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">티어</TableHead>
+                  {!isGuest && (
+                    <TableHead className="text-muted-foreground font-semibold text-center w-24">
+                      관리자 메모
+                    </TableHead>
+                  )}
                   <TableHead className="text-muted-foreground font-semibold text-center w-32">관리</TableHead>
                 </TableRow>
               </TableHeader>
@@ -375,6 +402,37 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                         {member.tier}티어
                       </Badge>
                     </TableCell>
+                    {!isGuest && (
+                      <TableCell className="text-center align-middle">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className={`gap-1.5 h-8 ${
+                            member.adminMemo?.trim()
+                              ? "text-amber-700 dark:text-amber-400"
+                              : "text-muted-foreground"
+                          }`}
+                          onClick={() => openMemoDialog(member)}
+                          disabled={pending}
+                          title={
+                            member.adminMemo?.trim()
+                              ? "메모 보기·수정"
+                              : "메모 작성 (관리자만)"
+                          }
+                        >
+                          <StickyNote className="h-4 w-4 shrink-0" />
+                          <span className="hidden sm:inline max-w-[7rem] truncate text-xs font-normal">
+                            {(() => {
+                              const t = member.adminMemo?.trim()
+                              if (!t) return "작성"
+                              const line = t.split(/\r?\n/)[0]
+                              return line.length > 24 ? `${line.slice(0, 24)}…` : line
+                            })()}
+                          </span>
+                        </Button>
+                      </TableCell>
+                    )}
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-2">
                         {member.isActive ? (
@@ -441,6 +499,47 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
             </div>
           )}
         </section>
+
+        <Dialog open={isMemoDialogOpen} onOpenChange={setIsMemoDialogOpen}>
+          <DialogContent className="bg-card border-border text-foreground sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>
+                관리자 메모
+                {memoMember ? (
+                  <span className="block text-sm font-normal text-muted-foreground mt-1">
+                    {memoMember.name}
+                  </span>
+                ) : null}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-xs text-muted-foreground -mt-1">
+              운영진만 볼 수 있습니다. 최대 2000자, 여러 줄 입력 가능합니다.
+            </p>
+            <Textarea
+              value={memoDraft}
+              onChange={(e) => setMemoDraft(e.target.value)}
+              placeholder="내부 메모 (선택)"
+              rows={8}
+              className="bg-input border-border text-foreground min-h-[180px] resize-y"
+              disabled={pending}
+            />
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsMemoDialogOpen(false)
+                  setMemoMember(null)
+                }}
+                className="border-border text-foreground"
+              >
+                취소
+              </Button>
+              <Button onClick={handleSaveMemo} disabled={pending} className="bg-primary text-primary-foreground">
+                저장
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
           <DialogContent className="bg-card border-border text-foreground">
