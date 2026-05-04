@@ -1,14 +1,18 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
+import { useEffect, useState, useTransition, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -41,14 +45,50 @@ import {
   type Suggestion,
   type SuggestionReply,
 } from "@/app/actions/suggestions"
+import { getSiteNoticeAction, updateSiteNoticeAction } from "@/app/actions/site-notice"
+import {
+  EMPTY_SITE_NOTICE,
+  siteNoticeItemSizeClass,
+  type SiteNoticeData,
+  type SiteNoticeItem,
+  type SiteNoticeItemSize,
+} from "@/lib/site-notice"
 
 const SUGGESTION_CATEGORIES = ["데이터수정", "기능건의", "기타"] as const
+
+function renderNoticeInline(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g)
+  return parts.map((p, i) => {
+    if (p.startsWith("**") && p.endsWith("**") && p.length > 4) {
+      return (
+        <strong key={i} className="text-foreground font-semibold">
+          {p.slice(2, -2)}
+        </strong>
+      )
+    }
+    return <span key={i}>{p}</span>
+  })
+}
+
+function NoticeBullet({ text, size }: { text: string; size?: SiteNoticeItemSize }) {
+  const sizeClass = siteNoticeItemSizeClass(size)
+  return (
+    <li className="flex gap-2">
+      <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
+      <span className={`${sizeClass} text-muted-foreground leading-relaxed`}>
+        {renderNoticeInline(text)}
+      </span>
+    </li>
+  )
+}
 
 interface NoticeSuggestionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   isAdmin: boolean
   isCreator: boolean
+  /** 공지 `updated_at` 동기화 — 플로팅 공지 캡슐 하이라이트용 */
+  onSiteNoticeSynced?: (meta: { updatedAt: string | null }) => void
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -324,9 +364,17 @@ export function NoticeSuggestionDialog({
   onOpenChange,
   isAdmin,
   isCreator,
+  onSiteNoticeSynced,
 }: NoticeSuggestionDialogProps) {
+  const router = useRouter()
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [isLoading, setIsLoading] = useState(false)
+
+  const [siteNotice, setSiteNotice] = useState<SiteNoticeData>(EMPTY_SITE_NOTICE)
+  const [isNoticeEditOpen, setIsNoticeEditOpen] = useState(false)
+  const [editNoticeTitle, setEditNoticeTitle] = useState("")
+  const [editNoticeItems, setEditNoticeItems] = useState<SiteNoticeItem[]>([])
+  const [isNoticeSavePending, startNoticeSaveTransition] = useTransition()
 
   const [category, setCategory] = useState<string>("데이터수정")
   const [content, setContent] = useState("")
@@ -344,9 +392,40 @@ export function NoticeSuggestionDialog({
     }
   }
 
+  async function loadSiteNotice() {
+    const pack = await getSiteNoticeAction()
+    setSiteNotice(pack.notice)
+    onSiteNoticeSynced?.({ updatedAt: pack.updatedAt })
+  }
+
   useEffect(() => {
-    if (open) loadSuggestions()
+    if (open) {
+      void loadSuggestions()
+      void loadSiteNotice()
+    }
   }, [open])
+
+  const openNoticeEditor = () => {
+    setEditNoticeTitle(siteNotice.title)
+    setEditNoticeItems(siteNotice.items.map((i) => ({ ...i })))
+    setIsNoticeEditOpen(true)
+  }
+
+  const handleSaveNotice = () => {
+    startNoticeSaveTransition(async () => {
+      const res = await updateSiteNoticeAction({
+        title: editNoticeTitle,
+        items: editNoticeItems,
+      })
+      if (!res.ok) {
+        window.alert(res.error)
+        return
+      }
+      await loadSiteNotice()
+      setIsNoticeEditOpen(false)
+      router.refresh()
+    })
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -384,7 +463,22 @@ export function NoticeSuggestionDialog({
 
   const contentLength = content.length
 
+  const updateEditItem = (index: number, patch: Partial<SiteNoticeItem>) => {
+    setEditNoticeItems((rows) =>
+      rows.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    )
+  }
+
+  const removeEditItem = (index: number) => {
+    setEditNoticeItems((rows) => rows.filter((_, i) => i !== index))
+  }
+
+  const addEditItem = () => {
+    setEditNoticeItems((rows) => [...rows, { text: "", size: "sm" }])
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-card border-border text-foreground max-w-2xl w-full max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border">
@@ -398,42 +492,41 @@ export function NoticeSuggestionDialog({
           <div className="px-6 py-5 space-y-5">
             {/* ── 공지사항 ── */}
             <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-indigo-400 shrink-0" />
-                <p className="text-sm font-bold text-indigo-300">공지사항(26.04.14)</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle className="h-4 w-4 text-indigo-400 shrink-0" />
+                  <p className="text-sm font-bold text-indigo-300 truncate">{siteNotice.title}</p>
+                </div>
+                {isCreator && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 h-8 gap-1 border-indigo-500/40 text-indigo-200 hover:bg-indigo-500/15 hover:text-indigo-100"
+                    onClick={openNoticeEditor}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    수정
+                  </Button>
+                )}
               </div>
-              <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
-                <li className="flex gap-2">
-                  <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
-                  <span>
-                    건의 사항에는{" "}
-                    <span className="text-foreground font-semibold">사담 금지</span>입니다.{" "}
-                    장난성 글 작성 시{" "}
-                    <span className="text-destructive font-semibold">IP 밴</span>입니다.
-                  </span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
-                  <span>
-                    필요이상으로 사이트가 무거워지길 원치 않기에 모든 건의사항들을 반영할 수 없습니다. 데이터 수정 같은 경우{" "}
-                    <span className="text-foreground font-semibold">최대한 빠르게 반영</span>하겠습니다.
-                  </span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
-                  <span>
-                    모든 건의사항들은{" "}
-                    <span className="text-foreground font-semibold">해결 완료 또는 반영불가 시 삭제</span>됩니다.
-                  </span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
-                  <span>
-                    ELO 랭킹페이지에 4월 초 데이터가 누락되는 이슈가 있었습니다. 4/14 기준 고쳤으니 
-                    elo 랭킹페이지와 현재시즌 경기 수가 안맞는 분들은 건의 게시판에 써주세요.
-                  </span>
-                </li>
-              </ul>
+              {siteNotice.items.length > 0 ? (
+                <ul className="space-y-2 leading-relaxed">
+                  {siteNotice.items.map((item, idx) => (
+                    <NoticeBullet key={idx} text={item.text} size={item.size} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  등록된 공지 항목이 없습니다.
+                  {isCreator ? " 「수정」에서 내용을 추가할 수 있습니다." : ""}
+                </p>
+              )}
+              {isCreator && (
+                <p className="text-[11px] text-muted-foreground/90 leading-snug">
+                  제작자만 수정 가능합니다. 일부만 진하게: <span className="font-mono text-indigo-300/90">**텍스트**</span>
+                </p>
+              )}
             </div>
 
             {/* ── 구분선 ── */}
@@ -531,5 +624,116 @@ export function NoticeSuggestionDialog({
         </div>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={isNoticeEditOpen} onOpenChange={setIsNoticeEditOpen}>
+      <DialogContent className="bg-card border-border text-foreground max-w-lg w-full max-h-[85vh] flex flex-col gap-0 overflow-hidden">
+        <DialogHeader className="shrink-0 pb-2">
+          <DialogTitle className="text-lg">공지사항 수정</DialogTitle>
+          <p className="text-xs text-muted-foreground font-normal pt-1">
+            줄마다 글자 크기를 고를 수 있습니다. 일부만 진하게는{" "}
+            <span className="font-mono text-indigo-400">**강조**</span> 로 표시하세요.
+          </p>
+        </DialogHeader>
+        <div className="space-y-3 py-2 overflow-y-auto min-h-0 flex-1">
+          <div className="space-y-2">
+            <Label htmlFor="notice-title" className="text-foreground">
+              제목
+            </Label>
+            <Input
+              id="notice-title"
+              value={editNoticeTitle}
+              onChange={(e) => setEditNoticeTitle(e.target.value)}
+              className="bg-input border-border text-foreground"
+              maxLength={200}
+              disabled={isNoticeSavePending}
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-foreground">항목 (줄)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 border-border"
+                onClick={addEditItem}
+                disabled={isNoticeSavePending}
+              >
+                줄 추가
+              </Button>
+            </div>
+            <div className="space-y-3">
+              {editNoticeItems.map((row, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-lg border border-border bg-secondary/20 p-3 space-y-2"
+                >
+                  <Textarea
+                    value={row.text}
+                    onChange={(e) => updateEditItem(idx, { text: e.target.value })}
+                    placeholder="공지 내용… (**강조** 가능)"
+                    rows={3}
+                    className="bg-input border-border text-foreground resize-y min-h-[72px] text-sm"
+                    disabled={isNoticeSavePending}
+                  />
+                  <div className="flex flex-wrap items-center gap-2 justify-between">
+                    <Select
+                      value={row.size ?? "sm"}
+                      onValueChange={(v) =>
+                        updateEditItem(idx, { size: v as SiteNoticeItemSize })
+                      }
+                      disabled={isNoticeSavePending}
+                    >
+                      <SelectTrigger className="w-full sm:w-40 h-9 bg-input border-border text-sm">
+                        <SelectValue placeholder="글자 크기" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sm">작게</SelectItem>
+                        <SelectItem value="base">보통</SelectItem>
+                        <SelectItem value="lg">크게</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => removeEditItem(idx)}
+                      disabled={isNoticeSavePending || editNoticeItems.length <= 1}
+                    >
+                      이 줄 삭제
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="shrink-0 gap-2 sm:gap-0 pt-2 border-t border-border">
+          <Button
+            type="button"
+            variant="outline"
+            className="border-border"
+            onClick={() => setIsNoticeEditOpen(false)}
+            disabled={isNoticeSavePending}
+          >
+            취소
+          </Button>
+          <Button
+            type="button"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={handleSaveNotice}
+            disabled={isNoticeSavePending}
+          >
+            {isNoticeSavePending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "저장"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }

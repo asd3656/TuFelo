@@ -1,10 +1,16 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { BookOpen, Coffee, FileSpreadsheet, Megaphone, Plus, Vote, X, type LucideIcon, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { NoticeSuggestionDialog } from "@/components/notice-suggestion-dialog"
+import { getSiteNoticeAction } from "@/app/actions/site-notice"
+import {
+  readSeenSiteNoticeUpdatedAt,
+  shouldPulseNoticeCapsule,
+  writeSeenSiteNoticeUpdatedAt,
+} from "@/lib/site-notice-highlight"
 import { cn } from "@/lib/utils"
 
 type FabItemDef =
@@ -104,6 +110,7 @@ function FloatingFabCapsule({
   item,
   className,
   size = "default",
+  shellHighlight,
   onAfterInteract,
   onManual,
   onNotice,
@@ -111,6 +118,8 @@ function FloatingFabCapsule({
   item: FabItemDef
   className?: string
   size?: keyof typeof fabCapsuleSizes
+  /** 공지 캡슐만: 최근 수정·미확인 시 얇은 테두리 애니메이션 */
+  shellHighlight?: boolean
   onAfterInteract?: () => void
   onManual: () => void
   onNotice: () => void
@@ -123,7 +132,14 @@ function FloatingFabCapsule({
     </span>
   )
   const labelEl = <span className={cn(fabCapsuleLabelBase, s.label)}>{item.label}</span>
-  const shellClass = cn(fabCapsuleShellBase, s.shell, className)
+  const shellClass = cn(
+    fabCapsuleShellBase,
+    s.shell,
+    className,
+    shellHighlight &&
+      item.kind === "notice" &&
+      "fab-notice-capsule-highlight relative z-[1] border-indigo-600/55 dark:border-indigo-400/50",
+  )
 
   if (item.kind === "external") {
     return (
@@ -167,6 +183,15 @@ function FloatingFabCapsule({
 
 export function GlobalFloatingShortcuts({ isAdmin, isCreator }: { isAdmin: boolean; isCreator: boolean }) {
   const [isNoticeOpen, setIsNoticeOpen] = useState(false)
+  const [noticeUpdatedAt, setNoticeUpdatedAt] = useState<string | null>(null)
+  const [seenNoticeUpdatedAt, setSeenNoticeUpdatedAt] = useState<string | null>(null)
+  const prevNoticeOpen = useRef(false)
+
+  const pulseNoticeCapsule = useMemo(
+    () => shouldPulseNoticeCapsule(noticeUpdatedAt, seenNoticeUpdatedAt),
+    [noticeUpdatedAt, seenNoticeUpdatedAt],
+  )
+
   const [isManualOpen, setIsManualOpen] = useState(false)
   const [fabLinksOpenMobile, setFabLinksOpenMobile] = useState(false)
   const [fabLinksOpenDesktop, setFabLinksOpenDesktop] = useState(true)
@@ -198,6 +223,27 @@ export function GlobalFloatingShortcuts({ isAdmin, isCreator }: { isAdmin: boole
     document.addEventListener("keydown", onKey)
     return () => document.removeEventListener("keydown", onKey)
   }, [fabLinksOpen])
+
+  useEffect(() => {
+    setSeenNoticeUpdatedAt(readSeenSiteNoticeUpdatedAt())
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void getSiteNoticeAction().then((p) => {
+      if (!cancelled) setNoticeUpdatedAt(p.updatedAt)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (prevNoticeOpen.current && !isNoticeOpen) {
+      void getSiteNoticeAction().then((p) => setNoticeUpdatedAt(p.updatedAt))
+    }
+    prevNoticeOpen.current = isNoticeOpen
+  }, [isNoticeOpen])
 
   return (
     <>
@@ -244,6 +290,7 @@ export function GlobalFloatingShortcuts({ isAdmin, isCreator }: { isAdmin: boole
               item={item}
               size={fabCapsuleSize}
               className="shrink-0"
+              shellHighlight={item.id === "notice" && pulseNoticeCapsule}
               onAfterInteract={() => {
                 setFabLinksOpenMobile(false)
                 setFabLinksOpenDesktop(false)
@@ -304,7 +351,19 @@ export function GlobalFloatingShortcuts({ isAdmin, isCreator }: { isAdmin: boole
         </DialogContent>
       </Dialog>
 
-      <NoticeSuggestionDialog open={isNoticeOpen} onOpenChange={setIsNoticeOpen} isAdmin={isAdmin} isCreator={isCreator} />
+      <NoticeSuggestionDialog
+        open={isNoticeOpen}
+        onOpenChange={setIsNoticeOpen}
+        isAdmin={isAdmin}
+        isCreator={isCreator}
+        onSiteNoticeSynced={({ updatedAt }) => {
+          setNoticeUpdatedAt(updatedAt)
+          if (isNoticeOpen && updatedAt) {
+            writeSeenSiteNoticeUpdatedAt(updatedAt)
+            setSeenNoticeUpdatedAt(updatedAt)
+          }
+        }}
+      />
     </>
   )
 }

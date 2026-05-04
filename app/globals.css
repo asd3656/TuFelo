@@ -124,3 +124,59 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* 플로팅 공지 캡슐: 최근 수정·미열람 시 강조 (밝은 배경 / 다크 각각) */
+@keyframes fab-notice-pulse-light {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgb(67 56 202 / 0.85),
+      0 0 16px 3px rgb(99 102 241 / 0.45),
+      0 4px 14px rgb(67 56 202 / 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgb(79 70 229 / 1),
+      0 0 28px 8px rgb(99 102 241 / 0.55),
+      0 6px 20px rgb(49 46 129 / 0.35);
+  }
+}
+
+@keyframes fab-notice-pulse-dark {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgb(165 180 252 / 0.65),
+      0 0 22px 6px rgb(99 102 241 / 0.45),
+      0 4px 16px rgb(0 0 0 / 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px rgb(199 210 254 / 0.95),
+      0 0 36px 12px rgb(129 140 248 / 0.55),
+      0 6px 24px rgb(0 0 0 / 0.45);
+  }
+}
+
+.fab-notice-capsule-highlight {
+  animation: fab-notice-pulse-light 1.85s ease-in-out infinite;
+}
+
+.dark .fab-notice-capsule-highlight {
+  animation: fab-notice-pulse-dark 1.85s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fab-notice-capsule-highlight {
+    animation: none;
+    box-shadow:
+      0 0 0 2px rgb(67 56 202 / 0.85),
+      0 0 18px 4px rgb(99 102 241 / 0.4);
+  }
+
+  .dark .fab-notice-capsule-highlight {
+    box-shadow:
+      0 0 0 2px rgb(165 180 252 / 0.75),
+      0 0 22px 6px rgb(99 102 241 / 0.45);
+  }
+}
