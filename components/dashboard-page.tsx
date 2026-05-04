@@ -253,7 +253,6 @@ export function DashboardPage({
     setMatchTypeFilterOpen(false)
     setSeasonFilterOpen(false)
     setTierFilterOpen(false)
-    scrollMatchHistoryIntoView()
   }
 
   /** 선수(기준) 필터와 동일 규칙으로 ID 목록 — 전적 테이블에서 기준 선수를 항상 왼쪽에 두는 데 사용 */
