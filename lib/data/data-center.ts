@@ -5,6 +5,8 @@ import {
   parseDataCenterMembers,
   parseDataCenterSeasons,
 } from "@/lib/data/data-center-parse"
+import { fetchDecorativeByMemberForDataCenter } from "@/lib/data/decorative-badges"
+import type { DecorativeBadgeAccent } from "@/lib/decorative-badge-accent"
 import type { Race, Season } from "@/lib/types/tufelo"
 
 export interface DataCenterMember {
@@ -33,6 +35,8 @@ export interface DataCenterInitialData {
   members: DataCenterMember[]
   matches: DataCenterMatch[]
   seasons: Season[]
+  /** member id → 전역 장식 뱃지 (제작자 페이지에서 관리) */
+  decorativeByMember: Record<string, { id: string; label: string; accent: DecorativeBadgeAccent }[]>
 }
 
 /** 누락 방지 우선: 데이터센터 첫 진입 시 가능한 한 전체 경기를 로드 */
@@ -52,10 +56,12 @@ export async function fetchDataCenterInitialData(): Promise<DataCenterInitialDat
 
   if (!rpcError && rpcBundle && typeof rpcBundle === "object" && !Array.isArray(rpcBundle)) {
     const b = rpcBundle as Record<string, unknown>
+    const decorativeByMember = await fetchDecorativeByMemberForDataCenter()
     return {
       members: parseDataCenterMembers(b.members),
       matches: parseDataCenterMatches(b.matches),
       seasons: parseDataCenterSeasons(b.seasons),
+      decorativeByMember,
     }
   }
 
@@ -99,5 +105,6 @@ export async function fetchDataCenterInitialData(): Promise<DataCenterInitialDat
     player2EloDelta: row.player2_elo_delta !== null && row.player2_elo_delta !== undefined ? Number(row.player2_elo_delta) : null,
   }))
 
-  return { members, matches, seasons }
+  const decorativeByMember = await fetchDecorativeByMemberForDataCenter()
+  return { members, matches, seasons, decorativeByMember }
 }

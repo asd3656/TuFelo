@@ -33,10 +33,39 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Shield, Plus, Trash2, ScrollText, X, CalendarDays, Pencil, Play, Lock } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Shield,
+  Plus,
+  Trash2,
+  ScrollText,
+  X,
+  CalendarDays,
+  Pencil,
+  Play,
+  Lock,
+  Award,
+  Users,
+} from "lucide-react"
 import { addAdminAccountAction, deleteAdminAccountAction } from "@/app/actions/creator"
 import { logoutAdminAction } from "@/app/actions/admin"
 import { startNewSeasonAction, updateSeasonAction, deleteSeasonAction, syncCurrentSeasonStatsAction } from "@/app/actions/seasons"
+import {
+  createDecorativeBadgeAction,
+  deleteDecorativeBadgeAction,
+  setDecorativeBadgeMembersAction,
+  updateDecorativeBadgeAction,
+} from "@/app/actions/decorative-badges"
+import type { CreatorDecorativeBadge } from "@/lib/data/decorative-badges"
+import type { DecorativeBadgeAccent } from "@/lib/decorative-badge-accent"
+import { DECORATIVE_BADGE_ACCENT_OPTIONS, decorativeBadgeAccentClasses } from "@/lib/decorative-badge-accent"
 import type { Season } from "@/lib/types/tufelo"
 
 interface AdminRow {
@@ -59,6 +88,8 @@ interface CreatorPageClientProps {
   admins: AdminRow[]
   logs: LogRow[]
   seasons: Season[]
+  decorativeBadges: CreatorDecorativeBadge[]
+  badgeMembers: { id: string; name: string }[]
   isGuest?: boolean
   headerData: SiteHeaderData
 }
@@ -80,6 +111,10 @@ const ACTION_OPTIONS = [
   "시즌 수정",
   "시즌 삭제",
   "시즌 전적 재동기화",
+  "전역 뱃지 생성",
+  "전역 뱃지 수정",
+  "전역 뱃지 삭제",
+  "전역 뱃지 부여",
 ] as const
 
 function formatDate(iso: string) {
@@ -120,7 +155,16 @@ function parseElapsedMs(detail: string | null): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGuest, headerData }: CreatorPageClientProps) {
+export function CreatorPageClient({
+  currentUsername,
+  admins,
+  logs,
+  seasons,
+  decorativeBadges,
+  badgeMembers,
+  isGuest,
+  headerData,
+}: CreatorPageClientProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
@@ -148,6 +192,18 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
   // 시즌 삭제 확인
   const [deleteSeasonTarget, setDeleteSeasonTarget] = useState<Season | null>(null)
   const [syncingSeasonStats, setSyncingSeasonStats] = useState(false)
+
+  const [newBadgeLabel, setNewBadgeLabel] = useState("")
+  const [newBadgeSort, setNewBadgeSort] = useState("0")
+  const [newBadgeAccent, setNewBadgeAccent] = useState<DecorativeBadgeAccent>("amber")
+  const [editBadge, setEditBadge] = useState<CreatorDecorativeBadge | null>(null)
+  const [editBadgeLabel, setEditBadgeLabel] = useState("")
+  const [editBadgeSort, setEditBadgeSort] = useState("0")
+  const [editBadgeAccent, setEditBadgeAccent] = useState<DecorativeBadgeAccent>("amber")
+  const [assignBadge, setAssignBadge] = useState<CreatorDecorativeBadge | null>(null)
+  const [assignSelected, setAssignSelected] = useState<Set<string>>(() => new Set())
+  const [assignFilter, setAssignFilter] = useState("")
+  const [deleteBadgeTarget, setDeleteBadgeTarget] = useState<CreatorDecorativeBadge | null>(null)
 
   const activeSeason = seasons.find((s) => s.endDate === null) ?? null
 
@@ -296,6 +352,93 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
     startTransition(async () => {
       await logoutAdminAction()
       router.push("/")
+    })
+  }
+
+  const filteredAssignMembers = useMemo(() => {
+    const q = assignFilter.trim().toLowerCase()
+    if (!q) return badgeMembers
+    return badgeMembers.filter((m) => m.name.toLowerCase().includes(q))
+  }, [badgeMembers, assignFilter])
+
+  function openAssignDialog(b: CreatorDecorativeBadge) {
+    setAssignBadge(b)
+    setAssignSelected(new Set(b.memberIds))
+    setAssignFilter("")
+  }
+
+  function toggleAssignMember(id: string) {
+    setAssignSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function handleSaveAssign() {
+    if (!assignBadge) return
+    startTransition(async () => {
+      const res = await setDecorativeBadgeMembersAction({
+        badgeId: assignBadge.id,
+        memberIds: [...assignSelected],
+      })
+      if (!res.ok) {
+        window.alert(res.error)
+        return
+      }
+      setAssignBadge(null)
+      router.refresh()
+    })
+  }
+
+  function handleCreateBadge(e: React.FormEvent) {
+    e.preventDefault()
+    startTransition(async () => {
+      const res = await createDecorativeBadgeAction({
+        label: newBadgeLabel,
+        sortOrder: Number(newBadgeSort) || 0,
+        accent: newBadgeAccent,
+      })
+      if (!res.ok) {
+        window.alert(res.error)
+        return
+      }
+      setNewBadgeLabel("")
+      setNewBadgeSort("0")
+      setNewBadgeAccent("amber")
+      router.refresh()
+    })
+  }
+
+  function handleUpdateBadge() {
+    if (!editBadge) return
+    startTransition(async () => {
+      const res = await updateDecorativeBadgeAction({
+        id: editBadge.id,
+        label: editBadgeLabel,
+        sortOrder: Number(editBadgeSort) || 0,
+        accent: editBadgeAccent,
+      })
+      if (!res.ok) {
+        window.alert(res.error)
+        return
+      }
+      setEditBadge(null)
+      router.refresh()
+    })
+  }
+
+  function handleDeleteBadgeConfirm() {
+    if (!deleteBadgeTarget) return
+    startTransition(async () => {
+      const res = await deleteDecorativeBadgeAction(deleteBadgeTarget.id)
+      if (!res.ok) {
+        window.alert(res.error)
+        return
+      }
+      setDeleteBadgeTarget(null)
+      router.refresh()
     })
   }
 
@@ -539,6 +682,154 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
                           </TableCell>
                         </>
                       )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </section>
+
+        {/* 전역 장식 뱃지 (데이터센터 프로필) */}
+        <section className="bg-card rounded-lg border border-border overflow-hidden mb-8">
+          <div className="px-6 py-4 border-b border-border">
+            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Award className="h-5 w-5 text-amber-500" />
+              전역 장식 뱃지
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              표시 문구를 직접 입력합니다. 예: 개인리그{" "}
+              <span className="font-mono text-xs text-amber-600/90 dark:text-amber-400/90">TFSL S2 우승자</span>, 팀 리그{" "}
+              <span className="font-mono text-xs text-amber-600/90 dark:text-amber-400/90">TFPL S2 우승 발할라</span> — 부여
+              선수만 데이터센터에 뱃지가 보입니다.
+            </p>
+          </div>
+
+          <div className="px-6 py-4 border-b border-border bg-secondary/15">
+            <p className="text-sm font-semibold text-foreground mb-3">새 뱃지</p>
+            <form onSubmit={handleCreateBadge} className="flex flex-wrap gap-3 items-end">
+              <div className="space-y-1.5 flex-1 min-w-[12rem]">
+                <Label className="text-xs text-muted-foreground">표시 문구</Label>
+                <Input
+                  placeholder="예: TFPL S2 우승 발할라"
+                  value={newBadgeLabel}
+                  onChange={(e) => setNewBadgeLabel(e.target.value)}
+                  className="bg-input border-border"
+                  maxLength={200}
+                  disabled={isGuest}
+                />
+              </div>
+              <div className="space-y-1.5 w-24">
+                <Label className="text-xs text-muted-foreground">정렬</Label>
+                <Input
+                  type="number"
+                  value={newBadgeSort}
+                  onChange={(e) => setNewBadgeSort(e.target.value)}
+                  className="bg-input border-border"
+                  disabled={isGuest}
+                />
+              </div>
+              <div className="space-y-1.5 w-[8.5rem]">
+                <Label className="text-xs text-muted-foreground">색상</Label>
+                <Select value={newBadgeAccent} onValueChange={(v) => setNewBadgeAccent(v as DecorativeBadgeAccent)} disabled={isGuest}>
+                  <SelectTrigger className="bg-input border-border h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DECORATIVE_BADGE_ACCENT_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                type="submit"
+                disabled={isGuest || pending || !newBadgeLabel.trim()}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                title={isGuest ? "제작자 권한이 필요합니다" : undefined}
+              >
+                {isGuest ? <Lock className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                추가
+              </Button>
+            </form>
+          </div>
+
+          {decorativeBadges.length === 0 ? (
+            <div className="px-6 py-8 text-center text-sm text-muted-foreground">등록된 뱃지가 없습니다.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="text-muted-foreground font-semibold">표시 문구</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center w-36">미리보기</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center w-20">정렬</TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center w-24">
+                      <span className="inline-flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" />
+                        인원
+                      </span>
+                    </TableHead>
+                    <TableHead className="text-muted-foreground font-semibold text-center w-44">관리</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {decorativeBadges.map((b) => (
+                    <TableRow key={b.id} className="border-border hover:bg-secondary/50">
+                      <TableCell className="font-medium text-foreground max-w-[min(28rem,55vw)]">
+                        <span className="line-clamp-2">{b.label}</span>
+                      </TableCell>
+                      <TableCell className="text-center align-middle">
+                        <div className="flex justify-center">
+                          <Badge variant="outline" className={`max-w-[10rem] truncate ${decorativeBadgeAccentClasses(b.accent)}`} title={b.label}>
+                            {b.label}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center tabular-nums text-muted-foreground">{b.sortOrder}</TableCell>
+                      <TableCell className="text-center">{b.memberIds.length}</TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-wrap justify-center gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-border"
+                            onClick={() => openAssignDialog(b)}
+                            disabled={isGuest || pending}
+                          >
+                            부여
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => {
+                              setEditBadge(b)
+                              setEditBadgeLabel(b.label)
+                              setEditBadgeSort(String(b.sortOrder))
+                              setEditBadgeAccent(b.accent)
+                            }}
+                            disabled={isGuest || pending}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteBadgeTarget(b)}
+                            disabled={isGuest || pending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                          {isGuest && <Lock className="h-3.5 w-3.5 text-muted-foreground/50" />}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -868,6 +1159,145 @@ export function CreatorPageClient({ currentUsername, admins, logs, seasons, isGu
             <AlertDialogCancel className="border-border text-foreground">취소</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteAdmin}
+              disabled={pending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              삭제
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 전역 뱃지 수정 */}
+      <Dialog open={!!editBadge} onOpenChange={(v) => { if (!v) setEditBadge(null) }}>
+        <DialogContent className="bg-card border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">뱃지 수정</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">표시 문구</Label>
+              <Input
+                value={editBadgeLabel}
+                onChange={(e) => setEditBadgeLabel(e.target.value)}
+                className="bg-input border-border"
+                maxLength={200}
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">정렬</Label>
+              <Input
+                type="number"
+                value={editBadgeSort}
+                onChange={(e) => setEditBadgeSort(e.target.value)}
+                className="bg-input border-border"
+                disabled={pending}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">색상</Label>
+              <Select value={editBadgeAccent} onValueChange={(v) => setEditBadgeAccent(v as DecorativeBadgeAccent)} disabled={pending}>
+                <SelectTrigger className="bg-input border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DECORATIVE_BADGE_ACCENT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" className="border-border" onClick={() => setEditBadge(null)} disabled={pending}>
+              취소
+            </Button>
+            <Button
+              type="button"
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleUpdateBadge}
+              disabled={pending || !editBadgeLabel.trim()}
+            >
+              저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 전역 뱃지 부여 */}
+      <Dialog open={!!assignBadge} onOpenChange={(v) => { if (!v) setAssignBadge(null) }}>
+        <DialogContent className="bg-card border-border sm:max-w-lg max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">이 뱃지를 부여할 선수</DialogTitle>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {assignBadge ? (
+                <Badge variant="outline" className={decorativeBadgeAccentClasses(assignBadge.accent)} title={assignBadge.label}>
+                  {assignBadge.label}
+                </Badge>
+              ) : null}
+            </div>
+          </DialogHeader>
+          <div className="space-y-3 flex-1 min-h-0 flex flex-col">
+            <Input
+              placeholder="이름 검색"
+              value={assignFilter}
+              onChange={(e) => setAssignFilter(e.target.value)}
+              className="bg-input border-border shrink-0"
+              disabled={pending}
+            />
+            <div className="overflow-y-auto flex-1 min-h-[12rem] max-h-[50vh] rounded-md border border-border p-3 space-y-2">
+              {filteredAssignMembers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">선수가 없거나 검색 결과가 없습니다.</p>
+              ) : (
+                filteredAssignMembers.map((m) => (
+                  <label
+                    key={m.id}
+                    className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-secondary/50 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={assignSelected.has(m.id)}
+                      onCheckedChange={() => toggleAssignMember(m.id)}
+                      disabled={pending}
+                    />
+                    <span className="text-sm text-foreground">{m.name}</span>
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0 shrink-0">
+            <Button type="button" variant="outline" className="border-border" onClick={() => setAssignBadge(null)} disabled={pending}>
+              취소
+            </Button>
+            <Button
+              type="button"
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleSaveAssign}
+              disabled={pending}
+            >
+              저장
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 전역 뱃지 삭제 확인 */}
+      <AlertDialog open={!!deleteBadgeTarget} onOpenChange={(v) => { if (!v) setDeleteBadgeTarget(null) }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">전역 뱃지 삭제</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground space-y-2">
+              <span className="block break-words text-foreground font-medium">{deleteBadgeTarget?.label}</span>
+              뱃지와 모든 선수에 대한 부여가 삭제됩니다. 데이터센터에서 더 이상 표시되지 않습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-foreground">취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteBadgeConfirm}
               disabled={pending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

@@ -67,6 +67,8 @@ import { cn } from "@/lib/utils"
 import type { Race, Season } from "@/lib/types/tufelo"
 import type { SiteHeaderData } from "@/lib/data/site-header"
 import type { DataCenterMatch, DataCenterMember } from "@/lib/data/data-center"
+import type { DecorativeBadgeAccent } from "@/lib/decorative-badge-accent"
+import { decorativeBadgeAccentClasses } from "@/lib/decorative-badge-accent"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { SiteHeader } from "@/components/site-header"
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -201,6 +203,8 @@ interface DataCenterPageClientProps {
   members: DataCenterMember[]
   matches: DataCenterMatch[]
   seasons: Season[]
+  /** 제작자가 부여한 전역 장식 뱃지 */
+  decorativeByMember: Record<string, { id: string; label: string; accent: DecorativeBadgeAccent }[]>
   headerData: SiteHeaderData
 }
 
@@ -432,7 +436,13 @@ function dayKeyFromPlayedDate(playedDate: string): { sortKey: string; label: str
   return { sortKey, label }
 }
 
-export function DataCenterPageClient({ members, matches, seasons, headerData }: DataCenterPageClientProps) {
+export function DataCenterPageClient({
+  members,
+  matches,
+  seasons,
+  decorativeByMember,
+  headerData,
+}: DataCenterPageClientProps) {
   const API_DEBOUNCE_MS = 300
   const router = useRouter()
   const pathname = usePathname()
@@ -2122,6 +2132,17 @@ export function DataCenterPageClient({ members, matches, seasons, headerData }: 
                             </Badge>
                           )
                         })()}
+                        {data.member &&
+                          (decorativeByMember[data.member.id] ?? []).map((db) => (
+                            <Badge
+                              key={db.id}
+                              variant="outline"
+                              className={decorativeBadgeAccentClasses(db.accent)}
+                              title="리그·대회 전역 뱃지"
+                            >
+                              {db.label}
+                            </Badge>
+                          ))}
                       </span>
                     ) : (
                       "검색된 선수가 없습니다."
