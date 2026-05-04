@@ -913,7 +913,7 @@ export function DashboardPage({
                     CHAMPION CELEBRATION
                   </p>
                   <div>
-                    <h2 className="bg-gradient-to-r from-fuchsia-500 via-violet-500 to-amber-500 bg-clip-text text-2xl font-extrabold tracking-tight text-transparent sm:text-3xl">
+                    <h2 className="text-2xl font-extrabold tracking-tight text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.45)] sm:text-3xl dark:text-amber-300">
                       Radopa
                     </h2>
                     <p className="mt-1 text-sm font-medium text-muted-foreground">
@@ -924,7 +924,7 @@ export function DashboardPage({
                 <div className="mx-auto w-full max-w-[220px] rounded-xl border border-yellow-300/60 bg-gradient-to-br from-yellow-100/70 via-amber-100/70 to-orange-100/70 px-4 py-3 text-center shadow-[0_0_18px_rgba(245,158,11,0.18)] dark:border-yellow-500/40 dark:from-yellow-500/15 dark:via-amber-500/10 dark:to-orange-500/10 lg:mx-0">
                   <p className="text-[11px] font-bold tracking-[0.14em] text-yellow-800 dark:text-yellow-300">HAMIC AEL-LEAGUE</p>
                   <p className="mt-1 text-lg font-extrabold text-foreground">CHAMPION</p>
-                  <p className="mt-1 text-xs font-semibold text-muted-foreground">RADOPA</p>
+                  <p className="mt-1 text-xs font-extrabold text-amber-600 dark:text-amber-300">RADOPA</p>
                 </div>
               </div>
             </div>
