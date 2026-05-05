@@ -52,7 +52,7 @@ const FAB_ITEMS: FabItemDef[] = [
     icon: FileSpreadsheet,
     iconRingClass: "bg-green-600 hover:bg-green-700",
     kind: "external",
-    href: "https://docs.google.com/spreadsheets/d/1kKeA8Y8AmO99qS6v4Xsu_95z6kdKnXL8DXLSLXoCUx8/edit?gid=501558484#gid=501558484",
+    href: "https://docs.google.com/spreadsheets/d/1kKeA8Y8AmO99qS6v4Xsu_95z6kdKnXL8DXLSLXoCUx8/edit?gid=1549482567#gid=1549482567",
   },
   {
     id: "tfpl",
