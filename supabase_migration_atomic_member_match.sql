@@ -112,3 +112,54 @@ $$;
 GRANT EXECUTE ON FUNCTION public.apply_season_match_undo_stats(
   uuid, uuid, uuid, integer, integer
 ) TO service_role;
+
+-- ------------------------------------------------------------
+-- Apply wins/losses/streak for a '팀플' match (no ELO change).
+-- Used when the map name contains '팀플' — ELO is intentionally excluded.
+-- ------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.apply_season_match_member_stats_only(
+  p_winner_id uuid,
+  p_loser_id uuid,
+  p_winner_streak integer,
+  p_loser_streak integer
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  n int;
+BEGIN
+  IF p_winner_id = p_loser_id THEN
+    RAISE EXCEPTION 'winner and loser must differ';
+  END IF;
+
+  UPDATE public.members
+  SET
+    wins = wins + 1,
+    streak = p_winner_streak
+  WHERE id = p_winner_id;
+
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n = 0 THEN
+    RAISE EXCEPTION 'winner member not found: %', p_winner_id;
+  END IF;
+
+  UPDATE public.members
+  SET
+    losses = losses + 1,
+    streak = p_loser_streak
+  WHERE id = p_loser_id;
+
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n = 0 THEN
+    RAISE EXCEPTION 'loser member not found: %', p_loser_id;
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.apply_season_match_member_stats_only(
+  uuid, uuid, integer, integer
+) TO service_role;

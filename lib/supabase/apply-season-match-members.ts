@@ -23,6 +23,25 @@ export async function applySeasonMatchMemberUpdatesRpc(
   return { error }
 }
 
+/** Apply wins/losses/streak for a '팀플' match without touching ELO. */
+export async function applySeasonMatchMemberStatsOnlyRpc(
+  supabase: SupabaseClient,
+  params: {
+    winnerId: string
+    loserId: string
+    winnerStreak: number
+    loserStreak: number
+  },
+): Promise<{ error: { message: string } | null }> {
+  const { error } = await supabase.rpc("apply_season_match_member_stats_only", {
+    p_winner_id: params.winnerId,
+    p_loser_id: params.loserId,
+    p_winner_streak: params.winnerStreak,
+    p_loser_streak: params.loserStreak,
+  })
+  return { error }
+}
+
 /** Atomically subtract elo deltas and one win/loss each (undo one season match on members). */
 export async function applySeasonMatchUndoStatsRpc(
   supabase: SupabaseClient,

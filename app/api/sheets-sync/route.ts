@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/service"
-import { applySeasonMatchMemberUpdatesRpc } from "@/lib/supabase/apply-season-match-members"
+import {
+  applySeasonMatchMemberUpdatesRpc,
+  applySeasonMatchMemberStatsOnlyRpc,
+} from "@/lib/supabase/apply-season-match-members"
 import { computeEloMatch } from "@/lib/elo"
 import { computeStreakForMember } from "@/lib/match-streak"
 import { insertAdminLog } from "@/lib/admin-log"
@@ -86,13 +89,14 @@ export async function POST(req: NextRequest) {
     const activeSeason = await getActiveSeason(supabase)
     const isSeasonMatch = activeSeason !== null && today >= activeSeason.start_date
     const seasonId = isSeasonMatch ? activeSeason!.id : null
+    const isTeamPlay = mapName.trim().includes("팀플")
 
     const elo1 = m1.elo as number
     const elo2 = m2.elo as number
     const streak1 = m1.streak as number
     const streak2 = m2.streak as number
 
-    if (isSeasonMatch) {
+    if (isSeasonMatch && !isTeamPlay) {
       // 5a. 시즌 경기: ELO 계산 + 선수 스탯 업데이트
       const winnerBaseElo = isPlayer1Winner ? elo1 : elo2
       const loserBaseElo = isPlayer1Winner ? elo2 : elo1
@@ -156,8 +160,59 @@ export async function POST(req: NextRequest) {
       const s2 = await computeStreakForMember(supabase, m2.id as string, seasonId as string)
       await supabase.from("members").update({ streak: s1 }).eq("id", m1.id)
       await supabase.from("members").update({ streak: s2 }).eq("id", m2.id)
+    } else if (isSeasonMatch && isTeamPlay) {
+      // 5b. 팀플 시즌 경기: 승패/스트릭 업데이트, ELO 미반영
+      const nextStreak1 = isPlayer1Winner ? (streak1 > 0 ? streak1 + 1 : 1) : (streak1 < 0 ? streak1 - 1 : -1)
+      const nextStreak2 = isPlayer1Winner ? (streak2 < 0 ? streak2 - 1 : -1) : (streak2 > 0 ? streak2 + 1 : 1)
+
+      const { data: inserted, error: insErr } = await supabase
+        .from("matches")
+        .insert({
+          player1_id: m1.id,
+          player2_id: m2.id,
+          winner_id: winnerId,
+          map_name: mapName.trim(),
+          match_type: matchType.trim(),
+          played_date: today,
+          season_id: seasonId,
+          player1_elo_before: null,
+          player2_elo_before: null,
+          player1_elo_delta: null,
+          player2_elo_delta: null,
+        })
+        .select("id")
+        .single()
+
+      if (insErr)
+        return NextResponse.json({ ok: false, error: `DB 저장 실패: ${insErr.message}` }, { status: 500 })
+
+      const matchId = inserted?.id as string
+
+      const loserId = isPlayer1Winner ? (m2.id as string) : (m1.id as string)
+      const winnerStreak = isPlayer1Winner ? nextStreak1 : nextStreak2
+      const loserStreak = isPlayer1Winner ? nextStreak2 : nextStreak1
+
+      const { error: rpcErr } = await applySeasonMatchMemberStatsOnlyRpc(supabase, {
+        winnerId,
+        loserId,
+        winnerStreak,
+        loserStreak,
+      })
+
+      if (rpcErr) {
+        await supabase.from("matches").delete().eq("id", matchId)
+        return NextResponse.json(
+          { ok: false, error: rpcErr.message ?? "스탯 업데이트 실패" },
+          { status: 500 },
+        )
+      }
+      // streak 재계산 (정확도 향상)
+      const s1 = await computeStreakForMember(supabase, m1.id as string, seasonId as string)
+      const s2 = await computeStreakForMember(supabase, m2.id as string, seasonId as string)
+      await supabase.from("members").update({ streak: s1 }).eq("id", m1.id)
+      await supabase.from("members").update({ streak: s2 }).eq("id", m2.id)
     } else {
-      // 5b. 비시즌 경기: ELO 계산 없이 기록만 저장
+      // 5c. 비시즌 경기: ELO 계산 없이 기록만 저장
       const { error: insErr } = await supabase.from("matches").insert({
         player1_id: m1.id,
         player2_id: m2.id,
