@@ -18,7 +18,7 @@ function csvInts(searchParams: URLSearchParams, key: string): number[] {
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url)
-    const seasonKeys = csv(searchParams, "season")
+    const seasonKeys = csv(searchParams, "season").filter((k) => k.toLowerCase() !== "__all__")
     const mapNames = csv(searchParams, "map")
     const matchTypes = csv(searchParams, "matchType")
     const races = csv(searchParams, "race")

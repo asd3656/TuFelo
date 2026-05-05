@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   BarChart3,
@@ -85,6 +85,8 @@ const ELO_WEEK_DOT_FILL = "#2563eb"
 const ELO_WEEK_DOT_RING = "#000000"
 
 /** 시즌 테이블과 별개로, 프로리그 시즌1·2 경기만 모아 보기 */
+/** 시즌 필터: 모든 시즌·비시즌 경기 포함 */
+const SEASON_OPTION_ALL = "__all__" as const
 const SEASON_OPTION_PROLEAGUE_S1 = "__proleague_s1__" as const
 const SEASON_OPTION_PROLEAGUE_S2 = "__proleague_s2__" as const
 const SEASON_OPTION_PROLEAGUE_S3_PRESEASON = "__proleague_s3_preseason__" as const
@@ -95,7 +97,7 @@ const PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION: Record<string, string> = {
 }
 
 function matchPassesSeasonFilter(seasonId: string, match: DataCenterMatch): boolean {
-  if (seasonId === "__all__") return true
+  if (seasonId === SEASON_OPTION_ALL) return true
   const mt = PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[seasonId]
   if (mt !== undefined) {
     return match.matchType.trim().toUpperCase() === mt.toUpperCase()
@@ -130,6 +132,7 @@ function hasDuplicateSeasonAlias(seasons: Season[], alias: string): boolean {
 /** URL 공유 시 시즌 토큰(프로리그 옵션·예약 alias) 대소문자 무시 */
 function normalizeSeasonUrlToken(value: string): string {
   const v = value.trim()
+  if (v.toLowerCase() === SEASON_OPTION_ALL) return SEASON_OPTION_ALL
   const plKey = Object.keys(PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION).find(
     (k) => k.toLowerCase() === v.toLowerCase(),
   )
@@ -530,6 +533,7 @@ export function DataCenterPageClient({
   const needsPlayer2Selection = hasResolvedPlayer1 && (activePlayer2Queries.length === 0 || matchedPlayer2Ids.size === 0)
 
   const seasonOptions = useMemo(() => {
+    const allRow = { id: SEASON_OPTION_ALL, label: "전체 시즌" }
     const proLeague = [
       { id: SEASON_OPTION_PROLEAGUE_S1, label: "시즌1 (TFPL_S1)" },
       { id: SEASON_OPTION_PROLEAGUE_S2, label: "시즌2 (TFPL_S2)" },
@@ -538,8 +542,22 @@ export function DataCenterPageClient({
       id: s.id,
       label: s.endDate === null ? `${s.name} (현재)` : s.name,
     }))
-    return [...proLeague, ...rows]
+    return [allRow, ...proLeague, ...rows]
   }, [seasons])
+
+  /** 「전체 시즌」과 특정 시즌은 동시 선택 불가 */
+  const onSeasonIdsChange = useCallback((next: string[]) => {
+    setSeasonIds((prev) => {
+      if (next.includes(SEASON_OPTION_ALL) && next.length > 1) {
+        if (prev.includes(SEASON_OPTION_ALL)) {
+          return next.filter((id) => id !== SEASON_OPTION_ALL)
+        }
+        return [SEASON_OPTION_ALL]
+      }
+      return next
+    })
+  }, [])
+
   const tierOptions = useMemo(() => {
     const uniq = Array.from(new Set(members.map((m) => m.tier).filter((v): v is number => v !== null)))
       .sort((a, b) => a - b)
@@ -565,6 +583,7 @@ export function DataCenterPageClient({
   const selectedSeason = useMemo(() => {
     if (seasonIds.length !== 1) return null
     const selectedId = seasonIds[0]
+    if (selectedId === SEASON_OPTION_ALL) return null
     if (PROLEAGUE_MATCH_TYPE_BY_SEASON_OPTION[selectedId] !== undefined) return null
     return seasons.find((s) => s.id === selectedId) ?? null
   }, [seasonIds, seasons])
@@ -695,7 +714,8 @@ export function DataCenterPageClient({
 
   const dataCenterQueryString = useMemo(() => {
     const params = new URLSearchParams()
-    if (seasonIds.length > 0) params.set("season", seasonIds.join(","))
+    const seasonForApi = seasonIds.filter((id) => id !== SEASON_OPTION_ALL)
+    if (seasonForApi.length > 0) params.set("season", seasonForApi.join(","))
     if (mapNames.length > 0) params.set("map", mapNames.join(","))
     if (matchTypes.length > 0) params.set("matchType", matchTypes.join(","))
     if (races.length > 0) params.set("race", races.join(","))
@@ -1737,7 +1757,7 @@ export function DataCenterPageClient({
                 데이터센터
               </h1>
               <p className="text-sm text-muted-foreground">필터 상태를 URL로 공유할 수 있습니다.
-                 <span className="font-medium text-foreground">테스트중이므로 피드백 환영합니다. 차트는 계속 바뀔예정입니다.</span></p>
+                 </p>
             </div>
           </div>
           <div className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
@@ -1897,10 +1917,10 @@ export function DataCenterPageClient({
               label="시즌"
               options={seasonOptions.map((s) => ({ value: s.id, label: s.label }))}
               selectedValues={seasonIds}
-              onChange={setSeasonIds}
+              onChange={onSeasonIdsChange}
               open={seasonMenuOpen}
               onOpenChange={setSeasonMenuOpen}
-              placeholder="전체 시즌"
+              placeholder="시즌 선택"
             />
 
             <MultiSelectFilter
