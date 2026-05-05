@@ -311,15 +311,29 @@ export async function startNewSeasonAction(input: {
     streak: 0,
   }))
   if (resetData.length > 0) {
-    await supabase.from("members").upsert(resetData, { onConflict: "id" })
+    const { error: resetErr } = await supabase.from("members").upsert(resetData, { onConflict: "id" })
+    if (resetErr) return { ok: false, error: `선수 초기화 실패: ${resetErr.message}` }
   }
 
   // 새 시즌 생성
-  const { error } = await supabase
+  const { data: insertedSeason, error: insertErr } = await supabase
     .from("seasons")
     .insert({ name, start_date: input.startDate })
+    .select("id")
+    .single()
 
-  if (error) return { ok: false, error: error.message }
+  if (insertErr) return { ok: false, error: insertErr.message }
+
+  // 시작일 이후 경기에 새 시즌 태그 + ELO/전적/연속을 경기 원본 기준으로 재계산
+  // (이 호출이 없으면 랭킹이 members 초기화·경기 season_id와 어긋나거나 이전과 동일하게 보일 수 있음)
+  try {
+    await recalculateCurrentSeasonElo(supabase, insertedSeason.id as string, input.startDate)
+  } catch (e) {
+    return {
+      ok: false,
+      error: `시즌은 생성됐으나 ELO 재계산에 실패했습니다. 제작자 페이지에서 「시즌 전적 재동기화」를 실행해 주세요. (${String(e)})`,
+    }
+  }
 
   await insertAdminLog(
     session.username,
