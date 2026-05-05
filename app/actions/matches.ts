@@ -15,7 +15,7 @@ import { getSessionFromCookies } from "@/lib/auth/admin"
 import { insertAdminLog } from "@/lib/admin-log"
 import type { RegisterMatchInput, UpdateMatchInput, ActionResult } from "@/lib/types/tufelo"
 
-const mapNamePattern = /^[가-힣]+$/
+const mapNamePattern = /^\S+$/
 
 /** 전적 관련 경로 캐시를 모두 무효화합니다 */
 function revalidateMatchPaths() {
@@ -44,7 +44,7 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
     return { ok: false, error: "같은 선수를 선택할 수 없습니다." }
   }
   if (!mapNamePattern.test(input.mapName)) {
-    return { ok: false, error: "맵 이름은 띄어쓰기 없이 한글만 입력해 주세요." }
+    return { ok: false, error: "맵 이름은 띄어쓰기 없이 입력해 주세요." }
   }
   if (!input.matchType || !input.matchType.trim()) {
     return { ok: false, error: "경기 유형을 입력해 주세요." }
@@ -324,7 +324,7 @@ export async function updateMatchAction(input: UpdateMatchInput): Promise<Action
   }
 
   if (!mapNamePattern.test(input.mapName)) {
-    return { ok: false, error: "맵 이름은 띄어쓰기 없이 한글만 입력해 주세요." }
+    return { ok: false, error: "맵 이름은 띄어쓰기 없이 입력해 주세요." }
   }
   if (!input.matchType || !input.matchType.trim()) {
     return { ok: false, error: "경기 유형을 입력해 주세요." }

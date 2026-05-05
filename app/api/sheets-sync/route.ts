@@ -10,7 +10,7 @@ import { insertAdminLog } from "@/lib/admin-log"
 
 export const dynamic = "force-dynamic"
 
-const mapNamePattern = /^[가-힣]+$/
+const mapNamePattern = /^\S+$/
 
 async function getActiveSeason(supabase: ReturnType<typeof createServiceClient>) {
   const { data } = await supabase
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: `결과 값 오류: "${player1Result}" (승 또는 패만 가능)` }, { status: 400 })
     if (!mapName?.trim()) return NextResponse.json({ ok: false, error: "맵 이름 누락" }, { status: 400 })
     if (!mapNamePattern.test(mapName.trim()))
-      return NextResponse.json({ ok: false, error: `맵 이름 오류: "${mapName}" (한글만, 띄어쓰기 없이)` }, { status: 400 })
+      return NextResponse.json({ ok: false, error: `맵 이름 오류: "${mapName}" (띄어쓰기 없이 입력)` }, { status: 400 })
     if (!matchType?.trim()) return NextResponse.json({ ok: false, error: "경기 유형 누락" }, { status: 400 })
 
     const supabase = createServiceClient()
