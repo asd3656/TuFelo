@@ -336,28 +336,29 @@ export function RankingPageClient({
                         "border-border transition-colors",
                         !isTierFirst && player.rank <= 3 && "bg-secondary/30 hover:bg-secondary/40",
                         !isTierFirst && player.rank > 3 && "hover:bg-secondary/50",
+                        isTierFirst && "relative",
                         isTierFirst &&
                           /* 셀마다 inset 그림자 넣으면 열 사이에 세로선처럼 보임 → 바깥 테두리만 (상하 + 첫열 좌 + 마지막 열 우) */
                           "[&>td]:border-yellow-400/90 [&>td]:border-solid [&>td]:border-y-2 [&>td]:border-x-0 [&>td]:bg-gradient-to-b [&>td]:from-yellow-500/14 [&>td]:via-amber-500/10 [&>td]:to-yellow-600/5 dark:[&>td]:from-yellow-500/12 dark:[&>td]:via-amber-500/8 dark:[&>td]:to-yellow-900/15 [&>td:first-child]:border-l-2 [&>td:last-child]:border-r-2 hover:[&>td]:from-yellow-500/20 hover:[&>td]:via-amber-500/14",
                         isTierFirst && "shadow-[0_0_22px_rgba(250,204,21,0.28)] dark:shadow-[0_0_20px_rgba(250,204,21,0.18)]",
                       )}
                     >
-                      {/* tr 직계 자식은 td만 허용 — 오버레이는 첫 번째 셀 내부에만 (표 레이아웃 깨짐 방지) */}
+                      {/* tr에 relative를 주어 containing block으로 삼고, span은 inset-0으로 행 너비에 맞게 제한 */}
                       <TableCell
                         className={cn(
-                          "text-center relative overflow-visible",
+                          "text-center",
                           isTierFirst && "isolate",
                         )}
                       >
                         {isTierFirst && (
                           <>
                             <span
-                              className="ranking-row-champ-aura pointer-events-none absolute top-0 bottom-0 left-0 z-0 min-h-full w-[max(100vw,1200px)] max-w-none"
+                              className="ranking-row-champ-aura pointer-events-none absolute inset-0 z-0"
                               aria-hidden
                             />
                             {!isPastSeason && (
                               <span
-                                className="ranking-row-champ-sweep pointer-events-none absolute top-0 bottom-0 left-0 z-0 min-h-full w-[max(100vw,1200px)] max-w-none"
+                                className="ranking-row-champ-sweep pointer-events-none absolute inset-0 z-0"
                                 aria-hidden
                               />
                             )}
