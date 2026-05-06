@@ -64,6 +64,8 @@ export function useMatchFilter({
   const abortRef = useRef<AbortController | null>(null)
   const filtersRef = useRef(filters)
   filtersRef.current = filters
+  const currentPageRef = useRef(currentPage)
+  currentPageRef.current = currentPage
 
   const isMountedRef = useRef(false)
 
@@ -105,13 +107,13 @@ export function useMatchFilter({
     }
   }, [])
 
-  // router.refresh() 후 SSR props가 바뀌면 현재 필터 상태로 재조회
+  // router.refresh() 후 SSR props가 바뀌면 현재 페이지·필터 상태 그대로 재조회
   useEffect(() => {
     if (!isMountedRef.current) {
       isMountedRef.current = true
       return
     }
-    doFetch(1, filtersRef.current)
+    doFetch(currentPageRef.current, filtersRef.current)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMatches])
 
