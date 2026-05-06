@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /d/project/TuFelo log --all --full-history --source --oneline -- supabase_migration*.sql)"
+    ]
+  }
+}
