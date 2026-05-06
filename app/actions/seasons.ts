@@ -98,7 +98,7 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
   // startDate 이후 모든 경기 (시간순)
   const { data: matches, error: matchesErr } = await supabase
     .from("matches")
-    .select("id, player1_id, player2_id, winner_id, played_date, created_at")
+    .select("id, player1_id, player2_id, winner_id, map_name, played_date, created_at")
     .gte("played_date", startDate)
     .order("played_date", { ascending: true })
     .order("created_at", { ascending: true })
@@ -109,6 +109,7 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     player1_id: string
     player2_id: string
     winner_id: string
+    map_name: string
     played_date: string
     created_at: string
   }>
@@ -128,24 +129,41 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
   // ELO 시뮬레이션 (winner_id 기준)
   type MatchUpdate = {
     id: string
-    p1_elo_before: number
-    p2_elo_before: number
-    p1_elo_delta: number
-    p2_elo_delta: number
+    p1_elo_before: number | null
+    p2_elo_before: number | null
+    p1_elo_delta: number | null
+    p2_elo_delta: number | null
   }
   const matchUpdates: MatchUpdate[] = []
 
   for (const match of matchList) {
     const p1Id = match.player1_id
     const p2Id = match.player2_id
-    const elo1 = eloMap.get(p1Id) ?? getStartingEloForTier(tierMap.get(p1Id) ?? 4)
-    const elo2 = eloMap.get(p2Id) ?? getStartingEloForTier(tierMap.get(p2Id) ?? 4)
-
     const isP1Winner = match.winner_id === p1Id
     const isP2Winner = match.winner_id === p2Id
     if (!isP1Winner && !isP2Winner) {
       throw new Error(`winner_id가 player1/player2와 일치하지 않습니다. match_id=${match.id}`)
     }
+
+    const winnerId = isP1Winner ? p1Id : p2Id
+    const loserId = isP1Winner ? p2Id : p1Id
+    winsMap.set(winnerId, (winsMap.get(winnerId) ?? 0) + 1)
+    lossesMap.set(loserId, (lossesMap.get(loserId) ?? 0) + 1)
+
+    if (match.map_name.includes("팀플")) {
+      // 팀플 경기: 승패만 반영, ELO 미반영
+      matchUpdates.push({
+        id: match.id,
+        p1_elo_before: null,
+        p2_elo_before: null,
+        p1_elo_delta: null,
+        p2_elo_delta: null,
+      })
+      continue
+    }
+
+    const elo1 = eloMap.get(p1Id) ?? getStartingEloForTier(tierMap.get(p1Id) ?? 4)
+    const elo2 = eloMap.get(p2Id) ?? getStartingEloForTier(tierMap.get(p2Id) ?? 4)
 
     const winnerBaseElo = isP1Winner ? elo1 : elo2
     const loserBaseElo = isP1Winner ? elo2 : elo1
@@ -158,11 +176,6 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
 
     eloMap.set(p1Id, p1NewElo)
     eloMap.set(p2Id, p2NewElo)
-
-    const winnerId = isP1Winner ? p1Id : p2Id
-    const loserId = isP1Winner ? p2Id : p1Id
-    winsMap.set(winnerId, (winsMap.get(winnerId) ?? 0) + 1)
-    lossesMap.set(loserId, (lossesMap.get(loserId) ?? 0) + 1)
 
     matchUpdates.push({
       id: match.id,

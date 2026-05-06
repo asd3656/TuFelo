@@ -26,7 +26,7 @@ interface RegisterMatchDialogProps {
   knownMatchTypes: string[]
 }
 
-const mapNamePattern = /^[가-힣]+$/
+const mapNamePattern = /^\S+$/
 
 function clampDateToSeoulMax(value: string): string {
   const max = getSeoulDateString()
@@ -487,7 +487,7 @@ export function RegisterMatchDialog({
       return null
     }
     if (!mapNamePattern.test(map)) {
-      setMapError("맵 이름은 띄어쓰기 없이 한글만 입력해 주세요.")
+      setMapError("맵 이름은 띄어쓰기 없이 입력해 주세요.")
       return null
     }
     if (!matchType.trim()) {
