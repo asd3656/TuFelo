@@ -70,10 +70,10 @@ export function SiteHeader({
         <div className="container mx-auto max-w-6xl px-4 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <Link href="/" className="inline-flex w-fit items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+              <a href="/" className="inline-flex w-fit items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 <Trophy className="h-7 w-7 text-primary" />
                 <h1 className="text-2xl font-bold text-foreground sm:text-3xl">TuF Clan ELO board</h1>
-              </Link>
+              </a>
               {adminUsernames.length > 0 && (
                 <p className="mt-2 w-fit text-sm text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-300 dark:border-indigo-500/25 rounded-md px-2.5 py-1 font-medium">
                   관리자 : {adminUsernames.join(", ")}
