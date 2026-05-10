@@ -146,6 +146,26 @@ export async function fetchInitialDashboardData(
 }
 
 /**
+ * 현재 시즌의 맵/경기유형 고유값. 전적 등록·필터 드롭다운에 현재 시즌 데이터만 표시할 때 사용.
+ */
+export async function fetchCurrentSeasonMeta(seasonId: string): Promise<{
+  maps: string[]
+  matchTypes: string[]
+}> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("matches")
+    .select("map_name, match_type")
+    .eq("season_id", seasonId)
+    .limit(10000)
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as { map_name: string | null; match_type: string | null }[]
+  const maps = Array.from(new Set(rows.map((r) => r.map_name).filter(Boolean))).sort() as string[]
+  const matchTypes = Array.from(new Set(rows.map((r) => r.match_type).filter(Boolean))).sort() as string[]
+  return { maps, matchTypes }
+}
+
+/**
  * 랭킹 페이지용: 멤버 원본 + 현재 시즌 경기 + 시즌 목록 + 과거 시즌 스냅샷 반환.
  */
 export async function fetchRankingData(): Promise<{

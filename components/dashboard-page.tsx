@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import Link from "next/link"
 import { PlayerSearch } from "@/components/player-search"
 import { MatchHistory } from "@/components/match-history"
 import { RegisterMatchDialog } from "@/components/register-match-dialog"
@@ -47,8 +46,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import {
   Plus,
   Trophy,
-  BarChart3,
-  Users,
   Loader2,
   Lock,
   RotateCcw,
@@ -78,6 +75,8 @@ interface DashboardPageProps {
   adminUsernames?: string[]
   seasons?: Season[]
   currentSeason?: Season | null
+  currentSeasonMaps?: string[]
+  currentSeasonMatchTypes?: string[]
 }
 
 interface WeeklyBestEntry {
@@ -160,6 +159,8 @@ export function DashboardPage({
   adminUsernames = [],
   seasons = [],
   currentSeason = null,
+  currentSeasonMaps,
+  currentSeasonMatchTypes,
 }: DashboardPageProps) {
   const router = useRouter()
   const urlSearchParams = useSearchParams()
@@ -495,18 +496,15 @@ export function DashboardPage({
 
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Label htmlFor="filter-map" className="text-sm font-medium text-muted-foreground">
+                <Label className="text-sm font-medium text-muted-foreground">
                   맵 필터
                 </Label>
                 <span className="text-xs text-muted-foreground">띄어쓰기 없이 한글로만</span>
               </div>
-              <Input
-                id="filter-map"
-                type="text"
-                placeholder="일부이름으로 검색 가능"
+              <MapFilterCombobox
                 value={filters.map}
-                onChange={(e) => setMap(e.target.value)}
-                className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+                knownMaps={currentSeasonMaps ?? knownMaps}
+                onChange={setMap}
               />
               <p className="text-xs text-muted-foreground">입력한 글이 포함된 맵 이름의 전적만 표시</p>
             </div>
@@ -533,7 +531,7 @@ export function DashboardPage({
                       <SheetTitle>경기 유형 선택</SheetTitle>
                     </SheetHeader>
                     <div className="grid gap-1 px-1 pb-6">
-                      {knownMatchTypes.map((type) => (
+                      {(currentSeasonMatchTypes ?? knownMatchTypes).map((type) => (
                         <label
                           key={type}
                           className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-left hover:bg-accent/60"
@@ -573,6 +571,7 @@ export function DashboardPage({
                       type="button"
                       variant="outline"
                       className="w-full justify-between bg-input border-border text-foreground font-normal"
+                      onMouseEnter={() => setMatchTypeFilterOpen(true)}
                     >
                       {filters.matchTypes.length === 0
                         ? "전체 경기 유형"
@@ -584,7 +583,7 @@ export function DashboardPage({
                   <DropdownMenuContent align="start" className="w-64">
                     <DropdownMenuLabel>경기 유형 선택</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    {knownMatchTypes.map((type) => {
+                    {(currentSeasonMatchTypes ?? knownMatchTypes).map((type) => {
                       const checked = filters.matchTypes.includes(type)
                       return (
                         <DropdownMenuCheckboxItem
@@ -1263,11 +1262,76 @@ export function DashboardPage({
           prefillDate={filters.dateFrom}
           prefillMap={filters.map.trim()}
           prefillMatchType={filters.matchTypes[0] ?? ""}
-          knownMaps={knownMaps}
-          knownMatchTypes={knownMatchTypes}
+          knownMaps={currentSeasonMaps ?? knownMaps}
+          knownMatchTypes={currentSeasonMatchTypes ?? knownMatchTypes}
         />
       </div>
     </main>
+  )
+}
+
+function MapFilterCombobox({
+  value,
+  knownMaps,
+  onChange,
+}: {
+  value: string
+  knownMaps: string[]
+  onChange: (v: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const choices = useMemo(() => {
+    const q = value.trim().toLowerCase()
+    if (!q) return knownMaps
+    return knownMaps.filter((m) => m.toLowerCase().includes(q))
+  }, [knownMaps, value])
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onDoc)
+    return () => document.removeEventListener("mousedown", onDoc)
+  }, [])
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <Input
+        ref={inputRef}
+        type="text"
+        placeholder="일부이름으로 검색 가능"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        autoComplete="off"
+        className="bg-input border-border text-foreground placeholder:text-muted-foreground"
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open && choices.length > 0}
+      />
+      {open && choices.length > 0 && (
+        <ul
+          className="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
+          role="listbox"
+        >
+          {choices.map((mapName) => (
+            <li key={mapName}>
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onChange(mapName); setOpen(false); inputRef.current?.focus() }}
+              >
+                {mapName}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 

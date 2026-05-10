@@ -263,7 +263,7 @@ function MatchTypeAutocomplete({
           onChange(e.target.value)
           setOpenList(true)
         }}
-        onFocus={() => { if (!value.trim()) return; setOpenList(true) }}
+        onFocus={() => setOpenList(true)}
         onKeyDown={handleKeyDown}
         autoComplete="off"
         className="bg-input border-border"
@@ -321,7 +321,7 @@ function MapAutocomplete({
 
   const choices = useMemo(() => {
     const q = value.trim().toLowerCase()
-    if (!q) return []
+    if (!q) return knownMaps
     return knownMaps.filter((m) => m.toLowerCase().includes(q))
   }, [knownMaps, value])
 
@@ -390,9 +390,7 @@ function MapAutocomplete({
           onChange(e.target.value)
           setOpenList(true)
         }}
-        onFocus={() => {
-          if (value.trim()) setOpenList(true)
-        }}
+        onFocus={() => setOpenList(true)}
         onKeyDown={handleKeyDown}
         autoComplete="off"
         className="bg-input border-border"

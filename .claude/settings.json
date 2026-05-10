@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git -C /d/project/TuFelo log --all --full-history --source --oneline -- supabase_migration*.sql)"
+      "Bash(git -C /d/project/TuFelo log --all --full-history --source --oneline -- supabase_migration*.sql)",
+      "Bash(xargs grep -l \"matches\")"
     ]
   }
 }
