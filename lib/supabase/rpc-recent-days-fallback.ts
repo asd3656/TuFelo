@@ -6,7 +6,7 @@ type RpcResponse<T> = {
 }
 
 type RpcClientLike = {
-  rpc<T>(fn: string, args?: Record<string, unknown> | null): Promise<RpcResponse<T>>
+  rpc<T>(fn: string, args?: Record<string, unknown> | null): PromiseLike<RpcResponse<T>>
 }
 
 function shouldRetryWithoutRecentDays(functionName: string, error: RpcErrorLike): boolean {

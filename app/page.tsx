@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import { DashboardPage } from "@/components/dashboard-page"
-import { fetchInitialDashboardData, fetchCurrentSeasonMeta } from "@/lib/data/matches"
+import { fetchInitialDashboardData, fetchCurrentSeasonMeta, fetchAllSeasonsMatchTypeMaps } from "@/lib/data/matches"
 import { fetchMembers } from "@/lib/data/members"
 import { fetchSeasons } from "@/lib/data/seasons"
 import { fetchSiteHeaderData } from "@/lib/data/site-header"
@@ -14,9 +14,10 @@ export default async function HomePage() {
   const activeMembers = members.filter((m) => m.isActive)
   const currentSeason = seasons.find((s) => s.endDate === null) ?? null
 
-  const [dashboardData, currentSeasonMeta] = await Promise.all([
+  const [dashboardData, currentSeasonMeta, seasonMatchTypesMap] = await Promise.all([
     fetchInitialDashboardData(members),
     currentSeason ? fetchCurrentSeasonMeta(currentSeason.id) : null,
+    fetchAllSeasonsMatchTypeMaps(),
   ])
 
   const currentSeasonMaps = currentSeasonMeta?.maps ?? dashboardData.knownMaps
@@ -46,6 +47,7 @@ export default async function HomePage() {
         adminUsernames={headerData.adminUsernames}
         seasons={seasons}
         currentSeason={currentSeason}
+        seasonMatchTypesMap={seasonMatchTypesMap}
       />
     </Suspense>
   )

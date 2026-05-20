@@ -166,6 +166,30 @@ export async function fetchCurrentSeasonMeta(seasonId: string): Promise<{
 }
 
 /**
+ * 전체 시즌별 경기 유형 목록. 시즌 필터 선택에 따라 경기 유형 드롭다운을 동적으로 구성할 때 사용.
+ * season_id(UUID) → matchTypes[] 형태로 반환. S1/S2 가상 ID는 포함하지 않음.
+ */
+export async function fetchAllSeasonsMatchTypeMaps(): Promise<Record<string, string[]>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("matches")
+    .select("season_id, match_type")
+    .not("season_id", "is", null)
+    .not("match_type", "is", null)
+    .limit(50000)
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as { season_id: string; match_type: string }[]
+  const map: Record<string, Set<string>> = {}
+  for (const row of rows) {
+    if (!map[row.season_id]) map[row.season_id] = new Set()
+    map[row.season_id].add(row.match_type)
+  }
+  return Object.fromEntries(
+    Object.entries(map).map(([id, types]) => [id, Array.from(types).sort()]),
+  )
+}
+
+/**
  * 랭킹 페이지용: 멤버 원본 + 현재 시즌 경기 + 시즌 목록 + 과거 시즌 스냅샷 반환.
  */
 export async function fetchRankingData(): Promise<{

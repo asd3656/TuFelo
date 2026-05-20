@@ -77,6 +77,7 @@ interface DashboardPageProps {
   currentSeason?: Season | null
   currentSeasonMaps?: string[]
   currentSeasonMatchTypes?: string[]
+  seasonMatchTypesMap?: Record<string, string[]>
 }
 
 interface WeeklyBestEntry {
@@ -161,6 +162,7 @@ export function DashboardPage({
   currentSeason = null,
   currentSeasonMaps,
   currentSeasonMatchTypes,
+  seasonMatchTypesMap = {},
 }: DashboardPageProps) {
   const router = useRouter()
   const urlSearchParams = useSearchParams()
@@ -248,6 +250,22 @@ export function DashboardPage({
       f.player1Tiers.length > 0
     )
   }, [filters])
+
+  /** 시즌 필터 선택에 따라 경기 유형 드롭다운에 표시할 목록을 동적으로 결정 */
+  const availableMatchTypes = useMemo(() => {
+    if (filters.seasonIds.length === 0) return knownMatchTypes
+    const result = new Set<string>()
+    for (const id of filters.seasonIds) {
+      if (id === SEASON_FILTER_TFPL_S1) {
+        result.add("TFPL_S1")
+      } else if (id === SEASON_FILTER_TFPL_S2) {
+        result.add("TFPL_S2")
+      } else {
+        for (const t of seasonMatchTypesMap[id] ?? []) result.add(t)
+      }
+    }
+    return result.size > 0 ? Array.from(result).sort() : knownMatchTypes
+  }, [filters.seasonIds, knownMatchTypes, seasonMatchTypesMap])
 
   function handleResetAllFilters() {
     resetFilters()
@@ -531,7 +549,7 @@ export function DashboardPage({
                       <SheetTitle>경기 유형 선택</SheetTitle>
                     </SheetHeader>
                     <div className="grid gap-1 px-1 pb-6">
-                      {(currentSeasonMatchTypes ?? knownMatchTypes).map((type) => (
+                      {availableMatchTypes.map((type) => (
                         <label
                           key={type}
                           className="flex cursor-pointer items-center gap-3 rounded-md px-3 py-2.5 text-left hover:bg-accent/60"
@@ -583,7 +601,7 @@ export function DashboardPage({
                   <DropdownMenuContent align="start" className="w-64">
                     <DropdownMenuLabel>경기 유형 선택</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    {(currentSeasonMatchTypes ?? knownMatchTypes).map((type) => {
+                    {availableMatchTypes.map((type) => {
                       const checked = filters.matchTypes.includes(type)
                       return (
                         <DropdownMenuCheckboxItem
