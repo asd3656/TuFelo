@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import type { Match, Race, Tier } from "@/lib/types/tufelo"
 import {
   Table,
@@ -289,9 +290,14 @@ export function MatchHistory({
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
                       {leftWon && <WinnerTrophyMark />}
-                      <span className={leftWon ? winnerNameClass : loserNameClass}>
+                      <Link
+                        href={`/data-center?player=${encodeURIComponent(leftName)}&players=on`}
+                        prefetch={false}
+                        className={`hover:underline underline-offset-2 ${leftWon ? winnerNameClass : loserNameClass}`}
+                        title={`${leftName} 데이터센터에서 보기`}
+                      >
                         {leftName}
-                      </span>
+                      </Link>
                       <TierBadge tier={leftTier} />
                     </span>
                   </TableCell>
@@ -320,9 +326,14 @@ export function MatchHistory({
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
                       {!leftWon && <WinnerTrophyMark />}
-                      <span className={!leftWon ? winnerNameClass : loserNameClass}>
+                      <Link
+                        href={`/data-center?player=${encodeURIComponent(rightName)}&players=on`}
+                        prefetch={false}
+                        className={`hover:underline underline-offset-2 ${!leftWon ? winnerNameClass : loserNameClass}`}
+                        title={`${rightName} 데이터센터에서 보기`}
+                      >
                         {rightName}
-                      </span>
+                      </Link>
                       <TierBadge tier={rightTier} />
                     </span>
                   </TableCell>
