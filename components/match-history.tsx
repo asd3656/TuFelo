@@ -28,6 +28,8 @@ interface MatchHistoryProps {
   onEditMatch?: (match: Match) => void
   editPending?: boolean
   onBulkDelete?: (matchIds: string[]) => void
+  /** 선수 닉네임 클릭 시 호출 — 지정 시 Link 대신 버튼으로 동작 */
+  onPlayerClick?: (playerName: string) => void
 }
 
 const raceColors: Record<string, string> = {
@@ -122,6 +124,7 @@ export function MatchHistory({
   onEditMatch,
   editPending = false,
   onBulkDelete,
+  onPlayerClick,
 }: MatchHistoryProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -290,14 +293,25 @@ export function MatchHistory({
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
                       {leftWon && <WinnerTrophyMark />}
-                      <Link
-                        href={`/data-center?player=${encodeURIComponent(leftName)}&players=on`}
-                        prefetch={false}
-                        className={`hover:underline underline-offset-2 ${leftWon ? winnerNameClass : loserNameClass}`}
-                        title={`${leftName} 데이터센터에서 보기`}
-                      >
-                        {leftName}
-                      </Link>
+                      {onPlayerClick ? (
+                        <button
+                          type="button"
+                          className={`hover:underline underline-offset-2 cursor-pointer ${leftWon ? winnerNameClass : loserNameClass}`}
+                          title={`${leftName} 전적 기록에서 보기`}
+                          onClick={() => onPlayerClick(leftName)}
+                        >
+                          {leftName}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/?player=${encodeURIComponent(leftName)}#match-history`}
+                          prefetch={false}
+                          className={`hover:underline underline-offset-2 ${leftWon ? winnerNameClass : loserNameClass}`}
+                          title={`${leftName} 전적 기록에서 보기`}
+                        >
+                          {leftName}
+                        </Link>
+                      )}
                       <TierBadge tier={leftTier} />
                     </span>
                   </TableCell>
@@ -326,14 +340,25 @@ export function MatchHistory({
                   <TableCell>
                     <span className="inline-flex items-center gap-2 flex-wrap">
                       {!leftWon && <WinnerTrophyMark />}
-                      <Link
-                        href={`/data-center?player=${encodeURIComponent(rightName)}&players=on`}
-                        prefetch={false}
-                        className={`hover:underline underline-offset-2 ${!leftWon ? winnerNameClass : loserNameClass}`}
-                        title={`${rightName} 데이터센터에서 보기`}
-                      >
-                        {rightName}
-                      </Link>
+                      {onPlayerClick ? (
+                        <button
+                          type="button"
+                          className={`hover:underline underline-offset-2 cursor-pointer ${!leftWon ? winnerNameClass : loserNameClass}`}
+                          title={`${rightName} 전적 기록에서 보기`}
+                          onClick={() => onPlayerClick(rightName)}
+                        >
+                          {rightName}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/?player=${encodeURIComponent(rightName)}#match-history`}
+                          prefetch={false}
+                          className={`hover:underline underline-offset-2 ${!leftWon ? winnerNameClass : loserNameClass}`}
+                          title={`${rightName} 전적 기록에서 보기`}
+                        >
+                          {rightName}
+                        </Link>
+                      )}
                       <TierBadge tier={rightTier} />
                     </span>
                   </TableCell>

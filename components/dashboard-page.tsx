@@ -1162,6 +1162,7 @@ export function DashboardPage({
               onEditMatch={(match) => setEditingMatch(match)}
               editPending={isEditPending}
               onBulkDelete={handleBulkDelete}
+              onPlayerClick={setPlayer1}
             />
           </div>
 

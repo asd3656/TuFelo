@@ -370,11 +370,11 @@ export function RankingPageClient({
                       </TableCell>
                       <TableCell>
                         <Link
-                          href={`/?player=${encodeURIComponent(player.name)}#match-history`}
+                          href={`/data-center?player=${encodeURIComponent(player.name)}&players=on`}
                           className={`font-semibold hover:underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm ${
                             isTierFirst ? "text-orange-600 dark:text-orange-400" : "text-foreground"
                           }`}
-                          title="전적 기록에서 이 선수로 검색"
+                          title="데이터센터에서 이 선수 보기"
                         >
                           {player.name}
                         </Link>
