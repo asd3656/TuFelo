@@ -2102,6 +2102,15 @@ export function DataCenterPageClient({
                   <CardTitle className="flex items-center gap-2 text-base">
                     {icon}
                     {title}
+                    {title === "선수2" && player2Queries.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPlayer2Queries([])}
+                        className="ml-auto rounded border border-border px-2 py-0.5 text-xs font-normal text-muted-foreground hover:border-foreground/40 hover:bg-muted hover:text-foreground"
+                      >
+                        초기화
+                      </button>
+                    )}
                   </CardTitle>
                   <CardDescription>
                     {data.member ? (
