@@ -237,7 +237,7 @@ type SummaryResponse = {
 }
 
 type DetailResponse = {
-  recent20Matches?: Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
+  recent20Matches?: Array<{ id: string; mapName: string; mapShort: string; isWin: boolean; opponentName?: string; opponentRace?: Race }>
   recent20Summary?: { games: number; wins: number; losses: number; winRate: number }
   recent20MapWins?: Array<{ mapName: string; games: number; wins: number; losses: number; winRate: number }>
   versusEloTrend?: Array<{ weekLabel: string; p1Elo: number | null; p2Elo?: number | null }>
@@ -494,6 +494,7 @@ export function DataCenterPageClient({
   const [mapMenuOpen, setMapMenuOpen] = useState(false)
   const [matchTypeMenuOpen, setMatchTypeMenuOpen] = useState(false)
   const [player2MenuOpen, setPlayer2MenuOpen] = useState(false)
+  const [selectedRecent20Id, setSelectedRecent20Id] = useState<string | null>(null)
   const [player1AutocompleteOpen, setPlayer1AutocompleteOpen] = useState(false)
   const [player1AutocompleteActiveIndex, setPlayer1AutocompleteActiveIndex] = useState(-1)
   const [mapChartSort, setMapChartSort] = useState<"gamesDesc" | "winRateDesc">("gamesDesc")
@@ -621,23 +622,32 @@ export function DataCenterPageClient({
     return rows
   }, [seasonFilteredMatches])
 
-  /** 시즌 필터를 적용한 상태에서 선수1과 실제로 경기한 상대 목록(경기 수 내림차순) */
+  /** 시즌·맵·경기유형·종족·티어·기간 필터를 모두 적용한 상태에서 선수1과 경기한 상대 목록(경기 수 내림차순) */
   const player2Options = useMemo(() => {
     if (!playerFilterEnabled || matchedPlayerIds.size === 0) return [] as { name: string; games: number }[]
     const counter = new Map<string, number>()
     for (const match of seasonFilteredMatches) {
+      if (mapNames.length > 0 && !mapNames.includes(match.mapName)) continue
+      if (matchTypes.length > 0 && !matchTypes.includes(match.matchType)) continue
+      if (recentDays > 0) {
+        const cutoff = startOfDay(subDays(new Date(), recentDays - 1))
+        const playedAt = parseISO(match.playedDate)
+        if (Number.isNaN(playedAt.getTime()) || playedAt < cutoff) continue
+      }
       const p1IsAnchor = matchedPlayerIds.has(match.player1Id)
       const p2IsAnchor = matchedPlayerIds.has(match.player2Id)
       if (!p1IsAnchor && !p2IsAnchor) continue
       const opponentId = p1IsAnchor ? match.player2Id : match.player1Id
       const opponent = memberById.get(opponentId)
       if (!opponent) continue
+      if (races.length > 0 && !races.includes(opponent.race)) continue
+      if (tiers.length > 0 && (opponent.tier === null || opponent.tier === undefined || !tiers.includes(String(opponent.tier)))) continue
       counter.set(opponent.name, (counter.get(opponent.name) ?? 0) + 1)
     }
     return [...counter.entries()]
       .map(([name, games]) => ({ name, games }))
       .sort((a, b) => (b.games - a.games) || a.name.localeCompare(b.name, "ko"))
-  }, [playerFilterEnabled, matchedPlayerIds, seasonFilteredMatches, memberById])
+  }, [playerFilterEnabled, matchedPlayerIds, seasonFilteredMatches, memberById, mapNames, matchTypes, races, tiers, recentDays])
 
   const player1AutocompleteOptions = useMemo(() => {
     const q = playerQuery.trim().toLowerCase()
@@ -1687,25 +1697,29 @@ export function DataCenterPageClient({
   }, [hasResolvedPlayer1, seasonFilteredMatches, members])
 
   const localPlayerRecent20Matches = useMemo(() => {
-    if (!hasResolvedPlayer1) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean }>
+    if (!hasResolvedPlayer1) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean; opponentName?: string; opponentRace?: Race }>
     const rows = filteredMatches
       .map((match) => {
         const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
         if (!anchorId) return null
         const mapName = match.mapName?.trim() || "미상"
+        const opponentId = anchorId === match.player1Id ? match.player2Id : match.player1Id
+        const opponent = memberById.get(opponentId)
         return {
           id: match.id,
           playedDate: match.playedDate,
           mapName,
           mapShort: mapName.slice(0, 2),
           isWin: match.winnerId === anchorId,
+          opponentName: opponent?.name,
+          opponentRace: opponent?.race,
         }
       })
       .filter((row): row is NonNullable<typeof row> => row !== null)
       .sort((a, b) => b.playedDate.localeCompare(a.playedDate) || b.id.localeCompare(a.id))
       .slice(0, 20)
-    return rows.map(({ id, mapName, mapShort, isWin }) => ({ id, mapName, mapShort, isWin }))
-  }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds])
+    return rows.map(({ id, mapName, mapShort, isWin, opponentName, opponentRace }) => ({ id, mapName, mapShort, isWin, opponentName, opponentRace }))
+  }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds, memberById])
 
   const localPlayerRecent20Summary = useMemo(() => {
     const games = localPlayerRecent20Matches.length
@@ -2305,26 +2319,61 @@ export function DataCenterPageClient({
                     <p className="mb-2 text-xs text-muted-foreground">최근 20경기 시트 (승=초록 / 패=빨강)</p>
                     <div className="grid grid-cols-10 gap-1.5">
                       {Array.from({ length: 20 }, (_, idx) => {
-                        const row = playerRecent20Matches[idx]
+                        const row = localPlayerRecent20Matches[idx]
                         if (!row) {
                           return <div key={`empty-${idx}`} className="h-8 rounded-md border border-border/50 bg-muted/40" />
                         }
+                        const isSelected = selectedRecent20Id === row.id
                         return (
                           <div
                             key={row.id}
+                            onClick={() => setSelectedRecent20Id(isSelected ? null : row.id)}
                             className={cn(
-                              "flex h-8 items-center justify-center rounded-md border text-[11px] font-semibold",
+                              "flex h-8 cursor-pointer items-center justify-center rounded-md border text-[11px] font-semibold transition-all",
                               row.isWin
                                 ? "border-emerald-300 bg-emerald-100 text-emerald-700 dark:border-emerald-400/60 dark:bg-emerald-500/20 dark:text-emerald-300"
                                 : "border-rose-300 bg-rose-100 text-rose-700 dark:border-rose-400/60 dark:bg-rose-500/20 dark:text-rose-300",
+                              isSelected && "ring-2 ring-offset-1 ring-foreground/60 dark:ring-offset-background",
                             )}
-                            title={`${row.mapName} · ${row.isWin ? "승" : "패"}`}
                           >
                             {row.mapShort}
                           </div>
                         )
                       })}
                     </div>
+                    {(() => {
+                      const sel = selectedRecent20Id ? localPlayerRecent20Matches.find((m) => m.id === selectedRecent20Id) : null
+                      if (!sel) return <div className="mt-3 h-[52px]" />
+                      const oppMember = sel.opponentName ? members.find((m) => m.name === sel.opponentName) : null
+                      return (
+                        <div className="mt-3 flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+                          <span className={cn(
+                            "shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold",
+                            sel.isWin
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                              : "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300",
+                          )}>
+                            {sel.isWin ? "승" : "패"}
+                          </span>
+                          <span className="text-muted-foreground">{sel.mapName}</span>
+                          <span className="text-muted-foreground">vs</span>
+                          <span
+                            className={cn("font-semibold text-foreground", sel.opponentName && "cursor-pointer underline-offset-2 hover:underline")}
+                            onClick={() => { if (sel.opponentName) setPlayer2Queries([sel.opponentName]) }}
+                          >{sel.opponentName ?? "알 수 없음"}</span>
+                          {sel.opponentRace && (
+                            <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-semibold", raceTagClasses[sel.opponentRace])}>
+                              {raceNames[sel.opponentRace]}
+                            </span>
+                          )}
+                          {oppMember?.tier != null && (
+                            <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-semibold", tierTagClasses[oppMember.tier])}>
+                              티어 {oppMember.tier}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   <div>
