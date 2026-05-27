@@ -589,7 +589,7 @@ export function DashboardPage({
                       type="button"
                       variant="outline"
                       className="w-full justify-between bg-input border-border text-foreground font-normal"
-                      onMouseEnter={() => setMatchTypeFilterOpen(true)}
+
                     >
                       {filters.matchTypes.length === 0
                         ? "전체 경기 유형"
@@ -614,6 +614,7 @@ export function DashboardPage({
                               : filters.matchTypes.filter((v) => v !== type)
                             setMatchTypes(next)
                           }}
+                          className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
                         >
                           {type}
                         </DropdownMenuCheckboxItem>
@@ -622,7 +623,7 @@ export function DashboardPage({
                     <DropdownMenuSeparator />
                     <button
                       type="button"
-                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                       onClick={() => {
                         setMatchTypes([])
                         setMatchTypeFilterOpen(false)
@@ -749,6 +750,7 @@ export function DashboardPage({
                           : filters.seasonIds.filter((v) => v !== SEASON_FILTER_TFPL_S1)
                         setSeasonIds(next)
                       }}
+                      className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
                     >
                       시즌1
                     </DropdownMenuCheckboxItem>
@@ -761,6 +763,7 @@ export function DashboardPage({
                           : filters.seasonIds.filter((v) => v !== SEASON_FILTER_TFPL_S2)
                         setSeasonIds(next)
                       }}
+                      className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
                     >
                       시즌2
                     </DropdownMenuCheckboxItem>
@@ -777,6 +780,7 @@ export function DashboardPage({
                               : filters.seasonIds.filter((v) => v !== s.id)
                             setSeasonIds(next)
                           }}
+                          className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
                         >
                           {s.name}{s.endDate === null ? " (현재)" : ""}
                         </DropdownMenuCheckboxItem>
@@ -785,7 +789,7 @@ export function DashboardPage({
                     <DropdownMenuSeparator />
                     <button
                       type="button"
-                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                       onClick={() => {
                         setSeasonIds([])
                         setSeasonFilterOpen(false)
@@ -885,6 +889,7 @@ export function DashboardPage({
                               : filters.player1Tiers.filter((v) => v !== tier)
                             setPlayer1Tiers(next)
                           }}
+                          className="text-foreground hover:text-foreground focus:text-foreground data-[highlighted]:text-foreground dark:hover:text-foreground dark:focus:text-foreground dark:data-[highlighted]:text-foreground"
                         >
                           {tier}티어
                         </DropdownMenuCheckboxItem>
@@ -893,7 +898,7 @@ export function DashboardPage({
                     <DropdownMenuSeparator />
                     <button
                       type="button"
-                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                      className="w-full rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
                       onClick={() => {
                         setPlayer1Tiers([])
                         setTierFilterOpen(false)
