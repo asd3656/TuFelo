@@ -98,9 +98,10 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
   // startDate 이후 모든 경기 (시간순)
   const { data: matches, error: matchesErr } = await supabase
     .from("matches")
-    .select("id, player1_id, player2_id, winner_id, map_name, played_date, created_at")
+    .select("id, player1_id, player2_id, winner_id, map_name, played_date, played_at, created_at")
     .gte("played_date", startDate)
     .order("played_date", { ascending: true })
+    .order("played_at", { ascending: true, nullsLast: true })
     .order("created_at", { ascending: true })
   if (matchesErr) throw new Error(`경기 조회 실패: ${matchesErr.message}`)
 
@@ -111,6 +112,7 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     winner_id: string
     map_name: string
     played_date: string
+    played_at: string | null
     created_at: string
   }>
 

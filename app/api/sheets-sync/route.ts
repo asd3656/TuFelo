@@ -82,6 +82,10 @@ export async function POST(req: NextRequest) {
     const isPlayer1Winner = player1Result === "승"
     const winnerId = isPlayer1Winner ? (m1.id as string) : (m2.id as string)
 
+    const playedAt = playedDateRaw
+      ? new Date(playedDateRaw.replace(" ", "T") + "+09:00").toISOString()
+      : null
+
     // 4. 활성 시즌 확인 — 경기 입력 시점 날짜 기준 (없으면 승인 시점 사용)
     const today = playedDateRaw
       ? playedDateRaw.slice(0, 10) // "yyyy-MM-dd HH:mm:ss" → "yyyy-MM-dd"
@@ -124,6 +128,7 @@ export async function POST(req: NextRequest) {
           player2_elo_before: elo2,
           player1_elo_delta: delta1,
           player2_elo_delta: delta2,
+          played_at: playedAt,
         })
         .select("id")
         .single()
@@ -179,6 +184,7 @@ export async function POST(req: NextRequest) {
           player2_elo_before: null,
           player1_elo_delta: null,
           player2_elo_delta: null,
+          played_at: playedAt,
         })
         .select("id")
         .single()
@@ -225,6 +231,7 @@ export async function POST(req: NextRequest) {
         player2_elo_before: null,
         player1_elo_delta: null,
         player2_elo_delta: null,
+        played_at: playedAt,
       })
 
       if (insErr)

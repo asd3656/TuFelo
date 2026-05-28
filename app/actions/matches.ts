@@ -74,6 +74,7 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
   const isTeamPlay = input.mapName.includes("팀플")
 
   const userIp = await getClientIp()
+  const playedAt = new Date().toISOString()
 
   if (isSeasonMatch && !isTeamPlay) {
     // ─ 시즌 경기: ELO 계산 + 선수 스탯 업데이트
@@ -103,6 +104,7 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
         player2_elo_before: elo2,
         player1_elo_delta: winnerDelta,
         player2_elo_delta: loserDelta,
+        played_at: playedAt,
         ...(userIp ? { user_ip: userIp } : {}),
       })
       .select("id")
@@ -150,6 +152,7 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
         player2_elo_before: null,
         player1_elo_delta: null,
         player2_elo_delta: null,
+        played_at: playedAt,
         ...(userIp ? { user_ip: userIp } : {}),
       })
       .select("id")
@@ -189,6 +192,7 @@ export async function registerMatchAction(input: RegisterMatchInput): Promise<Ac
         player2_elo_before: null,
         player1_elo_delta: null,
         player2_elo_delta: null,
+        played_at: playedAt,
         ...(userIp ? { user_ip: userIp } : {}),
       })
 

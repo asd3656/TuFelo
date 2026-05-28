@@ -109,6 +109,7 @@ export async function fetchInitialDashboardData(
         { count: "exact" },
       )
       .order("played_date", { ascending: false })
+      .order("played_at", { ascending: false, nullsLast: true })
       .order("created_at", { ascending: false })
       .range(0, DASHBOARD_PAGE_SIZE - 1),
     fetchDistinctMatchMeta(supabase),
@@ -219,9 +220,10 @@ export async function fetchRankingData(): Promise<{
     activeSeasonId
       ? supabase
           .from("matches")
-          .select("id, player1_id, player2_id, winner_id, match_type, player1_elo_delta, player2_elo_delta, played_date, created_at, season_id")
+          .select("id, player1_id, player2_id, winner_id, match_type, player1_elo_delta, player2_elo_delta, played_date, played_at, created_at, season_id")
           .eq("season_id", activeSeasonId)
           .order("played_date", { ascending: false })
+          .order("played_at", { ascending: false, nullsLast: true })
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
     fetchSeasons(),
