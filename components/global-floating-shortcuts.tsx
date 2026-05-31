@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { BookOpen, Coffee, FileSpreadsheet, Megaphone, Plus, Vote, X, type LucideIcon, AlertTriangle } from "lucide-react"
+import { BookOpen, Coffee, FileSpreadsheet, Globe, Megaphone, Plus, Vote, X, type LucideIcon, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { NoticeSuggestionDialog } from "@/components/notice-suggestion-dialog"
@@ -61,6 +61,14 @@ const FAB_ITEMS: FabItemDef[] = [
     iconRingClass: "bg-violet-600 hover:bg-violet-700",
     kind: "external",
     href: "https://tufpl.vercel.app/",
+  },
+  {
+    id: "homepage",
+    label: "홈페이지",
+    icon: Globe,
+    iconRingClass: "bg-blue-600 hover:bg-blue-700",
+    kind: "external",
+    href: "https://tufclan.com",
   },
   {
     id: "manual",
