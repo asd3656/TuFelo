@@ -23,7 +23,7 @@ export async function computeStreakForMember(
     .select("player1_id, player2_id, winner_id, played_date, created_at")
     .or(`player1_id.eq.${memberId},player2_id.eq.${memberId}`)
     .order("played_date", { ascending: false })
-    .order("played_at", { ascending: false, nullsLast: true })
+    .order("played_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
 
   if (seasonId !== undefined) {

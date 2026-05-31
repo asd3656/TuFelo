@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
         { count: "exact" },
       )
       .order("played_date", { ascending: false })
-      .order("played_at", { ascending: false, nullsLast: true })
+      .order("played_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(from, to)
 

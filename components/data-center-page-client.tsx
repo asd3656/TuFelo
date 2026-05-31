@@ -1697,7 +1697,7 @@ export function DataCenterPageClient({
   }, [hasResolvedPlayer1, seasonFilteredMatches, members])
 
   const localPlayerRecent20Matches = useMemo(() => {
-    if (!hasResolvedPlayer1) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean; opponentName?: string; opponentRace?: Race }>
+    if (!hasResolvedPlayer1) return [] as Array<{ id: string; mapName: string; mapShort: string; isWin: boolean; opponentName?: string; opponentRace?: Race; playedDate: string; matchType: string }>
     const rows = filteredMatches
       .map((match) => {
         const anchorId = anchorPlayerIdFromMatch(match, matchedPlayerIds)
@@ -1708,6 +1708,7 @@ export function DataCenterPageClient({
         return {
           id: match.id,
           playedDate: match.playedDate,
+          matchType: match.matchType,
           mapName,
           mapShort: mapName.slice(0, 2),
           isWin: match.winnerId === anchorId,
@@ -1718,7 +1719,7 @@ export function DataCenterPageClient({
       .filter((row): row is NonNullable<typeof row> => row !== null)
       .sort((a, b) => b.playedDate.localeCompare(a.playedDate) || b.id.localeCompare(a.id))
       .slice(0, 20)
-    return rows.map(({ id, mapName, mapShort, isWin, opponentName, opponentRace }) => ({ id, mapName, mapShort, isWin, opponentName, opponentRace }))
+    return rows.map(({ id, mapName, mapShort, isWin, opponentName, opponentRace, playedDate, matchType }) => ({ id, mapName, mapShort, isWin, opponentName, opponentRace, playedDate, matchType }))
   }, [hasResolvedPlayer1, filteredMatches, matchedPlayerIds, memberById])
 
   const localPlayerRecent20Summary = useMemo(() => {
@@ -2354,8 +2355,11 @@ export function DataCenterPageClient({
                       const sel = selectedRecent20Id ? localPlayerRecent20Matches.find((m) => m.id === selectedRecent20Id) : null
                       if (!sel) return <div className="mt-3 h-[52px]" />
                       const oppMember = sel.opponentName ? members.find((m) => m.name === sel.opponentName) : null
+                      const playedDateStr = (() => {
+                        try { return format(parseISO(sel.playedDate), "yy.M.d") } catch { return "" }
+                      })()
                       return (
-                        <div className="mt-3 flex items-center gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
                           <span className={cn(
                             "shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold",
                             sel.isWin
@@ -2379,6 +2383,14 @@ export function DataCenterPageClient({
                             <span className={cn("rounded border px-1.5 py-0.5 text-[11px] font-semibold", tierTagClasses[oppMember.tier])}>
                               티어 {oppMember.tier}
                             </span>
+                          )}
+                          {sel.matchType && (
+                            <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                              {sel.matchType}
+                            </span>
+                          )}
+                          {playedDateStr && (
+                            <span className="text-[11px] text-muted-foreground">{playedDateStr}</span>
                           )}
                         </div>
                       )

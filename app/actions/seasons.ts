@@ -101,7 +101,7 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     .select("id, player1_id, player2_id, winner_id, map_name, played_date, played_at, created_at")
     .gte("played_date", startDate)
     .order("played_date", { ascending: true })
-    .order("played_at", { ascending: true, nullsLast: true })
+    .order("played_at", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: true })
   if (matchesErr) throw new Error(`경기 조회 실패: ${matchesErr.message}`)
 
