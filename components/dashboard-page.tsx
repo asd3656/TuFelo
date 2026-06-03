@@ -209,7 +209,9 @@ export function DashboardPage({
   const [isWeeklyLoading, setIsWeeklyLoading] = useState(false)
 
   const matchHistorySectionRef = useRef<HTMLElement | null>(null)
-  const scrolledForPlayerQueryRef = useRef(false)
+  const scrolledForPlayerQueryRef = useRef(
+    !((urlSearchParams.get("player") ?? urlSearchParams.get("player1")) ?? "").trim()
+  )
   const isMobile = useIsMobile()
 
   const scrollMatchHistoryIntoView = useCallback(() => {
