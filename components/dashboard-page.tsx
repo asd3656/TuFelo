@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { PlayerSearch } from "@/components/player-search"
+import { ElementCaptureButton } from "@/components/element-capture-button"
 import { MatchHistory } from "@/components/match-history"
 import { RegisterMatchDialog } from "@/components/register-match-dialog"
 import { EditMatchDialog } from "@/components/edit-match-dialog"
 import { SiteHeader } from "@/components/site-header"
-import { ShareFilterUrlButton } from "@/components/share-filter-url-button"
+import { filterActionButtonClassName, ShareFilterUrlButton } from "@/components/share-filter-url-button"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -45,6 +46,7 @@ import {
 } from "@/components/ui/sheet"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
+  Filter,
   Plus,
   Trophy,
   Loader2,
@@ -133,6 +135,28 @@ function weeklyRankCardClass(rank: number): string {
 const SEASON_FILTER_TFPL_S1 = "__tfpl_s1__"
 const SEASON_FILTER_TFPL_S2 = "__tfpl_s2__"
 
+function resolvePlayerDisplayName(
+  members: ClanMember[],
+  query: string,
+  memberIds: string[],
+): string {
+  const trimmed = query.trim()
+  if (!trimmed) return ""
+
+  const matchedMembers = memberIds
+    .map((id) => members.find((member) => member.id === id))
+    .filter((member): member is ClanMember => Boolean(member))
+
+  if (matchedMembers.length === 1) return matchedMembers[0].name
+
+  const q = trimmed.toLowerCase()
+  const exactMember = matchedMembers.find((member) => {
+    const normalizedName = member.name.trim().toLowerCase()
+    return normalizedName === q || member.id.toLowerCase() === q
+  })
+  return exactMember?.name ?? trimmed
+}
+
 function labelForSeasonFilterChoice(seasonId: string, seasons: Season[]): string {
   if (seasonId === SEASON_FILTER_TFPL_S1) return "시즌1"
   if (seasonId === SEASON_FILTER_TFPL_S2) return "시즌2"
@@ -210,10 +234,15 @@ export function DashboardPage({
   const [isWeeklyLoading, setIsWeeklyLoading] = useState(false)
 
   const matchHistorySectionRef = useRef<HTMLElement | null>(null)
+  const matchHistoryCaptureRef = useRef<HTMLDivElement>(null)
   const scrolledForPlayerQueryRef = useRef(
     !((urlSearchParams.get("player") ?? urlSearchParams.get("player1")) ?? "").trim()
   )
   const isMobile = useIsMobile()
+
+  const resolveMatchHistoryCaptureTarget = useCallback(async () => {
+    return matchHistoryCaptureRef.current
+  }, [])
 
   const scrollMatchHistoryIntoView = useCallback(() => {
     requestAnimationFrame(() => {
@@ -282,23 +311,44 @@ export function DashboardPage({
     if (!filters.player1.trim()) return [] as string[]
     return resolveMemberIdsByPlayerQuery(members, filters.player1)
   }, [filters.player1, members])
-  const baselinePlayerDisplayName = useMemo(() => {
-    const query = filters.player1.trim()
-    if (!query) return ""
+  const baselinePlayerDisplayName = useMemo(
+    () => resolvePlayerDisplayName(members, filters.player1, baselinePlayerIds),
+    [baselinePlayerIds, filters.player1, members],
+  )
 
-    const matchedMembers = baselinePlayerIds
-      .map((id) => members.find((member) => member.id === id))
-      .filter((member): member is ClanMember => Boolean(member))
+  const opponentPlayerIds = useMemo(() => {
+    if (!filters.player2.trim()) return [] as string[]
+    return resolveMemberIdsByPlayerQuery(members, filters.player2)
+  }, [filters.player2, members])
 
-    if (matchedMembers.length === 1) return matchedMembers[0].name
+  const opponentPlayerDisplayName = useMemo(
+    () => resolvePlayerDisplayName(members, filters.player2, opponentPlayerIds),
+    [filters.player2, members, opponentPlayerIds],
+  )
 
-    const q = query.toLowerCase()
-    const exactMember = matchedMembers.find((member) => {
-      const normalizedName = member.name.trim().toLowerCase()
-      return normalizedName === q || member.id.toLowerCase() === q
-    })
-    return exactMember?.name ?? query
-  }, [baselinePlayerIds, filters.player1, members])
+  const matchHistoryDescription = useMemo(() => {
+    const hasPlayer1 = filters.player1.trim().length > 0
+    const hasPlayer2 = filters.player2.trim().length > 0
+
+    if (hasPlayer1 && hasPlayer2) {
+      return `"${baselinePlayerDisplayName} vs ${opponentPlayerDisplayName}"의 경기 기록 (총 ${totalCount}경기)`
+    }
+    if (hasPlayer1) {
+      return `"${baselinePlayerDisplayName}" 선수의 경기 기록 (총 ${totalCount}경기)`
+    }
+    if (totalPages > 1) {
+      return `전체 경기 기록 (${totalCount}경기 · ${currentPage}/${totalPages} 페이지)`
+    }
+    return `전체 경기 기록 (총 ${totalCount}경기)`
+  }, [
+    baselinePlayerDisplayName,
+    currentPage,
+    filters.player1,
+    filters.player2,
+    opponentPlayerDisplayName,
+    totalCount,
+    totalPages,
+  ])
 
   useEffect(() => {
     if (filters.player1.trim().length === 0 && filters.player2.trim().length > 0) {
@@ -476,23 +526,29 @@ export function DashboardPage({
             </div>
           </div>
 
-          <div className="relative mt-6 border-t border-border pt-6">
-            <div className="mb-3 flex justify-end gap-2 xl:absolute xl:top-6 xl:right-0 xl:z-10 xl:mb-0">
-              <ShareFilterUrlButton />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 gap-1.5 text-foreground hover:text-foreground dark:hover:text-foreground"
-                onClick={handleResetAllFilters}
-                disabled={!hasActiveFilters}
-                title={hasActiveFilters ? "모든 검색·필터 조건을 지웁니다" : "적용 중인 필터가 없습니다"}
-              >
-                <RotateCcw className="h-4 w-4" />
-                필터 전체 초기화
-              </Button>
+          <div className="mt-6 border-t border-border pt-6">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+                <Filter className="h-4 w-4" />
+                필터
+              </h3>
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                <ShareFilterUrlButton />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={filterActionButtonClassName}
+                  onClick={handleResetAllFilters}
+                  disabled={!hasActiveFilters}
+                  title={hasActiveFilters ? "모든 검색·필터 조건을 지웁니다" : "적용 중인 필터가 없습니다"}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  필터 전체 초기화
+                </Button>
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 xl:pr-72 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">날짜 필터</Label>
               <div className="flex items-center gap-2">
@@ -1138,41 +1194,44 @@ export function DashboardPage({
           id="match-history"
           className="scroll-mt-4 bg-card rounded-lg border border-border overflow-hidden"
         >
-          <div className="px-4 py-4 sm:px-6 border-b border-border">
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-foreground flex flex-wrap items-center gap-2">
-                전적 기록
-                {isLoadingMatches && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
-                {currentSeason && (
-                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
-                    {currentSeason.name} 진행중 · {currentSeason.startDate.replace(/-/g, ".")} ~
-                  </span>
-                )}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {filters.player1
-                  ? `"${baselinePlayerDisplayName}" 선수의 경기 기록 (총 ${totalCount}경기)`
-                  : totalPages > 1
-                    ? `전체 경기 기록 (${totalCount}경기 · ${currentPage}/${totalPages} 페이지)`
-                    : `전체 경기 기록 (총 ${totalCount}경기)`}
-              </p>
+          <div ref={matchHistoryCaptureRef}>
+            <div className="relative border-b border-border px-4 py-4 sm:px-6">
+              <ElementCaptureButton
+                className="absolute right-4 top-4 z-10 sm:right-6"
+                captureFilename="match-history"
+                resolveCaptureTarget={resolveMatchHistoryCaptureTarget}
+                ariaLabel="전적 기록 캡처"
+                title="전적 기록 캡처 미리보기"
+              />
+              <div className="min-w-0 pr-10">
+                <h2 className="text-lg font-semibold text-foreground flex flex-wrap items-center gap-2">
+                  전적 기록
+                  {isLoadingMatches && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                  {currentSeason && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25">
+                      {currentSeason.name} 진행중 · {currentSeason.startDate.replace(/-/g, ".")} ~
+                    </span>
+                  )}
+                </h2>
+                <p className="text-sm text-muted-foreground">{matchHistoryDescription}</p>
+              </div>
             </div>
-          </div>
 
-          <div className={isLoadingMatches ? "opacity-50 pointer-events-none transition-opacity" : "transition-opacity"}>
-            <MatchHistory
-              matches={matches}
-              rowStartNumber={(currentPage - 1) * PAGE_SIZE + 1}
-              searchPlayer={filters.player1}
-              baselinePlayerIds={baselinePlayerIds}
-              isAdmin={isAdmin}
-              isGuest={isGuest}
-              deletePending={isDeletePending}
-              onEditMatch={(match) => setEditingMatch(match)}
-              editPending={isEditPending}
-              onBulkDelete={handleBulkDelete}
-              onPlayerClick={setPlayer1}
-            />
+            <div className={isLoadingMatches ? "opacity-50 pointer-events-none transition-opacity" : "transition-opacity"}>
+              <MatchHistory
+                matches={matches}
+                rowStartNumber={(currentPage - 1) * PAGE_SIZE + 1}
+                searchPlayer={filters.player1}
+                baselinePlayerIds={baselinePlayerIds}
+                isAdmin={isAdmin}
+                isGuest={isGuest}
+                deletePending={isDeletePending}
+                onEditMatch={(match) => setEditingMatch(match)}
+                editPending={isEditPending}
+                onBulkDelete={handleBulkDelete}
+                onPlayerClick={setPlayer1}
+              />
+            </div>
           </div>
 
           {totalPages > 1 && (

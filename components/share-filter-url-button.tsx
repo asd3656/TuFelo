@@ -6,6 +6,9 @@ import { Share2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+export const filterActionButtonClassName =
+  "shrink-0 gap-1.5 border-border bg-background text-foreground shadow-xs hover:bg-muted/60 hover:text-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 dark:hover:text-foreground"
+
 type ShareFilterUrlButtonProps = {
   className?: string
 }
@@ -28,10 +31,7 @@ export function ShareFilterUrlButton({ className }: ShareFilterUrlButtonProps) {
       type="button"
       variant="outline"
       size="sm"
-      className={cn(
-        "shrink-0 gap-1.5 text-foreground hover:text-foreground dark:hover:text-foreground",
-        className,
-      )}
+      className={cn(filterActionButtonClassName, className)}
       onClick={handleShare}
       title="현재 필터가 적용된 URL을 복사합니다"
     >

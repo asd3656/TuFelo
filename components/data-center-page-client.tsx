@@ -71,7 +71,7 @@ import type { DecorativeBadgeAccent } from "@/lib/decorative-badge-accent"
 import { decorativeBadgeAccentClasses } from "@/lib/decorative-badge-accent"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
 import { ChartCaptureCard } from "@/components/chart-capture-card"
-import { ShareFilterUrlButton } from "@/components/share-filter-url-button"
+import { filterActionButtonClassName, ShareFilterUrlButton } from "@/components/share-filter-url-button"
 import { SiteHeader } from "@/components/site-header"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
@@ -1801,7 +1801,7 @@ export function DataCenterPageClient({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="gap-1.5 text-foreground hover:text-foreground dark:hover:text-foreground"
+                className={filterActionButtonClassName}
                 onClick={resetAllFilters}
               >
                 <RotateCcw className="h-4 w-4" />
