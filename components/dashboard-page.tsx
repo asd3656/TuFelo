@@ -7,6 +7,7 @@ import { MatchHistory } from "@/components/match-history"
 import { RegisterMatchDialog } from "@/components/register-match-dialog"
 import { EditMatchDialog } from "@/components/edit-match-dialog"
 import { SiteHeader } from "@/components/site-header"
+import { ShareFilterUrlButton } from "@/components/share-filter-url-button"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -476,7 +477,8 @@ export function DashboardPage({
           </div>
 
           <div className="relative mt-6 border-t border-border pt-6">
-            <div className="mb-3 flex justify-end xl:absolute xl:top-6 xl:right-0 xl:z-10 xl:mb-0">
+            <div className="mb-3 flex justify-end gap-2 xl:absolute xl:top-6 xl:right-0 xl:z-10 xl:mb-0">
+              <ShareFilterUrlButton />
               <Button
                 type="button"
                 variant="outline"
@@ -490,7 +492,7 @@ export function DashboardPage({
                 <RotateCcw className="h-4 w-4" aria-hidden />
               </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 xl:pr-11 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 xl:pr-44 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">날짜 필터</Label>
               <div className="flex items-center gap-2">
