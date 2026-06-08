@@ -482,17 +482,17 @@ export function DashboardPage({
               <Button
                 type="button"
                 variant="outline"
-                size="icon"
-                className="h-8 w-8 shrink-0 border-border text-muted-foreground hover:bg-secondary hover:text-foreground"
+                size="sm"
+                className="shrink-0 gap-1.5 text-foreground hover:text-foreground dark:hover:text-foreground"
                 onClick={handleResetAllFilters}
                 disabled={!hasActiveFilters}
                 title={hasActiveFilters ? "모든 검색·필터 조건을 지웁니다" : "적용 중인 필터가 없습니다"}
-                aria-label="필터 전체 초기화"
               >
-                <RotateCcw className="h-4 w-4" aria-hidden />
+                <RotateCcw className="h-4 w-4" />
+                필터 전체 초기화
               </Button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 xl:pr-44 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 xl:pr-72 gap-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium text-muted-foreground">날짜 필터</Label>
               <div className="flex items-center gap-2">
