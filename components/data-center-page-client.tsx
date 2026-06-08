@@ -70,6 +70,8 @@ import type { DataCenterMatch, DataCenterMember } from "@/lib/data/data-center"
 import type { DecorativeBadgeAccent } from "@/lib/decorative-badge-accent"
 import { decorativeBadgeAccentClasses } from "@/lib/decorative-badge-accent"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { ChartCaptureCard } from "@/components/chart-capture-card"
+import { ShareFilterUrlButton } from "@/components/share-filter-url-button"
 import { SiteHeader } from "@/components/site-header"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
@@ -1793,16 +1795,19 @@ export function DataCenterPageClient({
               </CardTitle>
               <CardDescription>페이지 진입 시 한 번 로드한 데이터로 차트를 갱신합니다.</CardDescription>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0 gap-1.5 text-foreground hover:text-foreground dark:hover:text-foreground"
-              onClick={resetAllFilters}
-            >
-              <RotateCcw className="h-4 w-4" />
-              필터 전체 초기화
-            </Button>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <ShareFilterUrlButton />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-foreground hover:text-foreground dark:hover:text-foreground"
+                onClick={resetAllFilters}
+              >
+                <RotateCcw className="h-4 w-4" />
+                필터 전체 초기화
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             <div className="space-y-2">
@@ -2040,7 +2045,7 @@ export function DataCenterPageClient({
                 { name: "rest", value: Math.max(0, 100 - item.winRate), fill: "hsl(220 14% 24%)" },
               ]
               return (
-                <Card key={item.race}>
+                <ChartCaptureCard key={item.race} captureFilename={`meta-race-${item.race}`}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{raceNames[item.race]}</CardTitle>
                   </CardHeader>
@@ -2068,7 +2073,7 @@ export function DataCenterPageClient({
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">표본 {item.games.toLocaleString()}경기</p>
                   </CardContent>
-                </Card>
+                </ChartCaptureCard>
               )
             })}
           </section>
@@ -2080,8 +2085,9 @@ export function DataCenterPageClient({
               { title: "선수1", data: player1CardStats, icon: <User className="h-4 w-4" />, accent: "from-sky-500/20 to-transparent", orderClass: "xl:order-1" },
               { title: "선수2", data: player2CardStats, icon: <Swords className="h-4 w-4" />, accent: "from-violet-500/20 to-transparent", orderClass: "xl:order-3" },
             ].map(({ title, data, icon, accent, orderClass }) => (
-              <Card
+              <ChartCaptureCard
                 key={title}
+                captureFilename={`player-${title}`}
                 className={cn(
                   "relative overflow-hidden",
                   data.member && tierRankBadgeByMemberId.get(data.member.id)?.rank === 1 && "border-yellow-400/85 shadow-[0_0_18px_rgba(250,204,21,0.32)]",
@@ -2248,10 +2254,10 @@ export function DataCenterPageClient({
                     </>
                   )}
                 </CardContent>
-              </Card>
+              </ChartCaptureCard>
             ))}
 
-            <Card className="overflow-hidden xl:order-2">
+            <ChartCaptureCard captureFilename="head-to-head" className="overflow-hidden xl:order-2">
               <div className="h-1 w-full bg-gradient-to-r from-rose-500/20 via-orange-500/20 to-transparent" />
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -2287,13 +2293,13 @@ export function DataCenterPageClient({
                   </>
                 )}
               </CardContent>
-            </Card>
+            </ChartCaptureCard>
           </section>
         )}
 
         {playerFilterEnabled && hasResolvedPlayer1 && (
           <section className="mb-6">
-            <Card>
+            <ChartCaptureCard captureFilename="recent-20-games">
               <CardHeader>
                 <CardTitle className="text-base">
                   최근 20게임 승/패 (
@@ -2439,7 +2445,7 @@ export function DataCenterPageClient({
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </ChartCaptureCard>
           </section>
         )}
 
@@ -2461,7 +2467,10 @@ export function DataCenterPageClient({
               isPlayerModePendingInput && "opacity-60",
             )}
           >
-          <Card className={cn("flex h-full flex-col", usePlayer1Charts && "xl:col-span-1")}>
+          <ChartCaptureCard
+            captureFilename="race-win-rate"
+            className={cn("flex h-full flex-col", usePlayer1Charts && "xl:col-span-1")}
+          >
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Percent className="h-4 w-4" />
@@ -2556,10 +2565,10 @@ export function DataCenterPageClient({
                 </ChartContainer>
               )}
             </CardContent>
-          </Card>
+          </ChartCaptureCard>
 
           {usePlayer1Charts && (
-            <Card className="flex h-full flex-col xl:col-span-1">
+            <ChartCaptureCard captureFilename="race-games-distribution" className="flex h-full flex-col xl:col-span-1">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <BarChart3 className="h-4 w-4" />
@@ -2649,10 +2658,13 @@ export function DataCenterPageClient({
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </ChartCaptureCard>
           )}
 
-          <Card className={cn("flex h-full flex-col", usePlayer1Charts && "xl:col-span-1")}>
+          <ChartCaptureCard
+            captureFilename="map-win-rate"
+            className={cn("flex h-full flex-col", usePlayer1Charts && "xl:col-span-1")}
+          >
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <BarChart3 className="h-4 w-4" />
@@ -2773,14 +2785,14 @@ export function DataCenterPageClient({
                 </ChartContainer>
               )}
             </CardContent>
-          </Card>
+          </ChartCaptureCard>
 
           </div>
         </section>
 
         {!usePlayer1Charts && (
           <section className="mt-4 grid grid-cols-1 gap-4">
-            <Card>
+            <ChartCaptureCard captureFilename="elo-volatility">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <BarChart3 className="h-4 w-4" />
@@ -2892,7 +2904,7 @@ export function DataCenterPageClient({
                     </ChartContainer>
                   )}
                 </CardContent>
-            </Card>
+            </ChartCaptureCard>
           </section>
         )}
 
@@ -2909,7 +2921,7 @@ export function DataCenterPageClient({
           )}
           <div className={cn("grid grid-cols-1 gap-4", usePlayer1Charts && "xl:grid-cols-10", isPlayerModePendingInput && "opacity-60")}>
           {usePlayer1Charts && (
-            <Card className="xl:col-span-3">
+            <ChartCaptureCard captureFilename="map-radar" className="xl:col-span-3">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <BarChart3 className="h-4 w-4" />
@@ -3022,9 +3034,9 @@ export function DataCenterPageClient({
                   </ChartContainer>
                 )}
               </CardContent>
-            </Card>
+            </ChartCaptureCard>
           )}
-          <Card className={cn(usePlayer1Charts && "xl:col-span-7")}>
+          <ChartCaptureCard captureFilename="elo-trend" className={cn(usePlayer1Charts && "xl:col-span-7")}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <LineChartIcon className="h-4 w-4" />
@@ -3146,14 +3158,14 @@ export function DataCenterPageClient({
                 </ChartContainer>
               )}
             </CardContent>
-          </Card>
+          </ChartCaptureCard>
           </div>
         </section>
 
         
 
         <section className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Card>
+          <ChartCaptureCard captureFilename="player-count">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">선수 수 (시즌 필터 기준)</CardTitle>
             </CardHeader>
@@ -3167,8 +3179,8 @@ export function DataCenterPageClient({
                     : "이 시즌 경기에 출전한 서로 다른 선수"}
               </p>
             </CardContent>
-          </Card>
-          <Card>
+          </ChartCaptureCard>
+          <ChartCaptureCard captureFilename="filtered-matches">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-muted-foreground">필터 통과 경기(원본)</CardTitle>
             </CardHeader>
@@ -3178,7 +3190,7 @@ export function DataCenterPageClient({
               </p>
               <p className="mt-1 text-xs text-muted-foreground">전체 로드된 경기 대비 필터 통과 비율</p>
             </CardContent>
-          </Card>
+          </ChartCaptureCard>
         </section>
       </div>
     </main>
