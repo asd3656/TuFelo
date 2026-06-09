@@ -1274,6 +1274,14 @@ export function DataCenterPageClient({
     [metaMapRaceWinRates],
   )
   const metaMapRows = useMemo(() => metaMapRaceWinRates.map((row) => row.map), [metaMapRaceWinRates])
+  const metaMapChartLayout = useMemo(() => {
+    const rowCount = metaMapRows.length
+    const longestLabel = metaMapRows.reduce((max, name) => Math.max(max, name.length), 0)
+    return {
+      height: Math.max(300, rowCount * 36 + 68),
+      yAxisWidth: Math.min(168, Math.max(96, longestLabel * 12 + 12)),
+    }
+  }, [metaMapRows])
 
   /** 메타: 최근 14일 일자별 클랜 풀 종족 승률 추이 */
   const localMetaDayRaceTrend = useMemo(() => {
@@ -2742,11 +2750,31 @@ export function DataCenterPageClient({
                   최소 경기 수 조건을 만족하는 맵 데이터가 없습니다.
                 </div>
               ) : (
-                <ChartContainer className="h-[340px] w-full" config={chartConfig}>
-                  <ScatterChart margin={{ left: 16, right: 14, top: 20, bottom: 8 }}>
+                <ChartContainer
+                  className="w-full"
+                  style={{ height: metaMapChartLayout.height }}
+                  config={chartConfig}
+                >
+                  <ScatterChart margin={{ left: 4, right: 18, top: 24, bottom: 12 }}>
                     <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
-                    <XAxis type="number" dataKey="winRate" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
-                    <YAxis type="category" dataKey="map" name="맵" width={90} />
+                    <XAxis
+                      type="number"
+                      dataKey="winRate"
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v) => `${v}%`}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="map"
+                      name="맵"
+                      width={metaMapChartLayout.yAxisWidth}
+                      ticks={metaMapRows}
+                      interval={0}
+                      tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
                     {metaMapRows.map((map) => (
                       <ReferenceLine key={`row-${map}`} y={map} stroke="#94a3b8" strokeOpacity={0.65} strokeDasharray="2 5" />
                     ))}

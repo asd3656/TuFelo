@@ -1199,6 +1199,7 @@ export function DashboardPage({
               <ElementCaptureButton
                 className="absolute right-4 top-4 z-10 sm:right-6"
                 captureFilename="match-history"
+                fullContent
                 resolveCaptureTarget={resolveMatchHistoryCaptureTarget}
                 ariaLabel="전적 기록 캡처"
                 title="전적 기록 캡처 미리보기"

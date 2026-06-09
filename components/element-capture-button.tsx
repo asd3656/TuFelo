@@ -2,9 +2,8 @@
 
 import { useCallback, useState } from "react"
 import { Camera, Download, Loader2 } from "lucide-react"
-import { toPng } from "html-to-image"
-
 import { Button } from "@/components/ui/button"
+import { captureElementToPng } from "@/lib/capture-full-content"
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,8 @@ type ElementCaptureButtonProps = {
   resolveCaptureTarget: () => Promise<HTMLElement | null>
   onCaptureComplete?: () => void
   captureFilename?: string
+  /** 가로 스크롤 영역을 포함해 잘리지 않고 전체 캡처 */
+  fullContent?: boolean
   className?: string
   title?: string
   ariaLabel?: string
@@ -28,6 +29,7 @@ export function ElementCaptureButton({
   resolveCaptureTarget,
   onCaptureComplete,
   captureFilename = "capture",
+  fullContent = false,
   className,
   title = "캡처 미리보기",
   ariaLabel = "캡처",
@@ -45,13 +47,9 @@ export function ElementCaptureButton({
       const node = await resolveCaptureTarget()
       if (!node) return
 
-      const surfaceEl = node.firstElementChild as HTMLElement | null
-      const dataUrl = await toPng(node, {
-        cacheBust: true,
+      const dataUrl = await captureElementToPng(node, {
         pixelRatio: 2,
-        backgroundColor: surfaceEl
-          ? getComputedStyle(surfaceEl).backgroundColor
-          : getComputedStyle(document.documentElement).backgroundColor,
+        fullContent,
       })
 
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, "")
@@ -64,7 +62,7 @@ export function ElementCaptureButton({
       onCaptureComplete?.()
       setCapturing(false)
     }
-  }, [captureFilename, capturing, onCaptureComplete, resolveCaptureTarget])
+  }, [captureFilename, capturing, fullContent, onCaptureComplete, resolveCaptureTarget])
 
   const handleDownload = useCallback(() => {
     if (!previewUrl) return
