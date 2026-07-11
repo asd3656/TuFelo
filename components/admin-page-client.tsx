@@ -87,6 +87,7 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
   const [filterTier, setFilterTier] = useState("__all__")
   const [filterRace, setFilterRace] = useState("__all__")
   const [filterStatus, setFilterStatus] = useState("__all__")
+  const [filterLauncher, setFilterLauncher] = useState("__all__")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -111,9 +112,12 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
         const matchesStatus =
           filterStatus === "__all__" ||
           (filterStatus === "active" ? member.isActive : !member.isActive)
-        return matchesSearch && matchesTier && matchesRace && matchesStatus
+        const matchesLauncher =
+          filterLauncher === "__all__" ||
+          (filterLauncher === "used" ? !!member.lastLauncherUsedAt : !member.lastLauncherUsedAt)
+        return matchesSearch && matchesTier && matchesRace && matchesStatus && matchesLauncher
       }),
-    [initialMembers, searchQuery, filterTier, filterRace, filterStatus],
+    [initialMembers, searchQuery, filterTier, filterRace, filterStatus, filterLauncher],
   )
 
   const runAction = (fn: () => Promise<ActionResult>, onDone?: () => void) => {
@@ -316,7 +320,21 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                 </SelectContent>
               </Select>
 
-              {(filterStatus !== "__all__" || filterTier !== "__all__" || filterRace !== "__all__") && (
+              <Select value={filterLauncher} onValueChange={setFilterLauncher}>
+                <SelectTrigger className="w-36 bg-card border-border text-foreground">
+                  <SelectValue placeholder="런처 전체" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">런처 전체</SelectItem>
+                  <SelectItem value="used">런처 사용</SelectItem>
+                  <SelectItem value="unused">런처 미사용</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {(filterStatus !== "__all__" ||
+                filterTier !== "__all__" ||
+                filterRace !== "__all__" ||
+                filterLauncher !== "__all__") && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -325,6 +343,7 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                     setFilterStatus("__all__")
                     setFilterTier("__all__")
                     setFilterRace("__all__")
+                    setFilterLauncher("__all__")
                   }}
                 >
                   필터 초기화
@@ -363,6 +382,7 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                   <TableHead className="text-muted-foreground font-semibold">선수명</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">종족</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">티어</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold text-center w-20">런처</TableHead>
                   {!isGuest && (
                     <TableHead className="text-muted-foreground font-semibold text-center w-24">
                       관리자 메모
@@ -401,6 +421,17 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                       <Badge variant="outline" className={tierColors[member.tier]}>
                         {member.tier}티어
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {member.lastLauncherUsedAt ? (
+                        <Badge variant="outline" className="border-cyan-500/40 text-cyan-600 dark:text-cyan-400">
+                          사용
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="border-muted-foreground/30 text-muted-foreground">
+                          미사용
+                        </Badge>
+                      )}
                     </TableCell>
                     {!isGuest && (
                       <TableCell className="text-center align-middle">

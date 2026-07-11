@@ -87,6 +87,9 @@ const ELO_WEEK_LINE_COLOR = "#1d4ed8"
 const ELO_WEEK_DOT_FILL = "#2563eb"
 const ELO_WEEK_DOT_RING = "#000000"
 
+const LAUNCHER_MEMBER_ACCENT = "#22d3ee"
+const LAUNCHER_MATCH_ACCENT = "#a78bfa"
+
 /** 시즌 테이블과 별개로, 프로리그 시즌1·2 경기만 모아 보기 */
 /** 시즌 필터: 모든 시즌·비시즌 경기 포함 */
 const SEASON_OPTION_ALL = "__all__" as const
@@ -244,7 +247,6 @@ type DetailResponse = {
   recent20Summary?: { games: number; wins: number; losses: number; winRate: number }
   recent20MapWins?: Array<{ mapName: string; games: number; wins: number; losses: number; winRate: number }>
   versusEloTrend?: Array<{ weekLabel: string; p1Elo: number | null; p2Elo?: number | null }>
-  metaDayRaceTrend?: Array<{ weekLabel: string; T: number | null; P: number | null; Z: number | null }>
   metaEloVolatilityRows?: Array<{
     name: string
     games: number
@@ -255,6 +257,17 @@ type DetailResponse = {
     drawdown: number
     rangeRemainder: number
   }>
+}
+
+type LauncherStatsResponse = {
+  totalActiveMembers: number
+  launcherMemberCount: number
+  launcherMemberPercentage: number
+  recentActiveMemberCount: number
+  recentActiveDays: number
+  totalRegisteredMatches: number | null
+  launcherSourcedMatches: number | null
+  launcherMatchPercentage: number | null
 }
 
 type MultiOption = { value: string; label: string }
@@ -533,6 +546,7 @@ export function DataCenterPageClient({
   const [metaAnchorRace, setMetaAnchorRace] = useState<Race>("T")
   const [serverSummary, setServerSummary] = useState<SummaryResponse | null>(null)
   const [serverDetail, setServerDetail] = useState<DetailResponse | null>(null)
+  const [launcherStats, setLauncherStats] = useState<LauncherStatsResponse | null>(null)
   const summaryCacheRef = useRef<Map<string, SummaryResponse>>(new Map())
   const detailCacheRef = useRef<Map<string, DetailResponse>>(new Map())
 
@@ -924,6 +938,20 @@ export function DataCenterPageClient({
     }
   }, [API_DEBOUNCE_MS, dataCenterQueryString])
 
+  /** 런처 사용 통계: 필터와 무관하게 클랜 전체 기준 고정값이라 마운트 시 1회만 로드 */
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch("/api/data-center/launcher-stats", { signal: controller.signal, cache: "no-store" })
+      .then((res) => (res.ok ? (res.json() as Promise<LauncherStatsResponse>) : null))
+      .then((data) => {
+        if (!controller.signal.aborted) setLauncherStats(data)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setLauncherStats(null)
+      })
+    return () => controller.abort()
+  }, [])
+
   const perspectiveRows = useMemo(() => {
     const rows: PerspectiveRow[] = []
     for (const match of filteredMatches) {
@@ -1312,67 +1340,6 @@ export function DataCenterPageClient({
       yAxisWidth: Math.min(168, Math.max(96, longestLabel * 12 + 12)),
     }
   }, [metaMapRows])
-
-  /** 메타: 최근 14일 일자별 클랜 풀 종족 승률 추이 */
-  const localMetaDayRaceTrend = useMemo(() => {
-    const grouped = new Map<string, { sortKey: string; label: string; stats: Record<Race, { games: number; wins: number }> }>()
-    const cutoff = startOfDay(subDays(new Date(), 13))
-
-    for (const match of filteredMatches) {
-      const playedAt = parseISO(match.playedDate)
-      if (Number.isNaN(playedAt.getTime()) || playedAt < cutoff) continue
-      const day = dayKeyFromPlayedDate(match.playedDate)
-      if (!day) continue
-
-      const p1 = memberById.get(match.player1Id)
-      const p2 = memberById.get(match.player2Id)
-      if (!p1 || !p2) continue
-
-      const hasPlayer1Filter = activePlayerQuery.trim().length > 0 && matchedPlayerIds.size > 0
-      const hasPlayer2Filter = activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0
-      const useAnchorPlayerIds = hasPlayer1Filter ? matchedPlayerIds : hasPlayer2Filter ? matchedPlayer2Ids : null
-
-      let bucket = grouped.get(day.sortKey)
-      if (!bucket) {
-        bucket = {
-          sortKey: day.sortKey,
-          label: day.label,
-          stats: {
-            T: { games: 0, wins: 0 },
-            P: { games: 0, wins: 0 },
-            Z: { games: 0, wins: 0 },
-          },
-        }
-        grouped.set(day.sortKey, bucket)
-      }
-
-      if (!useAnchorPlayerIds || useAnchorPlayerIds.has(match.player1Id)) {
-        bucket.stats[p1.race].games += 1
-        if (match.winnerId === match.player1Id) bucket.stats[p1.race].wins += 1
-      }
-      if (!useAnchorPlayerIds || useAnchorPlayerIds.has(match.player2Id)) {
-        bucket.stats[p2.race].games += 1
-        if (match.winnerId === match.player2Id) bucket.stats[p2.race].wins += 1
-      }
-    }
-
-    const sorted = [...grouped.values()].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-
-    return sorted.slice(-14).map(({ label, stats }) => ({
-      weekLabel: label,
-      T: stats.T.games >= minGames ? Number(((stats.T.wins / stats.T.games) * 100).toFixed(1)) : null,
-      P: stats.P.games >= minGames ? Number(((stats.P.wins / stats.P.games) * 100).toFixed(1)) : null,
-      Z: stats.Z.games >= minGames ? Number(((stats.Z.wins / stats.Z.games) * 100).toFixed(1)) : null,
-    }))
-  }, [
-    filteredMatches,
-    memberById,
-    activePlayerQuery,
-    activePlayer2Queries,
-    matchedPlayerIds,
-    matchedPlayer2Ids,
-    minGames,
-  ])
 
   /** 메타: 최근 7일 ELO 변동성 (변동폭/최고점 대비 현재 하락폭) */
   const localMetaEloVolatilityRows = useMemo(() => {
@@ -1806,7 +1773,6 @@ export function DataCenterPageClient({
       .sort((a, b) => b.wins - a.wins || b.games - a.games || a.mapName.localeCompare(b.mapName, "ko"))
   }, [localPlayerRecent20Matches])
 
-  const metaDayRaceTrend = serverDetail?.metaDayRaceTrend ?? localMetaDayRaceTrend
   const metaEloVolatilityRows = serverDetail?.metaEloVolatilityRows ?? localMetaEloVolatilityRows
   const versusEloTrend = serverDetail?.versusEloTrend ?? localVersusEloTrend
   const playerRecent20Matches = serverDetail?.recent20Matches ?? localPlayerRecent20Matches
@@ -3128,129 +3094,194 @@ export function DataCenterPageClient({
               </CardContent>
             </ChartCaptureCard>
           )}
-          <ChartCaptureCard captureFilename="elo-trend" className={cn(usePlayer1Charts && "xl:col-span-7")}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <LineChartIcon className="h-4 w-4" />
-                {usePlayer1Charts ? `${playerChartLabel} · 일자별 Elo 점수` : "일자별 종족 승률 추이"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {(usePlayer1Charts ? versusEloTrend.length === 0 : metaDayRaceTrend.length === 0) ? (
-                <div className="py-16 text-center text-sm text-muted-foreground">
-                  {usePlayer1Charts
-                    ? hasResolvedPlayer1
+          {usePlayer1Charts && (
+            <ChartCaptureCard captureFilename="elo-trend" className="xl:col-span-7">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <LineChartIcon className="h-4 w-4" />
+                  {`${playerChartLabel} · 일자별 Elo 점수`}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {versusEloTrend.length === 0 ? (
+                  <div className="py-16 text-center text-sm text-muted-foreground">
+                    {hasResolvedPlayer1
                       ? "이 조건에서 Elo 점수가 기록된 일자 데이터가 없습니다."
-                      : "선수1 이름을 검색하면 Elo 추이가 표시됩니다."
-                    : "일자별 추이를 그릴 수 있는 데이터가 없습니다."}
-                </div>
-              ) : usePlayer1Charts ? (
-                <ChartContainer className="h-[320px] w-full" config={eloWeekChartConfig}>
-                  <LineChart data={versusEloTrend} margin={{ left: 8, right: 10, top: 16, bottom: 8 }}>
-                    <CartesianGrid vertical={false} stroke="#94a3b8" strokeOpacity={0.65} strokeDasharray="2 5" />
-                    <XAxis dataKey="weekLabel" interval={0} angle={-25} height={52} textAnchor="end" />
-                    <YAxis
-                      domain={["dataMin - 15", "dataMax + 15"]}
-                      width={52}
-                      tickFormatter={(v) => String(v)}
-                    />
-                    <Tooltip content={<ChartTooltipContent />} formatter={(value) => [`${value}`, "Elo 점수"]} />
-                    <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
-                    <Line
-                      type="linear"
-                      dataKey="p1Elo"
-                      name={player1CardStats.member?.name ?? "선수1"}
-                      stroke={ELO_WEEK_LINE_COLOR}
-                      strokeWidth={3.5}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      dot={{
-                        r: 5,
-                        fill: ELO_WEEK_DOT_FILL,
-                        stroke: ELO_WEEK_DOT_RING,
-                        strokeWidth: 2.8,
-                      }}
-                      activeDot={{
-                        r: 6.5,
-                        fill: ELO_WEEK_DOT_FILL,
-                        stroke: ELO_WEEK_DOT_RING,
-                        strokeWidth: 3,
-                      }}
-                      isAnimationActive={false}
-                      connectNulls
-                    />
-                    {isHeadToHeadMode && (
+                      : "선수1 이름을 검색하면 Elo 추이가 표시됩니다."}
+                  </div>
+                ) : (
+                  <ChartContainer className="h-[320px] w-full" config={eloWeekChartConfig}>
+                    <LineChart data={versusEloTrend} margin={{ left: 8, right: 10, top: 16, bottom: 8 }}>
+                      <CartesianGrid vertical={false} stroke="#94a3b8" strokeOpacity={0.65} strokeDasharray="2 5" />
+                      <XAxis dataKey="weekLabel" interval={0} angle={-25} height={52} textAnchor="end" />
+                      <YAxis
+                        domain={["dataMin - 15", "dataMax + 15"]}
+                        width={52}
+                        tickFormatter={(v) => String(v)}
+                      />
+                      <Tooltip content={<ChartTooltipContent />} formatter={(value) => [`${value}`, "Elo 점수"]} />
+                      <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
                       <Line
                         type="linear"
-                        dataKey="p2Elo"
-                        name={player2CardStats.member?.name ?? "선수2"}
-                        stroke="#ef4444"
-                        strokeWidth={3}
+                        dataKey="p1Elo"
+                        name={player1CardStats.member?.name ?? "선수1"}
+                        stroke={ELO_WEEK_LINE_COLOR}
+                        strokeWidth={3.5}
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         dot={{
                           r: 5,
-                          fill: "#f87171",
-                          stroke: "#000000",
+                          fill: ELO_WEEK_DOT_FILL,
+                          stroke: ELO_WEEK_DOT_RING,
                           strokeWidth: 2.8,
                         }}
                         activeDot={{
                           r: 6.5,
-                          fill: "#f87171",
-                          stroke: "#000000",
+                          fill: ELO_WEEK_DOT_FILL,
+                          stroke: ELO_WEEK_DOT_RING,
                           strokeWidth: 3,
                         }}
                         isAnimationActive={false}
                         connectNulls
                       />
-                    )}
-                  </LineChart>
-                </ChartContainer>
-              ) : (
-                <ChartContainer className="h-[320px] w-full" config={chartConfig}>
-                  <LineChart data={metaDayRaceTrend} margin={{ left: 8, right: 10, top: 8, bottom: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
-                    <XAxis dataKey="weekLabel" interval={0} angle={-25} height={52} textAnchor="end" />
-                    <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} width={42} />
-                    <Tooltip
-                      content={<ChartTooltipContent />}
-                      formatter={(value, name) => [`${value ?? "-"}%`, raceNames[name as Race]]}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="T"
-                      stroke={raceColors.T}
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 4, fill: raceColors.T, stroke: "#0f172a", strokeWidth: 2 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="P"
-                      stroke={raceColors.P}
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 4, fill: raceColors.P, stroke: "#0f172a", strokeWidth: 2 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="Z"
-                      stroke={raceColors.Z}
-                      strokeWidth={2}
-                      connectNulls
-                      dot={{ r: 4, fill: raceColors.Z, stroke: "#0f172a", strokeWidth: 2 }}
-                      activeDot={{ r: 6 }}
-                      isAnimationActive={false}
-                    />
-                  </LineChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </ChartCaptureCard>
+                      {isHeadToHeadMode && (
+                        <Line
+                          type="linear"
+                          dataKey="p2Elo"
+                          name={player2CardStats.member?.name ?? "선수2"}
+                          stroke="#ef4444"
+                          strokeWidth={3}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          dot={{
+                            r: 5,
+                            fill: "#f87171",
+                            stroke: "#000000",
+                            strokeWidth: 2.8,
+                          }}
+                          activeDot={{
+                            r: 6.5,
+                            fill: "#f87171",
+                            stroke: "#000000",
+                            strokeWidth: 3,
+                          }}
+                          isAnimationActive={false}
+                          connectNulls
+                        />
+                      )}
+                    </LineChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </ChartCaptureCard>
+          )}
+          {!usePlayer1Charts && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ChartCaptureCard captureFilename="launcher-member-ratio">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">런처 사용자 비율</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center">
+                  <div className="relative h-[150px] w-[150px]">
+                    <PieChart width={150} height={150}>
+                      <Pie
+                        data={[
+                          {
+                            name: "launcher",
+                            value: Math.max(0, Math.min(100, launcherStats?.launcherMemberPercentage ?? 0)),
+                            fill: LAUNCHER_MEMBER_ACCENT,
+                          },
+                          {
+                            name: "rest",
+                            value: Math.max(0, 100 - (launcherStats?.launcherMemberPercentage ?? 0)),
+                            fill: "hsl(220 14% 24%)",
+                          },
+                        ]}
+                        dataKey="value"
+                        startAngle={90}
+                        endAngle={-270}
+                        innerRadius={46}
+                        outerRadius={62}
+                        stroke="hsl(220 14% 32%)"
+                        strokeWidth={1}
+                      >
+                        <Cell key="launcher" fill={LAUNCHER_MEMBER_ACCENT} />
+                        <Cell key="rest" fill="hsl(220 14% 24%)" />
+                      </Pie>
+                    </PieChart>
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <span className="text-xl font-bold" style={{ color: LAUNCHER_MEMBER_ACCENT }}>
+                        {launcherStats ? `${launcherStats.launcherMemberPercentage}%` : "-"}
+                      </span>
+                    </div>
+                  </div>
+                  {launcherStats ? (
+                    <>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {launcherStats.launcherMemberCount.toLocaleString()}명 / 전체 {launcherStats.totalActiveMembers.toLocaleString()}명
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        최근 {launcherStats.recentActiveDays}일 활성 {launcherStats.recentActiveMemberCount.toLocaleString()}명
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">불러오는 중...</p>
+                  )}
+                </CardContent>
+              </ChartCaptureCard>
+              <ChartCaptureCard captureFilename="launcher-match-ratio">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">전적 중 런처입력 비율</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col items-center">
+                  {launcherStats && launcherStats.launcherMatchPercentage === null ? (
+                    <p className="py-14 text-center text-sm text-muted-foreground">데이터를 불러올 수 없습니다.</p>
+                  ) : (
+                    <>
+                      <div className="relative h-[150px] w-[150px]">
+                        <PieChart width={150} height={150}>
+                          <Pie
+                            data={[
+                              {
+                                name: "launcher",
+                                value: Math.max(0, Math.min(100, launcherStats?.launcherMatchPercentage ?? 0)),
+                                fill: LAUNCHER_MATCH_ACCENT,
+                              },
+                              {
+                                name: "rest",
+                                value: Math.max(0, 100 - (launcherStats?.launcherMatchPercentage ?? 0)),
+                                fill: "hsl(220 14% 24%)",
+                              },
+                            ]}
+                            dataKey="value"
+                            startAngle={90}
+                            endAngle={-270}
+                            innerRadius={46}
+                            outerRadius={62}
+                            stroke="hsl(220 14% 32%)"
+                            strokeWidth={1}
+                          >
+                            <Cell key="launcher" fill={LAUNCHER_MATCH_ACCENT} />
+                            <Cell key="rest" fill="hsl(220 14% 24%)" />
+                          </Pie>
+                        </PieChart>
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                          <span className="text-xl font-bold" style={{ color: LAUNCHER_MATCH_ACCENT }}>
+                            {launcherStats ? `${launcherStats.launcherMatchPercentage}%` : "-"}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {launcherStats
+                          ? `전체 등록 ${launcherStats.totalRegisteredMatches?.toLocaleString()}건 중 런처입력 ${launcherStats.launcherSourcedMatches?.toLocaleString()}건`
+                          : "불러오는 중..."}
+                      </p>
+                    </>
+                  )}
+                </CardContent>
+              </ChartCaptureCard>
+            </div>
+          )}
           </div>
         </section>
 

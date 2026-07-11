@@ -49,6 +49,8 @@ export interface ClanMember {
   isActive: boolean
   /** 관리자 명단에서만 로드·표시. 게스트·일반 페이지에는 포함되지 않음 */
   adminMemo?: string | null
+  /** 런처로 전적을 전송한 마지막 시각. null이면 런처 미사용 */
+  lastLauncherUsedAt?: string | null
 }
 
 export interface RegisterMatchInput {
