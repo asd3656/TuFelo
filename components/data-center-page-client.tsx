@@ -70,6 +70,7 @@ import type { DataCenterMatch, DataCenterMember } from "@/lib/data/data-center"
 import type { DecorativeBadgeAccent } from "@/lib/decorative-badge-accent"
 import { decorativeBadgeAccentClasses } from "@/lib/decorative-badge-accent"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ChartCaptureCard } from "@/components/chart-capture-card"
 import { filterActionButtonClassName, ShareFilterUrlButton } from "@/components/share-filter-url-button"
 import { SiteHeader } from "@/components/site-header"
@@ -430,6 +431,35 @@ function anchorPlayerIdFromMatch(match: DataCenterMatch, anchorIds: Set<string>)
   if (anchorIds.has(match.player1Id)) return match.player1Id
   if (anchorIds.has(match.player2Id)) return match.player2Id
   return null
+}
+
+/** 선수 프로필 카드 승률 — 시즌 외 추가 필터(맵·경기유형·기간·상대 티어) */
+function matchPassesPlayerCardFilters(
+  match: DataCenterMatch,
+  anchorId: string,
+  opts: {
+    mapNames: string[]
+    matchTypes: string[]
+    tiers: string[]
+    recentDays: number
+    memberById: Map<string, DataCenterMember>
+  },
+): boolean {
+  const { mapNames, matchTypes, tiers, recentDays, memberById } = opts
+  if (mapNames.length > 0 && !mapNames.includes(match.mapName)) return false
+  if (matchTypes.length > 0 && !matchTypes.includes(match.matchType)) return false
+  if (recentDays > 0) {
+    const cutoff = startOfDay(subDays(new Date(), recentDays - 1))
+    const playedAt = parseISO(match.playedDate)
+    if (Number.isNaN(playedAt.getTime()) || playedAt < cutoff) return false
+  }
+  if (tiers.length > 0) {
+    const opponentId = anchorId === match.player1Id ? match.player2Id : match.player1Id
+    const opponentTier = memberById.get(opponentId)?.tier
+    if (opponentTier === null || opponentTier === undefined) return false
+    if (!tiers.includes(String(opponentTier))) return false
+  }
+  return true
 }
 
 /** 경기 일자 기준 일 단위 키 (정렬용 키 + 표시 라벨) */
@@ -1491,9 +1521,18 @@ export function DataCenterPageClient({
     eloScore: { label: "Elo 점수", color: ELO_WEEK_LINE_COLOR },
   } satisfies ChartConfig
 
-  const buildPlayerCardStats = (anchorIds: Set<string>) => {
+  const buildPlayerCardStats = (anchorIds: Set<string>, cardMapNames: string[] = []) => {
+    const emptyMatchup = { winRate: 0, games: 0, wins: 0 }
     if (anchorIds.size === 0) {
-      return { games: 0, wins: 0, winRate: 0, vsT: 0, vsP: 0, vsZ: 0, member: null as DataCenterMember | null }
+      return {
+        games: 0,
+        wins: 0,
+        winRate: 0,
+        vsT: emptyMatchup,
+        vsP: emptyMatchup,
+        vsZ: emptyMatchup,
+        member: null as DataCenterMember | null,
+      }
     }
     const member = members.find((m) => anchorIds.has(m.id)) ?? null
     let games = 0
@@ -1503,9 +1542,11 @@ export function DataCenterPageClient({
       P: { games: 0, wins: 0 },
       Z: { games: 0, wins: 0 },
     }
+    const cardFilterOpts = { mapNames: cardMapNames, matchTypes, tiers, recentDays, memberById }
     for (const match of seasonFilteredMatches) {
       const anchorId = anchorPlayerIdFromMatch(match, anchorIds)
       if (!anchorId) continue
+      if (!matchPassesPlayerCardFilters(match, anchorId, cardFilterOpts)) continue
       games += 1
       const won = match.winnerId === anchorId
       if (won) wins += 1
@@ -1515,19 +1556,30 @@ export function DataCenterPageClient({
       if (won) vs[opp.race].wins += 1
     }
     const pct = (w: number, g: number) => (g > 0 ? Number(((w / g) * 100).toFixed(1)) : 0)
+    const matchup = (race: Race) => ({
+      games: vs[race].games,
+      wins: vs[race].wins,
+      winRate: pct(vs[race].wins, vs[race].games),
+    })
     return {
       member,
       games,
       wins,
       winRate: pct(wins, games),
-      vsT: pct(vs.T.wins, vs.T.games),
-      vsP: pct(vs.P.wins, vs.P.games),
-      vsZ: pct(vs.Z.wins, vs.Z.games),
+      vsT: matchup("T"),
+      vsP: matchup("P"),
+      vsZ: matchup("Z"),
     }
   }
 
-  const player1CardStats = useMemo(() => buildPlayerCardStats(matchedPlayerIds), [matchedPlayerIds, filteredMatches, memberById, members])
-  const player2CardStats = useMemo(() => buildPlayerCardStats(matchedPlayer2Ids), [matchedPlayer2Ids, filteredMatches, memberById, members])
+  const player1CardStats = useMemo(
+    () => buildPlayerCardStats(matchedPlayerIds, mapNames),
+    [matchedPlayerIds, seasonFilteredMatches, memberById, members, mapNames, matchTypes, tiers, recentDays],
+  )
+  const player2CardStats = useMemo(
+    () => buildPlayerCardStats(matchedPlayer2Ids),
+    [matchedPlayer2Ids, seasonFilteredMatches, memberById, members, matchTypes, tiers, recentDays],
+  )
 
   const headToHeadStats = useMemo(() => {
     if (hasResolvedPlayer1 && activePlayer2Queries.length > 0 && matchedPlayer2Ids.size > 0 && serverPvpMapWinRates.length > 0) {
@@ -2245,19 +2297,31 @@ export function DataCenterPageClient({
                         </p>
                       </div>
                       {[
-                        { k: "저그전", v: data.vsZ, c: "bg-red-500" },
-                        { k: "테란전", v: data.vsT, c: "bg-sky-500" },
-                        { k: "토스전", v: data.vsP, c: "bg-amber-400" },
+                        { k: "저그전", stat: data.vsZ, c: "bg-red-500" },
+                        { k: "테란전", stat: data.vsT, c: "bg-sky-500" },
+                        { k: "토스전", stat: data.vsP, c: "bg-amber-400" },
                       ].map((item) => (
-                        <div key={item.k} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">{item.k} 승률</span>
-                            <span className="font-medium">{item.v}%</span>
-                          </div>
-                          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                            <div className={cn("h-full rounded-full", item.c)} style={{ width: `${Math.max(0, Math.min(100, item.v))}%` }} />
-                          </div>
-                        </div>
+                        <UiTooltip key={item.k}>
+                          <TooltipTrigger asChild>
+                            <div className="cursor-default space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">{item.k} 승률</span>
+                                <span className="font-medium">{item.stat.winRate}%</span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={cn("h-full rounded-full", item.c)}
+                                  style={{ width: `${Math.max(0, Math.min(100, item.stat.winRate))}%` }}
+                                />
+                              </div>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top">
+                            {item.stat.games > 0
+                              ? `${item.stat.wins.toLocaleString()}승 / ${Math.max(0, item.stat.games - item.stat.wins).toLocaleString()}패 · 총 ${item.stat.games.toLocaleString()}경기`
+                              : "경기 없음"}
+                          </TooltipContent>
+                        </UiTooltip>
                       ))}
                     </>
                   )}
