@@ -549,6 +549,7 @@ export function DataCenterPageClient({
   const [metaAnchorRace, setMetaAnchorRace] = useState<Race>("T")
   const [metaTrendRangeStart, setMetaTrendRangeStart] = useState(() => format(subDays(new Date(), 29), "yyyy-MM-dd"))
   const [metaTrendRangeEnd, setMetaTrendRangeEnd] = useState(() => format(new Date(), "yyyy-MM-dd"))
+  const [selectedTrendDayKey, setSelectedTrendDayKey] = useState<string | null>(null)
   const [serverSummary, setServerSummary] = useState<SummaryResponse | null>(null)
   const [serverDetail, setServerDetail] = useState<DetailResponse | null>(null)
   const [launcherStats, setLauncherStats] = useState<LauncherStatsResponse | null>(null)
@@ -1466,6 +1467,27 @@ export function DataCenterPageClient({
       return { ...row, movingAvg: Number(movingAvg.toFixed(1)) }
     })
   }, [usePlayer1Charts, filteredMatches, metaTrendRangeStart, metaTrendRangeEnd])
+
+  useEffect(() => {
+    setSelectedTrendDayKey(null)
+  }, [metaTrendRangeStart, metaTrendRangeEnd])
+
+  /** 선택한 막대(날짜)의 경기유형별 등록 건수 */
+  const selectedTrendDaySummary = useMemo(() => {
+    if (!selectedTrendDayKey) return null
+    const row = metaMatchRegistrationTrend.find((r) => r.sortKey === selectedTrendDayKey)
+    if (!row) return null
+    const countsByType = new Map<string, number>()
+    for (const match of filteredMatches) {
+      const day = dayKeyFromPlayedDate(match.playedDate)
+      if (!day || day.sortKey !== selectedTrendDayKey) continue
+      countsByType.set(match.matchType, (countsByType.get(match.matchType) ?? 0) + 1)
+    }
+    const breakdown = Array.from(countsByType.entries())
+      .map(([matchType, count]) => ({ matchType, count }))
+      .sort((a, b) => b.count - a.count || a.matchType.localeCompare(b.matchType, "ko"))
+    return { label: format(parseISO(row.sortKey), "M월 d일"), breakdown }
+  }, [selectedTrendDayKey, metaMatchRegistrationTrend, filteredMatches])
 
   const metaMatchRegistrationSummary = useMemo(() => {
     if (metaMatchRegistrationTrend.length === 0) return { total: 0, dailyAvg: 0 }
@@ -3132,7 +3154,21 @@ export function DataCenterPageClient({
                         fillOpacity={0.55}
                         radius={[3, 3, 0, 0]}
                         maxBarSize={22}
-                      />
+                        style={{ cursor: "pointer" }}
+                        onClick={(data) => {
+                          const sortKey = (data as { payload?: { sortKey?: string } })?.payload?.sortKey
+                          if (sortKey) setSelectedTrendDayKey((prev) => (prev === sortKey ? null : sortKey))
+                        }}
+                      >
+                        {metaMatchRegistrationTrend.map((row) => (
+                          <Cell
+                            key={row.sortKey}
+                            fillOpacity={row.sortKey === selectedTrendDayKey ? 1 : 0.55}
+                            stroke={row.sortKey === selectedTrendDayKey ? "hsl(217 91% 32%)" : "none"}
+                            strokeWidth={row.sortKey === selectedTrendDayKey ? 1.5 : 0}
+                          />
+                        ))}
+                      </Bar>
                       <Line
                         type="monotone"
                         dataKey="movingAvg"
@@ -3147,6 +3183,22 @@ export function DataCenterPageClient({
                       />
                     </ComposedChart>
                   </ChartContainer>
+                )}
+                {selectedTrendDaySummary && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                    <span className="text-xs font-medium text-foreground">
+                      {selectedTrendDaySummary.label} 경기유형별 등록
+                    </span>
+                    {selectedTrendDaySummary.breakdown.length === 0 ? (
+                      <span className="text-xs text-muted-foreground">등록된 전적이 없습니다.</span>
+                    ) : (
+                      selectedTrendDaySummary.breakdown.map((row) => (
+                        <Badge key={row.matchType} variant="outline" className="text-[11px] font-normal">
+                          {row.matchType} : {row.count}건
+                        </Badge>
+                      ))
+                    )}
+                  </div>
                 )}
               </CardContent>
             </ChartCaptureCard>
