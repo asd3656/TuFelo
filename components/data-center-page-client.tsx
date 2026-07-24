@@ -19,6 +19,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   LabelList,
   Legend,
   Line,
@@ -76,6 +77,8 @@ import { filterActionButtonClassName, ShareFilterUrlButton } from "@/components/
 import { SiteHeader } from "@/components/site-header"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
+  addDays,
+  differenceInCalendarDays,
   format,
   parseISO,
   startOfDay,
@@ -544,6 +547,8 @@ export function DataCenterPageClient({
   const [player1AutocompleteActiveIndex, setPlayer1AutocompleteActiveIndex] = useState(-1)
   const [mapChartSort, setMapChartSort] = useState<"gamesDesc" | "winRateDesc">("gamesDesc")
   const [metaAnchorRace, setMetaAnchorRace] = useState<Race>("T")
+  const [metaTrendRangeStart, setMetaTrendRangeStart] = useState(() => format(subDays(new Date(), 29), "yyyy-MM-dd"))
+  const [metaTrendRangeEnd, setMetaTrendRangeEnd] = useState(() => format(new Date(), "yyyy-MM-dd"))
   const [serverSummary, setServerSummary] = useState<SummaryResponse | null>(null)
   const [serverDetail, setServerDetail] = useState<DetailResponse | null>(null)
   const [launcherStats, setLauncherStats] = useState<LauncherStatsResponse | null>(null)
@@ -559,6 +564,21 @@ export function DataCenterPageClient({
     const days = Math.ceil((Date.now() - parsed[0].getTime()) / (1000 * 60 * 60 * 24))
     return Math.max(1, Math.min(365, days))
   }, [matches])
+
+  /** 프리셋 버튼(7/14/30/60/90일)이 현재 날짜 범위와 일치하는지 — 버튼 활성 표시용 */
+  const metaTrendActivePreset = useMemo(() => {
+    const today = startOfDay(new Date())
+    if (metaTrendRangeEnd !== format(today, "yyyy-MM-dd")) return null
+    return (
+      [7, 14, 30, 60, 90].find((d) => metaTrendRangeStart === format(subDays(today, d - 1), "yyyy-MM-dd")) ?? null
+    )
+  }, [metaTrendRangeStart, metaTrendRangeEnd])
+
+  const applyMetaTrendPreset = (days: number) => {
+    const today = startOfDay(new Date())
+    setMetaTrendRangeEnd(format(today, "yyyy-MM-dd"))
+    setMetaTrendRangeStart(format(subDays(today, days - 1), "yyyy-MM-dd"))
+  }
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members])
   const activePlayerQuery = playerFilterEnabled ? playerQuery : ""
@@ -1405,6 +1425,53 @@ export function DataCenterPageClient({
       .sort((a, b) => b.range - a.range || b.drawdown - a.drawdown || b.games - a.games)
       .slice(0, 10)
   }, [usePlayer1Charts, filteredMatches, memberById])
+
+  /** 메타: 일자별 전적 데이터 등록 추세 (현재 필터 + 선택한 기간 기준, 기본 최근 30일 + 7일 이동평균) */
+  const metaMatchRegistrationTrend = useMemo(() => {
+    if (usePlayer1Charts) return [] as Array<{ sortKey: string; label: string; count: number; movingAvg: number | null }>
+
+    const today = startOfDay(new Date())
+    const parsedStart = parseISO(metaTrendRangeStart)
+    const parsedEnd = parseISO(metaTrendRangeEnd)
+    let startDate = Number.isNaN(parsedStart.getTime()) ? subDays(today, 29) : startOfDay(parsedStart)
+    let endDate = Number.isNaN(parsedEnd.getTime()) ? today : startOfDay(parsedEnd)
+    if (startDate > endDate) {
+      ;[startDate, endDate] = [endDate, startDate]
+    }
+    const MAX_RANGE_DAYS = 366
+    if (differenceInCalendarDays(endDate, startDate) + 1 > MAX_RANGE_DAYS) {
+      startDate = subDays(endDate, MAX_RANGE_DAYS - 1)
+    }
+
+    const countsByDay = new Map<string, number>()
+    for (const match of filteredMatches) {
+      const day = dayKeyFromPlayedDate(match.playedDate)
+      if (!day) continue
+      countsByDay.set(day.sortKey, (countsByDay.get(day.sortKey) ?? 0) + 1)
+    }
+
+    const totalDays = differenceInCalendarDays(endDate, startDate) + 1
+    const rows: { sortKey: string; label: string; count: number }[] = []
+    for (let i = 0; i < totalDays; i++) {
+      const d = addDays(startDate, i)
+      const sortKey = format(d, "yyyy-MM-dd")
+      rows.push({ sortKey, label: format(d, "M.d"), count: countsByDay.get(sortKey) ?? 0 })
+    }
+
+    const MOVING_AVG_WINDOW = 7
+    return rows.map((row, index) => {
+      const windowStart = Math.max(0, index - (MOVING_AVG_WINDOW - 1))
+      const window = rows.slice(windowStart, index + 1)
+      const movingAvg = window.reduce((sum, r) => sum + r.count, 0) / window.length
+      return { ...row, movingAvg: Number(movingAvg.toFixed(1)) }
+    })
+  }, [usePlayer1Charts, filteredMatches, metaTrendRangeStart, metaTrendRangeEnd])
+
+  const metaMatchRegistrationSummary = useMemo(() => {
+    if (metaMatchRegistrationTrend.length === 0) return { total: 0, dailyAvg: 0 }
+    const total = metaMatchRegistrationTrend.reduce((sum, r) => sum + r.count, 0)
+    return { total, dailyAvg: Number((total / metaMatchRegistrationTrend.length).toFixed(1)) }
+  }, [metaMatchRegistrationTrend])
 
   const buildPlayerDayEloTrend = (anchorIds: Set<string>) => {
     type Row = { sortKey: string; label: string; playedDate: string; id: string; eloScore: number }
@@ -2962,6 +3029,126 @@ export function DataCenterPageClient({
                     </ChartContainer>
                   )}
                 </CardContent>
+            </ChartCaptureCard>
+          </section>
+        )}
+
+        {!usePlayer1Charts && (
+          <section className="mt-4 grid grid-cols-1 gap-4">
+            <ChartCaptureCard captureFilename="match-registration-trend">
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <LineChartIcon className="h-4 w-4" />
+                    일자별 전적 데이터 등록 추세
+                  </CardTitle>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[7, 14, 30, 60, 90].map((d) => (
+                      <Button
+                        key={d}
+                        type="button"
+                        size="sm"
+                        variant={metaTrendActivePreset === d ? "default" : "outline"}
+                        onClick={() => applyMetaTrendPreset(d)}
+                        className="h-7 px-2 text-[11px]"
+                      >
+                        {`${d}일`}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <Label className="text-[11px] text-muted-foreground">기간</Label>
+                  <Input
+                    type="date"
+                    value={metaTrendRangeStart}
+                    max={metaTrendRangeEnd}
+                    onChange={(e) => setMetaTrendRangeStart(e.target.value || metaTrendRangeStart)}
+                    className="h-7 w-[136px] px-2 text-[11px]"
+                  />
+                  <span className="text-[11px] text-muted-foreground">~</span>
+                  <Input
+                    type="date"
+                    value={metaTrendRangeEnd}
+                    min={metaTrendRangeStart}
+                    max={format(new Date(), "yyyy-MM-dd")}
+                    onChange={(e) => setMetaTrendRangeEnd(e.target.value || metaTrendRangeEnd)}
+                    className="h-7 w-[136px] px-2 text-[11px]"
+                  />
+                </div>
+                {metaMatchRegistrationTrend.length > 0 && (
+                  <CardDescription>
+                    {metaMatchRegistrationTrend[0].label} ~{" "}
+                    {metaMatchRegistrationTrend[metaMatchRegistrationTrend.length - 1].label} · 총{" "}
+                    {metaMatchRegistrationSummary.total.toLocaleString()}건 등록 · 일평균 {metaMatchRegistrationSummary.dailyAvg}건
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent>
+                {metaMatchRegistrationTrend.every((row) => row.count === 0) ? (
+                  <div className="py-12 text-center text-sm text-muted-foreground">
+                    이 기간에 등록된 전적이 없습니다.
+                  </div>
+                ) : (
+                  <ChartContainer
+                    className="h-[320px] w-full"
+                    config={{
+                      count: { label: "일별 등록 전적 수", color: "hsl(217 91% 60%)" },
+                      movingAvg: { label: "7일 이동평균", color: "hsl(358 85% 55%)" },
+                    }}
+                  >
+                    <ComposedChart data={metaMatchRegistrationTrend} margin={{ left: 8, right: 10, top: 16, bottom: 8 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="2 4" className="stroke-border/60" />
+                      <XAxis
+                        dataKey="label"
+                        interval={
+                          metaMatchRegistrationTrend.length > 30
+                            ? Math.ceil(metaMatchRegistrationTrend.length / 15) - 1
+                            : 0
+                        }
+                        tick={{ fontSize: 11 }}
+                      />
+                      <YAxis allowDecimals={false} width={36} tick={{ fontSize: 11 }} />
+                      <Tooltip
+                        cursor={{ fill: "hsl(var(--muted) / 0.2)" }}
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null
+                          const p = payload[0]?.payload as { label: string; count: number; movingAvg: number } | undefined
+                          if (!p) return null
+                          return (
+                            <div className="rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+                              <p className="font-medium text-foreground">{p.label}</p>
+                              <p className="text-muted-foreground">등록: {p.count}건</p>
+                              <p className="text-muted-foreground">7일 이동평균: {p.movingAvg}건</p>
+                            </div>
+                          )
+                        }}
+                      />
+                      <Legend verticalAlign="top" height={28} wrapperStyle={{ fontSize: 11 }} iconSize={10} />
+                      <Bar
+                        dataKey="count"
+                        name="일별 등록 전적 수"
+                        fill="hsl(217 91% 60%)"
+                        fillOpacity={0.55}
+                        radius={[3, 3, 0, 0]}
+                        maxBarSize={22}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="movingAvg"
+                        name="7일 이동평균"
+                        stroke="hsl(358 85% 55%)"
+                        strokeWidth={2.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        dot={false}
+                        activeDot={{ r: 5, fill: "hsl(358 85% 55%)", stroke: "#000000", strokeWidth: 2 }}
+                        isAnimationActive={false}
+                      />
+                    </ComposedChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
             </ChartCaptureCard>
           </section>
         )}

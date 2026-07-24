@@ -15,7 +15,21 @@
       "Bash(curl -s \"https://script.google.com/macros/s/AKfycbxBp22Aq9g_5S_r80gh4fMopwAVekjnxOWH_0ERlnTlcGiNWZ-SBok8IsjzRkJQjFFo/exec?action=launcher_stats\")",
       "Bash(curl -s -L \"https://script.google.com/macros/s/AKfycbxBp22Aq9g_5S_r80gh4fMopwAVekjnxOWH_0ERlnTlcGiNWZ-SBok8IsjzRkJQjFFo/exec?action=launcher_stats\")",
       "Bash(curl -s -o /dev/null -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/admin)",
-      "Bash(curl -s -o /dev/null -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/)"
+      "Bash(curl -s -o /dev/null -w \"HTTP_STATUS:%{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(npx eslint *)",
+      "Bash(sleep 6 && cat /tmp/dev.log)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/data-center)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3001/data-center)",
+      "Bash(chromium-cli --help)",
+      "Bash(node -e \"require.resolve\\('playwright'\\)\")",
+      "Bash(node -e \"require.resolve\\('puppeteer'\\)\")",
+      "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc.html)",
+      "Bash(grep -io \"error\" /tmp/dc.html | sort | uniq -c; grep -o \"digest[^,}]*\" /tmp/dc.html | head -5)",
+      "Bash(grep -o '.\\\\{30\\\\}[Ee]rror.\\\\{30\\\\}' /tmp/dc.html | head -20)",
+      "Bash(curl -s -o /dev/null -w \"port 3001: %{http_code}\\\\n\" http://localhost:3001 --max-time 2)",
+      "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc2.html)",
+      "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc3.html)"
     ]
   }
 }
