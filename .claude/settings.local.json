@@ -30,7 +30,11 @@
       "Bash(curl -s -o /dev/null -w \"port 3001: %{http_code}\\\\n\" http://localhost:3001 --max-time 2)",
       "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc2.html)",
       "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc3.html)",
-      "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc4.html)"
+      "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc4.html)",
+      "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc5.html)",
+      "Bash(curl -s http://localhost:3000/dashboard -o /tmp/dash.html)",
+      "Bash(grep -o \"이미지 저장\" /tmp/dc5.html | head -1; grep -o \"차트 캡처\" /tmp/dc5.html | head -1; wc -l /tmp/dc5.html /tmp/dash.html)",
+      "Bash(curl -s -o /tmp/home.html -w \"%{http_code}\\\\n\" http://localhost:3000/)"
     ]
   }
 }

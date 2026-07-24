@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useRef, useState, type ComponentProps } from "react"
-import { Camera, Download, Loader2 } from "lucide-react"
+import { Camera, Check, Copy, Download, Loader2 } from "lucide-react"
 import { toPng } from "html-to-image"
 
 import { Button } from "@/components/ui/button"
@@ -31,6 +31,7 @@ export function ChartCaptureCard({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [previewFilename, setPreviewFilename] = useState("")
+  const [imageCopied, setImageCopied] = useState(false)
 
   const handleCapture = useCallback(async () => {
     const node = captureRef.current
@@ -66,9 +67,24 @@ export function ChartCaptureCard({
     link.click()
   }, [previewFilename, previewUrl])
 
+  const handleCopyImage = useCallback(async () => {
+    if (!previewUrl) return
+    try {
+      const blob = await (await fetch(previewUrl)).blob()
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })])
+      setImageCopied(true)
+      window.setTimeout(() => setImageCopied(false), 2000)
+    } catch (error) {
+      console.error("이미지 복사 실패:", error)
+    }
+  }, [previewUrl])
+
   const handlePreviewOpenChange = useCallback((open: boolean) => {
     setPreviewOpen(open)
-    if (!open) setPreviewUrl(null)
+    if (!open) {
+      setPreviewUrl(null)
+      setImageCopied(false)
+    }
   }, [])
 
   return (
@@ -110,6 +126,16 @@ export function ChartCaptureCard({
           <DialogFooter className="border-t border-border px-6 py-4">
             <Button type="button" variant="outline" onClick={() => handlePreviewOpenChange(false)}>
               닫기
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCopyImage}
+              disabled={!previewUrl}
+              className="gap-1.5"
+            >
+              {imageCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {imageCopied ? "복사됨" : "이미지 복사"}
             </Button>
             <Button type="button" onClick={handleDownload} disabled={!previewUrl} className="gap-1.5">
               <Download className="h-4 w-4" />
