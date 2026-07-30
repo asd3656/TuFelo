@@ -34,7 +34,23 @@
       "Bash(curl -s http://localhost:3000/data-center -o /tmp/dc5.html)",
       "Bash(curl -s http://localhost:3000/dashboard -o /tmp/dash.html)",
       "Bash(grep -o \"이미지 저장\" /tmp/dc5.html | head -1; grep -o \"차트 캡처\" /tmp/dc5.html | head -1; wc -l /tmp/dc5.html /tmp/dash.html)",
-      "Bash(curl -s -o /tmp/home.html -w \"%{http_code}\\\\n\" http://localhost:3000/)"
+      "Bash(curl -s -o /tmp/home.html -w \"%{http_code}\\\\n\" http://localhost:3000/)",
+      "Bash(curl -sf http://localhost:3000)",
+      "Bash(curl -sf http://localhost:3001)",
+      "Bash(npx --no-install playwright --version)",
+      "Bash(mkdir -p \"/d/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad\")",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft/Edge/Application/msedge.exe\" --headless=new --disable-gpu --screenshot=\"D:/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad/home.png\" --window-size=1400,1600 \"http://localhost:3000\")",
+      "Bash(\"/c/Program Files \\(x86\\)/Microsoft/Edge/Application/msedge.exe\" --headless=new --disable-gpu --no-sandbox --screenshot=\"D:/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad/home.png\" --window-size=1400,1600 \"http://localhost:3000\")",
+      "Bash(echo \"exit:$?\")",
+      "Bash(npm install *)",
+      "Bash(npx playwright *)",
+      "Bash(node \"D:/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad/inspect-dropdown.js\")",
+      "Bash(node --require \"d:/project-starcraft/TuFelo/node_modules/playwright/index.js\" -e \"1\")",
+      "Bash(node \"D:/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad/inspect-dropdown.js\" --require-from \"d:/project-starcraft/TuFelo\")",
+      "Bash(NODE_PATH=\"d:/project-starcraft/TuFelo/node_modules\" node \"D:/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad/inspect-dropdown.js\")",
+      "Bash(NODE_PATH=\"d:/project-starcraft/TuFelo/node_modules\" node \"D:/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad/inspect-dropdown2.js\")",
+      "Bash(NODE_PATH=\"d:/project-starcraft/TuFelo/node_modules\" node \"D:/temp/claude/d--project-starcraft-TuFelo/5ddec30a-a8ec-4c5a-8443-115b146cab19/scratchpad/inspect-trigger.js\")",
+      "Bash(npm uninstall *)"
     ]
   }
 }

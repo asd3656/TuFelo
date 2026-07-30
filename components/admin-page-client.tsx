@@ -74,6 +74,19 @@ const tierColors: Record<CliqueTier, string> = {
 
 const TIERS: CliqueTier[] = [1, 2, 3, 4]
 
+/** yy.mm.dd 형식(Asia/Seoul 기준)으로 변환. 값이 없으면 "-" 반환 */
+function formatCreatedAt(dateStr: string | null | undefined): string {
+  if (!dateStr) return "-"
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "2-digit",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(dateStr))
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ""
+  return `${get("year")}.${get("month")}.${get("day")}`
+}
+
 interface AdminPageClientProps {
   initialMembers: ClanMember[]
   isGuest?: boolean
@@ -88,6 +101,7 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
   const [filterRace, setFilterRace] = useState("__all__")
   const [filterStatus, setFilterStatus] = useState("__all__")
   const [filterLauncher, setFilterLauncher] = useState("__all__")
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest")
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -103,22 +117,26 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
     tier: 4,
   })
 
-  const filteredMembers = useMemo(
-    () =>
-      initialMembers.filter((member) => {
-        const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase())
-        const matchesTier = filterTier === "__all__" || String(member.tier) === filterTier
-        const matchesRace = filterRace === "__all__" || member.race === filterRace
-        const matchesStatus =
-          filterStatus === "__all__" ||
-          (filterStatus === "active" ? member.isActive : !member.isActive)
-        const matchesLauncher =
-          filterLauncher === "__all__" ||
-          (filterLauncher === "used" ? !!member.lastLauncherUsedAt : !member.lastLauncherUsedAt)
-        return matchesSearch && matchesTier && matchesRace && matchesStatus && matchesLauncher
-      }),
-    [initialMembers, searchQuery, filterTier, filterRace, filterStatus, filterLauncher],
-  )
+  const filteredMembers = useMemo(() => {
+    const result = initialMembers.filter((member) => {
+      const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesTier = filterTier === "__all__" || String(member.tier) === filterTier
+      const matchesRace = filterRace === "__all__" || member.race === filterRace
+      const matchesStatus =
+        filterStatus === "__all__" ||
+        (filterStatus === "active" ? member.isActive : !member.isActive)
+      const matchesLauncher =
+        filterLauncher === "__all__" ||
+        (filterLauncher === "used" ? !!member.lastLauncherUsedAt : !member.lastLauncherUsedAt)
+      return matchesSearch && matchesTier && matchesRace && matchesStatus && matchesLauncher
+    })
+    return result.slice().sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+      return sortOrder === "newest" ? bTime - aTime : aTime - bTime
+    })
+  }, [initialMembers, searchQuery, filterTier, filterRace, filterStatus, filterLauncher, sortOrder])
 
   const runAction = (fn: () => Promise<ActionResult>, onDone?: () => void) => {
     startTransition(async () => {
@@ -331,6 +349,16 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                 </SelectContent>
               </Select>
 
+              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as "newest" | "oldest")}>
+                <SelectTrigger className="w-28 bg-card border-border text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">최신순</SelectItem>
+                  <SelectItem value="oldest">오래된순</SelectItem>
+                </SelectContent>
+              </Select>
+
               {(filterStatus !== "__all__" ||
                 filterTier !== "__all__" ||
                 filterRace !== "__all__" ||
@@ -383,6 +411,7 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                   <TableHead className="text-muted-foreground font-semibold text-center">종족</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center">티어</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-center w-20">런처</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold text-center w-24">생성날짜</TableHead>
                   {!isGuest && (
                     <TableHead className="text-muted-foreground font-semibold text-center w-24">
                       관리자 메모
@@ -432,6 +461,9 @@ export function AdminPageClient({ initialMembers, isGuest, headerData }: AdminPa
                           미사용
                         </Badge>
                       )}
+                    </TableCell>
+                    <TableCell className="text-center text-muted-foreground font-mono text-sm">
+                      {formatCreatedAt(member.createdAt)}
                     </TableCell>
                     {!isGuest && (
                       <TableCell className="text-center align-middle">

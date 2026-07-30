@@ -13,6 +13,7 @@ type MemberRow = {
   is_active: boolean
   admin_memo?: string | null
   last_launcher_used_at?: string | null
+  created_at?: string | null
 }
 
 function toClanMember(row: MemberRow, includeAdminMemo: boolean): ClanMember {
@@ -27,6 +28,7 @@ function toClanMember(row: MemberRow, includeAdminMemo: boolean): ClanMember {
     streak: row.streak,
     isActive: row.is_active,
     lastLauncherUsedAt: row.last_launcher_used_at ?? null,
+    createdAt: row.created_at ?? null,
   }
   if (includeAdminMemo) {
     base.adminMemo = row.admin_memo ?? null
@@ -39,7 +41,7 @@ export async function fetchMembers(): Promise<ClanMember[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("members")
-    .select("id, name, race, tier, elo, wins, losses, streak, is_active, last_launcher_used_at")
+    .select("id, name, race, tier, elo, wins, losses, streak, is_active, last_launcher_used_at, created_at")
     .order("is_active", { ascending: false })
     .order("name")
 
@@ -52,7 +54,7 @@ export async function fetchMembersWithAdminMemo(): Promise<ClanMember[]> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("members")
-    .select("id, name, race, tier, elo, wins, losses, streak, is_active, admin_memo, last_launcher_used_at")
+    .select("id, name, race, tier, elo, wins, losses, streak, is_active, admin_memo, last_launcher_used_at, created_at")
     .order("is_active", { ascending: false })
     .order("name")
 

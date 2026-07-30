@@ -51,6 +51,8 @@ export interface ClanMember {
   adminMemo?: string | null
   /** 런처로 전적을 전송한 마지막 시각. null이면 런처 미사용 */
   lastLauncherUsedAt?: string | null
+  /** 클랜원 생성(가입) 일시 */
+  createdAt?: string | null
 }
 
 export interface RegisterMatchInput {
