@@ -31,6 +31,37 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 
 // ─── 내부 헬퍼 ──────────────────────────────────────────────
 
+type MemberStatsRow = { id: string; elo: number; wins: number; losses: number; streak: number }
+
+/**
+ * 멤버 elo/wins/losses/streak을 건별 update로 청크 병렬 갱신합니다.
+ * 부분 컬럼 upsert는 INSERT 후보 행의 NOT NULL(name 등) 검사에 걸려 실패하므로 사용하지 않습니다.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function updateMemberStats(supabase: any, rows: MemberStatsRow[]): Promise<void> {
+  for (const chunk of chunkArray(rows, MEMBER_UPDATE_PARALLEL_CHUNK_SIZE)) {
+    const results = await Promise.all(
+      chunk.map((row) =>
+        supabase
+          .from("members")
+          .update({
+            elo: row.elo,
+            wins: row.wins,
+            losses: row.losses,
+            streak: row.streak,
+          })
+          .eq("id", row.id),
+      ),
+    )
+    for (const [idx, r] of results.entries()) {
+      if (r.error) {
+        const failedId = chunk[idx]?.id ?? "unknown"
+        throw new Error(`멤버 스탯 업데이트 실패(${failedId}): ${r.error.message}`)
+      }
+    }
+  }
+}
+
 /** 현재 활성 시즌의 최종 순위를 season_rankings 테이블에 스냅샷으로 저장 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function saveSeasonSnapshot(supabase: any, seasonId: string): Promise<void> {
@@ -243,29 +274,7 @@ async function recalculateCurrentSeasonElo(supabase: any, seasonId: string, star
     })
     .filter((v): v is NonNullable<typeof v> => v !== null)
 
-  if (memberUpdateData.length > 0) {
-    for (const chunk of chunkArray(memberUpdateData, MEMBER_UPDATE_PARALLEL_CHUNK_SIZE)) {
-      const results = await Promise.all(
-        chunk.map((row) =>
-          supabase
-            .from("members")
-            .update({
-              elo: row.elo,
-              wins: row.wins,
-              losses: row.losses,
-              streak: row.streak,
-            })
-            .eq("id", row.id),
-        ),
-      )
-      for (const [idx, r] of results.entries()) {
-        if (r.error) {
-          const failedId = chunk[idx]?.id ?? "unknown"
-          throw new Error(`멤버 스탯 업데이트 실패(${failedId}): ${r.error.message}`)
-        }
-      }
-    }
-  }
+  await updateMemberStats(supabase, memberUpdateData)
 }
 
 // ─── 공개 서버 액션 ─────────────────────────────────────────
@@ -312,22 +321,23 @@ export async function startNewSeasonAction(input: {
       .eq("id", activeSeason.id)
   }
 
-  // 활성 선수 ELO/승패/연속 초기화 (배치 upsert)
+  // 활성 선수 ELO/승패/연속 초기화
   const { data: activeMembers } = await supabase
     .from("members")
     .select("id, tier")
     .eq("is_active", true)
 
   const resetData = (activeMembers ?? []).map((m) => ({
-    id: m.id,
+    id: m.id as string,
     elo: getStartingEloForTier((m.tier as EloTier)),
     wins: 0,
     losses: 0,
     streak: 0,
   }))
-  if (resetData.length > 0) {
-    const { error: resetErr } = await supabase.from("members").upsert(resetData, { onConflict: "id" })
-    if (resetErr) return { ok: false, error: `선수 초기화 실패: ${resetErr.message}` }
+  try {
+    await updateMemberStats(supabase, resetData)
+  } catch (e) {
+    return { ok: false, error: `선수 초기화 실패: ${e instanceof Error ? e.message : String(e)}` }
   }
 
   // 새 시즌 생성
@@ -519,20 +529,22 @@ export async function deleteSeasonAction(id: string): Promise<ActionResult> {
       // ELO 재계산 (직전 시즌 시작일 기준)
       await recalculateCurrentSeasonElo(supabase, prevSeason.id as string, prevSeason.start_date as string)
     } else {
-      // 시즌 없음 → 모든 활성 선수 초기화 (배치 upsert)
+      // 시즌 없음 → 모든 활성 선수 초기화
       const { data: activeMembers } = await supabase
         .from("members")
         .select("id, tier")
         .eq("is_active", true)
       const resetData = (activeMembers ?? []).map((m) => ({
-        id: m.id,
+        id: m.id as string,
         elo: getStartingEloForTier((m.tier as EloTier)),
         wins: 0,
         losses: 0,
         streak: 0,
       }))
-      if (resetData.length > 0) {
-        await supabase.from("members").upsert(resetData, { onConflict: "id" })
+      try {
+        await updateMemberStats(supabase, resetData)
+      } catch (e) {
+        return { ok: false, error: `시즌은 삭제됐으나 선수 초기화에 실패했습니다. (${e instanceof Error ? e.message : String(e)})` }
       }
     }
   }
